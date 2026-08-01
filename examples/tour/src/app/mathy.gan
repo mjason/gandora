@@ -2,14 +2,15 @@ defmodule App.Mathy do
   @moduledoc "Math helpers showing patterns, interop, and documented examples."
   @moduledoc_trans zh_CN: "展示模式匹配、互操作与文档示例的数学工具。"
 
+  @doc since: "0.1.0"
   @doc """
-  Factorial via multi-clause dispatch. Docs are Markdown; the shared
-  `@example` block below is tested by `gan test` and shown in every
-  locale — translations stay prose-only.
+  Factorial via multi-clause dispatch. Prose lives in @doc and is
+  translated; runnable examples live in @example, tested by `gan test`
+  and shared by every locale.
   """
   @doc_trans zh_CN: """
-  多子句分派实现的阶乘。文档是 Markdown；下方共享的 `@example` 块由
-  `gan test` 测试，并在所有语言中展示——翻译只需要写散文。
+  多子句分派实现的阶乘。散文写在 @doc 里并可翻译；可运行的示例写在
+  @example 里，由 `gan test` 测试，并在所有语言中共享。
   """
   @example """
   ## Examples
@@ -38,6 +39,12 @@ defmodule App.Mathy do
     end
   end
 
+  @doc deprecated: "Use norm/1 instead.", since: "0.1.0"
+  @doc "Same as norm/1; kept for early adopters."
+  @doc_trans zh_CN: "与 norm/1 相同；为早期用户保留。"
+  def old_norm(xs), do: norm(xs)
+
+  @doc since: "0.1.0"
   @doc "Euclidean norm through a pipeline."
   @example """
       gan> norm([3, 4])

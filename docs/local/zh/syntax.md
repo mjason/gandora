@@ -142,13 +142,15 @@ end
 
 ## 文档
 
-`@doc`/`@moduledoc` 是 Markdown；`@doc_trans`/`@moduledoc_trans`
-添加纯散文的多语言。共享的 `@example` 块承载 `gan>` doctest——
-只写一次、只测一次、所有语言共同展示。
+三个通道，互不重叠：`@doc`/`@moduledoc` 是 Elixir 风格（Markdown
+字符串=文本、keyword 列表=元数据、`false`=隐藏，多行累积；文本永不
+被解析）。`@example` 承载可运行示例。`@doc_trans`/`@moduledoc_trans`
+添加纯散文翻译。
 
 ```elixir
+@doc since: "1.3.0"
 @doc "Factorial."
-@doc_trans zh_CN: "阶乘。"      # 翻译只写散文
+@doc_trans zh_CN: "阶乘。"
 @example """
     gan> fact(10)
     3628800
@@ -156,10 +158,11 @@ end
 def fact(n), do: ...
 ```
 
-`@doc false` 隐藏函数。`gan test` 运行每个模块的 doctest（期望输出
-是 Python 的 `repr`，即 `inspect/1` 打印的内容）；
-`gan doc App.Mathy.fact --locale zh` 按 RFC 4647 回退规则打印对应
-语言的文档。
+`gan test` 把 `@example` 块编译成原生 Python doctest 并运行（期望输出
+是 Python 的 `repr`，即 `inspect/1` 打印的内容）；所有语言渲染同一份
+示例。翻译里出现 `gan>` 是错误；`@doc` 文本里出现则是警告（不会被
+测试）。`gan doc App.Mathy.fact --locale zh` 按 RFC 4647 回退打印对应
+语言视图。
 
 ## 项目、包与 CLI
 

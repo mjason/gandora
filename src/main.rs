@@ -327,6 +327,11 @@ fn cmd_check(args: &[String]) -> Result<(), Diagnostic> {
         return Ok(());
     }
     let modules = project::compile_files(&sources, Some(&config))?;
+    for m in &modules {
+        for w in &m.warnings {
+            eprintln!("warning: {w}");
+        }
+    }
     println!("checked {} module(s), no errors", modules.len());
     Ok(())
 }
@@ -337,6 +342,11 @@ fn cmd_build() -> Result<(), Diagnostic> {
     if modules.is_empty() {
         println!("no .gan sources found");
         return Ok(());
+    }
+    for m in &modules {
+        for w in &m.warnings {
+            eprintln!("warning: {w}");
+        }
     }
     let out_root = config.root.join(&config.out_dir);
     project::write_outputs(&modules, &out_root)?;
@@ -591,8 +601,14 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
             let ast::Term::Call(c) = &inner else { continue };
             let ast::Callee::Name(name) = &c.callee else { continue };
             match name.as_str() {
-                "@moduledoc" => module_doc = Some(codegen::doc_info_from_args(&file, c)?),
-                "@doc" => pending = Some(codegen::doc_info_from_args(&file, c)?),
+                "@moduledoc" => {
+                    let info = module_doc.get_or_insert_with(codegen::DocInfo::default);
+                    codegen::merge_doc_value(&file, c, info, "@moduledoc")?;
+                }
+                "@doc" => {
+                    let info = pending.get_or_insert_with(codegen::DocInfo::default);
+                    codegen::merge_doc_value(&file, c, info, "@doc")?;
+                }
                 "@doc_trans" => {
                     if let Some(info) = pending.as_mut() {
                         codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;
@@ -638,13 +654,28 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
         Some(info) if info.hidden => println!("{label} is hidden (@doc false)"),
         Some(info) => {
             let prose = lookup_locale(&info, locale.as_deref());
-            if prose.is_none() && info.examples.is_empty() {
+            if prose.is_none() && info.meta.is_empty() && info.examples.is_empty() {
                 println!("{label} has no documentation");
             } else {
-                if let Some(text) = prose {
-                    print!("{}", ensure_trailing_newline(text));
+                // metadata first: deprecation is the thing to see immediately
+                if let Some(v) = info.meta_value("deprecated") {
+                    println!("[deprecated] {v}");
                 }
-                // shared @example blocks are shown in every locale
+                for (k, v) in &info.meta {
+                    if k != "deprecated" {
+                        println!("{k}: {v}");
+                    }
+                }
+                if !info.meta.is_empty() {
+                    println!();
+                }
+                if let Some(text) = prose {
+                    print!(
+                        "{}",
+                        ensure_trailing_newline(text.trim_start_matches('\n').trim_end())
+                    );
+                }
+                // example blocks render in every locale (GEP-0007-R009)
                 for ex in &info.examples {
                     println!();
                     print!("{}", ensure_trailing_newline(ex.trim_end()));

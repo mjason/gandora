@@ -155,13 +155,16 @@ output unchanged.
 
 ## Documentation
 
-`@doc`/`@moduledoc` are Markdown; `@doc_trans`/`@moduledoc_trans` add
-prose-only locales. Shared `@example` blocks hold the `gan>` doctests —
-written once, tested once, shown in every locale.
+Three channels, no overlap: `@doc`/`@moduledoc` are Elixir-style
+(Markdown string = text, keyword list = metadata, `false` = hidden,
+repeated lines accumulate; the text is never parsed). `@example` holds
+the runnable examples. `@doc_trans`/`@moduledoc_trans` add prose-only
+translations.
 
 ```elixir
+@doc since: "1.3.0"
 @doc "Factorial."
-@doc_trans zh_CN: "阶乘。"      # translations are prose-only
+@doc_trans zh_CN: "阶乘。"
 @example """
     gan> fact(10)
     3628800
@@ -169,10 +172,12 @@ written once, tested once, shown in every locale.
 def fact(n), do: ...
 ```
 
-`@doc false` hides a function. `gan test` runs every module's doctests
-(expected output is the Python `repr`, i.e. what `inspect/1` shows);
-`gan doc App.Mathy.fact --locale zh` prints the localized text with
-RFC 4647 fallback to the default.
+`gan test` compiles `@example` blocks into native Python doctests and
+runs them (expected output is the Python `repr`, i.e. what `inspect/1`
+shows); every locale renders the same blocks. A `gan>` line in a
+translation is an error; in `@doc` text it is a warning (untested).
+`gan doc App.Mathy.fact --locale zh` prints the localized view with
+RFC 4647 fallback.
 
 ## Projects, packages, and the CLI
 

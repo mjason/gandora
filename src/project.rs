@@ -253,6 +253,8 @@ pub struct CompiledModule {
     pub python: String,
     /// macros-only module: no Python file is written (GEP-0002-R009)
     pub compile_time_only: bool,
+    /// non-fatal notices, printed by check/build (GEP-0007-R005)
+    pub warnings: Vec<String>,
 }
 
 /// Parse, expand, and compile every module of a project.
@@ -381,6 +383,7 @@ pub fn compile_files(
             py_path: module_py_path(&p.module).replace('.', "/") + ".py",
             python,
             compile_time_only: cg.compile_time_only,
+            warnings: std::mem::take(&mut cg.warnings),
         });
     }
     Ok(out)

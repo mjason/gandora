@@ -394,7 +394,7 @@ fn doctests_and_localized_docs() {
     assert!(out.status.success());
     std::fs::write(
         proj.join("src/main.gan"),
-        "defmodule Main do\n  @doc \"\"\"\n      gan> broken(1)\n      999\n  \"\"\"\n  def broken(x), do: x + 1\n\n  def main(), do: nil\nend\n",
+        "defmodule Main do\n  @example \"\"\"\n      gan> broken(1)\n      999\n  \"\"\"\n  def broken(x), do: x + 1\n\n  def main(), do: nil\nend\n",
     )
     .unwrap();
     let out = gan().current_dir(&proj).arg("test").output().unwrap();

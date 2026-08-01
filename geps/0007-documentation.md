@@ -1,7 +1,7 @@
 ---
 gep: 7
 title: Documentation
-description: Markdown @doc with localized variants, hidden docs, doctests compiled to native Python doctests, and the gan doc / gan test commands.
+description: The Gandora documentation model — Elixir-style @doc (text, metadata, hidden), a dedicated @example channel for doctests, and prose-only translations.
 author: MJ
 status: Accepted
 type: Standards Track
@@ -10,7 +10,7 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 3
+revision: 5
 requires: [1]
 replaces: []
 superseded-by: null
@@ -23,127 +23,140 @@ translations:
 
 ## Abstract
 
-`@doc` and `@moduledoc` are Markdown, as in Elixir. Separate
-`@doc_trans <locale>: "..."` attributes add localized variants without
-cluttering the primary text, following the Osiris model where the default text is the runtime fallback and locales
-are tooling metadata. `@doc false` hides a function from documentation.
-Example sessions written with the `gan>` prompt compile into native
-Python doctests inside the generated docstrings, so `gan test` (and any
-standard Python doctest runner) executes them. `gan doc` prints
-documentation for a module or function in a requested locale.
+Documentation has three channels, each with one attribute family and no
+overlap. `@doc`/`@moduledoc` follow Elixir: a Markdown string is the
+text, a keyword list is metadata (`since:`, `deprecated:`, ...),
+`false` hides, and repeated lines accumulate — the compiler stores text
+verbatim and never parses inside it. `@example` is the dedicated
+channel for examples: repeatable blocks whose `gan>` lines are compiled
+into native Python doctests, appended to the generated docstring, run
+by `gan test`, and rendered in every locale. `@doc_trans`/
+`@moduledoc_trans` add prose-only translations. One copy of every
+example; no text extraction heuristics anywhere.
 
 ## Motivation
 
-Elixir treats documentation as a first-class, testable artifact
-(hexdocs' writing-documentation guide); Osiris adds locale maps so one
-codebase can present docs in the reviewer's language. Gandora should
-provide both without inventing runtime machinery — and its compile-to-
-Python identity offers a shortcut: Python already has a doctest runner
-in the standard library, so compiled examples become ordinary Python
-doctests.
+Earlier revisions tried to keep examples inside the doc text
+(Elixir-style) while also localizing that text, which forced the
+compiler to parse prose — first with locale keywords, then heading
+conventions, then structural extraction and an inclusion directive.
+Review rejected parsing prose as a paradigm: documentation text should
+be opaque data. Giving examples their own attribute removes every
+heuristic: the doc text is never inspected, translations are plain
+prose, and the example channel is the only thing the compiler
+understands.
 
 ## Scope
 
-The `@doc`/`@moduledoc` value forms, Markdown semantics, locale lookup,
-doctest syntax and compilation, and the `gan doc` and `gan test`
-commands. HTML rendering, `@spec`/`@typedoc`, `since:` metadata, and
-doc coverage tooling are deferred.
+The three channels, docstring assembly, doctest compilation, and the
+`gan doc` / `gan test` commands. HTML rendering, `@spec`/`@typedoc`,
+and doc coverage tooling are deferred.
 
 ## Terminology
 
-- **Doc map**: the set of locale-tagged texts attached by one
-  `@doc`/`@moduledoc`.
-- **Default text**: the `default:` entry (or the whole value when a bare
-  string is given).
-- **Doctest line**: a line beginning with the prompt `gan> ` inside doc
-  text, followed by one line of expected output.
+- **Doc unit**: the documentation of one module or function: default
+  text, translations, metadata, hidden flag, example blocks.
+- **Doctest line**: a line whose content begins with `gan> `, holding
+  one Gandora expression; the following non-blank line is its expected
+  output.
+- **Example block**: the string given to one `@example` attribute.
 
 ## Specification
 
-### Value forms and Markdown
+### @doc — text, metadata, hidden (Elixir-style)
 
-**GEP-0007-R001:** `@doc` and `@moduledoc` accept a string (the default
-text) or `false`. Doc text is Markdown; the compiler stores it verbatim
-and MUST NOT reflow or reformat it.
+**GEP-0007-R001:** `@doc` and `@moduledoc` accept, per attribute line:
+a Markdown string (the text), a keyword list (metadata), or `false`
+(hidden). Multiple lines before one definition accumulate into one doc
+unit, in any order. A second text string, or a repeated metadata key,
+is a compile error. Text is opaque: the compiler stores it verbatim
+and MUST NOT parse, reflow, or transform its content.
 
-**GEP-0007-R001A:** Localized variants attach with `@doc_trans` (after
-the `@doc` they translate) and `@moduledoc_trans` (after `@moduledoc`),
-carrying one or more `<locale>: "text"` pairs whose keys spell BCP 47
-tags with `_` for `-` (`zh_CN` ≡ `zh-CN`). The attribute MAY be repeated
-for additional locales; a duplicate locale, a `default:` key, or a
-`*_trans` without its preceding doc attribute is a compile error.
+**GEP-0007-R002:** Metadata values MUST be literals (string, boolean,
+integer, float, atom). The keys `since` and `deprecated` are
+well-known and additionally surface in the generated docstring as
+trailing `Since: <v>` / `Deprecated: <v>` lines; all metadata is
+otherwise tooling-facing only.
 
-**GEP-0007-R001B:** `@example "..."` (repeatable, before the `def` it
-documents, usable with or without `@doc`) declares a shared,
-language-neutral example block. Example blocks are appended to the
-default prose in the generated docstring, have their `gan>` lines
-compiled (R006), and are shown by `gan doc` in every locale.
-Translations are prose-only: a `gan>` line inside `@doc_trans` /
-`@moduledoc_trans` is a compile error directing the author to
-`@example`, so examples are written and tested exactly once.
+**GEP-0007-R003:** `@doc false` suppresses the docstring and hides the
+definition; `gan doc` MUST say the target is hidden rather than print
+nothing.
 
-**GEP-0007-R002:** The default text (after doctest compilation, R006)
-becomes the generated Python docstring. Localized texts are tooling
-metadata read from source (or from a package's shipped sources); they
-MUST NOT appear in generated code.
+### @example — the one channel the compiler understands
 
-**GEP-0007-R003:** `@doc false` suppresses the docstring and marks the
-function hidden; `gan doc` MUST say so rather than print nothing.
+**GEP-0007-R004:** `@example "..."` attaches one example block to the
+next definition; the attribute MAY be repeated and MAY be used with or
+without `@doc`. Blocks keep source order. Inside a block, doctest
+lines are compiled (R008); all other lines pass through verbatim, so a
+block may carry its own headings and captions.
 
-### Locale lookup and gan doc
+**GEP-0007-R005:** The generated docstring is assembled as: the doc
+text verbatim, then each compiled example block, then the well-known
+metadata trailer (R002), the parts separated by one blank line. A
+doctest line inside `@doc`/`@moduledoc` text is NOT compiled or tested
+— examples belong in `@example`, and `gan check` MUST warn when doc
+text contains a `gan> ` line.
 
-**GEP-0007-R004:** `gan doc <Module>[.<function>] [--locale <tag>]`
-prints the doc text for the requested locale using RFC 4647 lookup:
-exact tag match (case-insensitive), then progressively shortened
-prefixes, then the default text. Without `--locale` the default text is
-printed.
+### Translations — prose only
 
-**GEP-0007-R005:** `gan doc` resolves modules from project sources and
-from installed package markers (GEP-0006-R006), reads statically, and
-never imports Python.
+**GEP-0007-R006:** `@doc_trans` and `@moduledoc_trans` carry one or
+more `<locale>: "markdown"` pairs; locale keys spell BCP 47 tags with
+`_` for `-` (`zh_CN` ≡ `zh-CN`). The attribute MAY be repeated; a
+duplicate locale is a compile error. Translations are tooling metadata
+read from source (or a package's shipped sources) and MUST NOT appear
+in generated code.
 
-### Doctests
+**GEP-0007-R007:** A doctest line inside a translation is a compile
+error directing the author to `@example`. Translations therefore can
+never carry a second, untested copy of an example.
 
-**GEP-0007-R006:** Inside doc text, a doctest line `gan> <expr>`
-contains one Gandora expression; the following non-prompt line is the
-expected output. The compiler MUST compile the expression to Python and
-emit the pair into the generated docstring as a standard Python doctest
-(`>>> <compiled expr>` followed by the expected line, indentation
-preserved). Non-doctest lines pass through unchanged.
+### Rendering and testing
 
-**GEP-0007-R007:** Expected output is compared by Python's doctest
-runner, so it is the `repr` of the result — identical to what
-`inspect/1` prints (`{:ok, 1}` shows as `('ok', 1)`). Doctest
-expressions MUST be single-line and MUST NOT use macros in v0; a
-doctest expression that fails to compile is a compile error carrying
-the function's location.
+**GEP-0007-R008:** Doctest compilation: the expression after `gan> `
+is compiled to Python and emitted as `>>> <compiled>` with indentation
+preserved; its expected line passes through. Expected output is
+compared by Python's doctest runner and is therefore the `repr` of the
+result — what `inspect/1` prints. Doctest expressions MUST be
+single-line and MUST NOT use macros in v0; a failing compile is a
+compile error carrying the definition's location.
 
-**GEP-0007-R008:** `gan test` compiles the project into the build cache
-and runs every generated non-macro-only module through Python's
-standard doctest runner with the project interpreter (GEP-0001-R021
-selection, `-P`, cache on `PYTHONPATH`). It reports per-module results,
-exits 0 when all pass and 1 otherwise. Because emitted doctests are
-standard, `python -m doctest` and pytest's `--doctest-modules` MUST
-work on the generated files without `gan`.
+**GEP-0007-R009:** `gan doc <Module>[.<function>] [--locale <tag>]`
+renders: metadata first (`[deprecated]` prominently), then the text
+for the locale selected by RFC 4647 lookup (exact, shortened prefixes,
+then default), then every example block with its `gan>` prompts as
+authored. It resolves modules from project sources and installed
+package markers (GEP-0006-R006), reads statically, and never imports
+Python.
+
+**GEP-0007-R010:** `gan test` compiles the project into the build
+cache and runs every generated non-macro-only module through Python's
+standard doctest runner, importing by dotted module name with the
+GEP-0001-R021 interpreter, `-P`, and the cache on `PYTHONPATH`. It
+reports per-module results and exits 0 only when all pass. Emitted
+doctests are standard: `python -m doctest` and pytest's
+`--doctest-modules` MUST work on generated files without `gan`.
 
 ## Rationale
 
-Compiling `gan>` examples into Python doctests keeps the no-runtime
-property (the docstring is the artifact) and reuses a mature runner
-instead of building one. The expected-output-is-repr rule is honest to
-GEP-0001-R009's data mapping: documentation shows exactly what Python
-consumers of the value will see.
+Three channels with disjoint jobs make every earlier failure mode
+structurally impossible: text is opaque (no parsing paradigm),
+examples exist exactly once in a channel built for them, and
+translations are plain data. The cost is one departure from Elixir —
+examples move from the doc text into `@example` — which review judged
+cheaper than parsing prose; the R005 warning catches Elixir-habit
+`gan>` lines left in doc text.
 
-Locales-as-tooling-metadata copies Osiris: one runtime fallback in the
-artifact, richer language views served from source by tools, so the
-generated Python stays lean and deterministic.
+Compiling `gan>` into native Python doctests keeps the no-runtime
+property and reuses a mature runner; expected-output-as-repr is honest
+to GEP-0001-R009's data mapping.
 
 ## Backwards Compatibility
 
-Additive. Existing bare-string docs are the `default:` case. Text
-containing `gan> ` at line start previously passed through verbatim;
-it now compiles — a breaking edge only for docs that accidentally used
-the prompt.
+Revision 5 supersedes revisions 1–4: `@doc_meta`/`@moduledoc_meta` and
+the `<!-- examples -->` directive are removed; doctests in doc text are
+no longer compiled (warned instead); `@example` is the sole doctest
+carrier. `@doc` string/keyword/false forms and `@doc_trans` are
+unchanged.
 
 ## Security and Determinism
 
@@ -153,36 +166,28 @@ code, exactly as `gan run` does.
 
 ## Tooling and AI Usage
 
-Agents should document public functions with Markdown `@doc`, include
-`gan>` examples for non-obvious behavior, run `gan test` after edits,
-and use `gan doc Mod.fun --locale <tag>` to read localized docs instead
-of guessing.
+Agents should write Markdown `@doc` prose, put every runnable example
+in `@example`, attach metadata with `@doc since:`/`deprecated:`, keep
+translations prose-only, and run `gan test` after edits.
 
 ## Rejected Alternatives
 
-### Locale keywords inside @doc (`@doc default: ..., zh_CN: ...`)
+### Doctests inline in doc text (revisions 1–4)
 
-The first design. It buries the primary text behind a `default:` label
-and turns every translated function head into one long attribute;
-separate `@doc_trans` lines keep the common case (English only)
-zero-ceremony and translations independently editable.
+Elixir's own layout, but with localized texts it forces either
+duplicated examples in translations (rot) or compiler parsing of prose
+(extraction heuristics, inclusion directives). Review rejected prose
+parsing as a paradigm; the dedicated channel needs none of it.
 
-### A Gandora-side doctest runner
+### Locale keywords inside @doc
 
-Re-implements what Python ships, needs a runner in every environment,
-and diverges from what pytest users already run in CI.
+Buried the primary text behind a `default:` label and made every
+translated head one long attribute.
 
 ### Embedding all locales in the docstring
 
-Bloats every artifact with text most consumers cannot read and makes
-output depend on translation edits; tooling reads locales from source
-instead.
-
-### iex>-compatible prompt
-
-Reusing `iex>` would suggest Elixir semantics (inspect formatting,
-charlists) that Gandora deliberately does not have; `gan>` marks the
-boundary.
+Bloats every artifact with text most consumers cannot read; tooling
+reads locales from source instead.
 
 ## Open Questions
 
@@ -190,17 +195,22 @@ None for this revision.
 
 ## Conformance
 
-Tests MUST cover: bare-string, keyword-form, and `false` values;
-locale lookup incl. prefix fallback and default; the R003 missing-
-default diagnostic; doctest compilation of expressions (pipes, interop
-calls) with preserved indentation; a failing doctest detected by
-`gan test`; and `python -m doctest` running a generated module
-directly.
+Tests MUST cover: accumulation of string/keyword/false `@doc` lines in
+either order with duplicate-text and duplicate-key diagnostics; the
+metadata trailer; docstring assembly order (text, examples, trailer);
+`@example` with and without `@doc`; the R005 warning for `gan>` in doc
+text; the R007 translation diagnostic; doctest compilation with
+preserved indentation; locale fallback and example rendering in
+`gan doc --locale`; a failing doctest detected by `gan test`; and a
+generated module run by `python -m doctest` directly.
 
 ## Change History
 
-- Revision 3, 2026-08-01: Added shared @example blocks (R001B);
-  translations are prose-only so examples cannot rot untested.
-- Revision 2, 2026-08-01: Replaced the locale-keyword form of @doc with
-  separate @doc_trans / @moduledoc_trans attributes (R001A).
+- Revision 5, 2026-08-01: Final model — opaque doc text, dedicated
+  @example channel, prose-only translations; removed the extraction
+  and directive machinery of revision 4.
+- Revision 4, 2026-08-01: Structural example extraction with inclusion
+  directives (superseded).
+- Revision 3, 2026-08-01: Shared @example blocks (restored in rev 5).
+- Revision 2, 2026-08-01: Split translations into @doc_trans.
 - Revision 1, 2026-08-01: Initial version.

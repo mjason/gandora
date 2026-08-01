@@ -1,7 +1,7 @@
 """
   pandas end to end: a dev dependency from pyproject.toml, used with zero
   wrapper code. Needs `uv sync` first, then: gan run src/tour/dataframe.gan
-  """
+"""
 
 import builtins
 import pandas as pd

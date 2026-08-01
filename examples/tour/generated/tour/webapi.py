@@ -5,7 +5,7 @@
       uv run uvicorn tour.webapi:app --app-dir dist
 
   `gan run src/tour/webapi.gan` self-tests the app with TestClient.
-  """
+"""
 
 import builtins
 import fastapi

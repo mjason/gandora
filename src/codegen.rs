@@ -64,10 +64,21 @@ pub fn camel_to_snake(s: &str) -> String {
 pub struct DocInfo {
     /// locale tag -> markdown text; "default" is the fallback
     pub entries: Vec<(String, String)>,
-    /// shared `@example` blocks: language-neutral, tested once, shown in
-    /// every locale (GEP-0007-R001B)
+    /// `@example` blocks: the only channel holding doctests
+    /// (GEP-0007-R004)
     pub examples: Vec<String>,
+    /// metadata from keyword-form `@doc since: "..."` lines (GEP-0007-R002)
+    pub meta: Vec<(String, String)>,
     pub hidden: bool,
+}
+
+impl DocInfo {
+    pub fn meta_value(&self, key: &str) -> Option<&str> {
+        self.meta
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
+    }
 }
 
 impl DocInfo {
@@ -79,32 +90,93 @@ impl DocInfo {
     }
 }
 
-/// Parse `@doc` arguments: a string or `false` (GEP-0007-R001).
-pub fn doc_info_from_args(file: &str, call: &Call) -> crate::diag::Result<DocInfo> {
-    let mut info = DocInfo::default();
+/// Merge one `@doc`/`@moduledoc` attribute into a doc map. Elixir
+/// semantics: a string sets the text, `false` hides, a keyword list sets
+/// metadata; multiple attributes before one definition accumulate
+/// (GEP-0007-R001/R001C).
+pub fn merge_doc_value(
+    file: &str,
+    call: &Call,
+    info: &mut DocInfo,
+    attr: &str,
+) -> crate::diag::Result<()> {
     match call.args.first() {
         Some(Term::Bool(false)) => {
             info.hidden = true;
-            Ok(info)
+            return Ok(());
         }
         Some(t) if t.as_plain_str().is_some() => {
+            if info.default_text().is_some() {
+                return Err(Diagnostic::new(
+                    file,
+                    call.span,
+                    format!("{attr} text is given twice for the same definition"),
+                ));
+            }
             info.entries
                 .push(("default".to_string(), t.as_plain_str().unwrap()));
-            Ok(info)
+            return Ok(());
         }
-        Some(Term::Str(_)) => Err(Diagnostic::new(
-            file,
-            call.span,
-            "doc text cannot use #{} interpolation; write \\#{ for a literal \
-             #{ (GEP-0007-R001)",
-        )),
-        _ => Err(Diagnostic::new(
-            file,
-            call.span,
-            "@doc accepts a string or false; translations go on separate \
-             @doc_trans lines (GEP-0007-R001)",
-        )),
+        Some(Term::Str(_)) => {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                "doc text cannot use #{} interpolation; write \\#{ for a literal \
+                 #{ (GEP-0007-R001)",
+            ))
+        }
+        Some(Term::Pair(_, _)) | Some(Term::List(_)) => {}
+        _ => {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!(
+                    "{attr} accepts a Markdown string, false, or metadata pairs \
+                     like `{attr} since: \"1.2.0\"` (GEP-0007-R001)"
+                ),
+            ))
+        }
     }
+    // keyword form: metadata (Elixir's @doc since: / deprecated:)
+    let mut pairs: Vec<&Term> = Vec::new();
+    for arg in &call.args {
+        match arg {
+            Term::List(items) => pairs.extend(items.iter()),
+            other => pairs.push(other),
+        }
+    }
+    for p in pairs {
+        let Term::Pair(key, value) = p else {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!("{attr} metadata requires key: value pairs"),
+            ));
+        };
+        let rendered = match value.as_ref() {
+            t if t.as_plain_str().is_some() => t.as_plain_str().unwrap(),
+            Term::Bool(b) => b.to_string(),
+            Term::Int(n) => n.to_string(),
+            Term::Float(f) => f.to_string(),
+            Term::Atom(a) => a.clone(),
+            other => {
+                return Err(Diagnostic::new(
+                    file,
+                    call.span,
+                    format!("{attr} {key}: value must be a literal, found {other:?}"),
+                ))
+            }
+        };
+        if info.meta.iter().any(|(k, _)| k == key) {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!("duplicate {attr} metadata key {key}"),
+            ));
+        }
+        info.meta.push((key.clone(), rendered));
+    }
+    Ok(())
 }
 
 /// Merge `@doc_trans <locale>: "..."` pairs into a doc map
@@ -164,9 +236,9 @@ pub fn merge_doc_trans(
                 file,
                 call.span,
                 format!(
-                    "translations are prose-only: move gan> examples out of {attr} \
-                     into a shared @example block so they are written and tested \
-                     once (GEP-0007-R001B)"
+                    "translations are prose-only: move gan> examples into an \
+                     @example block so they are written and tested exactly once \
+                     (GEP-0007-R007)"
                 ),
             ));
         }
@@ -175,7 +247,7 @@ pub fn merge_doc_trans(
     Ok(())
 }
 
-/// Parse an `@example` block: one plain string (GEP-0007-R001B).
+/// Parse an `@example` block: one plain string (GEP-0007-R004).
 pub fn example_from_args(file: &str, call: &Call) -> crate::diag::Result<String> {
     match call.args.first() {
         Some(t) if t.as_plain_str().is_some() => Ok(t.as_plain_str().unwrap()),
@@ -215,6 +287,8 @@ pub struct Codegen {
     private_funs: BTreeSet<(String, usize)>,
     attr_names: BTreeSet<String>,
     struct_fields: Option<Vec<(String, Term)>>,
+    /// non-fatal notices surfaced by `gan check`/`gan build`
+    pub warnings: Vec<String>,
     /// true after `compile` when the module defines no runtime code
     /// (macros only) and should produce no Python file (GEP-0002-R009).
     pub compile_time_only: bool,
@@ -237,6 +311,7 @@ impl Codegen {
             private_funs: BTreeSet::new(),
             attr_names: BTreeSet::new(),
             struct_fields: None,
+            warnings: Vec::new(),
             compile_time_only: false,
             tmp_counter: 0,
             tmp_names: Vec::new(),
@@ -321,10 +396,12 @@ impl Codegen {
             };
             match name.as_str() {
                 "@moduledoc" => {
-                    moduledoc = Some(doc_info_from_args(&self.file, call)?);
+                    let info = moduledoc.get_or_insert_with(DocInfo::default);
+                    merge_doc_value(&self.file, call, info, "@moduledoc")?;
                 }
                 "@doc" => {
-                    pending_doc = Some(doc_info_from_args(&self.file, call)?);
+                    let info = pending_doc.get_or_insert_with(DocInfo::default);
+                    merge_doc_value(&self.file, call, info, "@doc")?;
                 }
                 "@example" => {
                     let ex = example_from_args(&self.file, call)?;
@@ -504,13 +581,7 @@ impl Codegen {
         }
 
         let mut out = String::new();
-        let module_docstring = match &moduledoc {
-            Some(info) if !info.hidden => match info.default_text() {
-                Some(text) => Some(self.compile_doctests(text, Span::default())?),
-                None => None,
-            },
-            _ => None,
-        };
+        let module_docstring = self.docstring_text(moduledoc.as_ref(), Span::default())?;
         if let Some(doc) = &module_docstring {
             let _ = writeln!(out, "\"\"\"{}\"\"\"", doc.replace("\"\"\"", "\\\"\\\"\\\""));
         }
@@ -786,8 +857,8 @@ impl Codegen {
         Ok(format!("\n{}\n", lines.join("\n")))
     }
 
-    /// The docstring for a doc map: default prose plus shared @example
-    /// blocks, with doctests compiled (GEP-0007-R002/R001B).
+    /// Assemble the docstring: opaque doc text, compiled example blocks,
+    /// then the well-known metadata trailer (GEP-0007-R005).
     fn docstring_text(
         &mut self,
         info: Option<&DocInfo>,
@@ -799,10 +870,23 @@ impl Codegen {
         }
         let mut parts: Vec<String> = Vec::new();
         if let Some(text) = info.default_text() {
+            if text.lines().any(|l| l.trim_start().starts_with("gan> ")) {
+                self.warnings.push(format!(
+                    "{}:{}: doc text contains a gan> line; it will not be \
+                     tested — move examples into @example (GEP-0007-R005)",
+                    self.file, span.line
+                ));
+            }
             parts.push(text.trim_end().to_string());
         }
         for ex in &info.examples {
-            parts.push(ex.trim_end().to_string());
+            parts.push(self.compile_doctests(ex.trim_end(), span)?);
+        }
+        if let Some(v) = info.meta_value("deprecated") {
+            parts.push(format!("Deprecated: {v}"));
+        }
+        if let Some(v) = info.meta_value("since") {
+            parts.push(format!("Since: {v}"));
         }
         if parts.is_empty() {
             return Ok(None);
@@ -811,7 +895,7 @@ impl Codegen {
         if joined.contains('\n') {
             joined.push('\n');
         }
-        Ok(Some(self.compile_doctests(&joined, span)?))
+        Ok(Some(joined))
     }
 
     /// Compile `gan> expr` doctest lines into native Python doctests
@@ -2603,7 +2687,7 @@ mod gep0007_tests {
     #[test]
     fn doctests_compile_to_python_doctests() {
         let py = compile(
-            "defmodule M do\n  @doc \"\"\"\nAdds one.\n\n## Examples\n\n    gan> inc(1)\n    2\n    gan> [1, 2] |> :builtins.len()\n    2\n\"\"\"\n  def inc(x), do: x + 1\nend",
+            "defmodule M do\n  @doc \"Adds one.\"\n  @example \"\"\"\n    gan> inc(1)\n    2\n    gan> [1, 2] |> :builtins.len()\n    2\n\"\"\"\n  def inc(x), do: x + 1\nend",
         );
         assert!(py.contains("    >>> inc(1)\n    2"), "{py}");
         assert!(py.contains("    >>> builtins.len([1, 2])\n    2"), "{py}");
@@ -2645,7 +2729,7 @@ mod gep0007_tests {
     #[test]
     fn broken_doctest_is_a_compile_error() {
         let err = compile_err(
-            "defmodule M do\n  @doc \"\"\"\n    gan> 1 +\n    2\n\"\"\"\n  def f(x), do: x\nend",
+            "defmodule M do\n  @example \"\"\"\n    gan> 1 +\n    2\n\"\"\"\n  def f(x), do: x\nend",
         );
         assert!(err.contains("in doctest"), "{err}");
     }
@@ -2658,7 +2742,7 @@ mod doc_robustness_tests {
     #[test]
     fn chinese_prose_and_comments_survive_extraction() {
         let py = compile(
-            "defmodule M do\n  @doc \"\"\"\n符号判断。# 这不是注释是正文\n\n## 示例\n\n    gan> classify(-3) # 行尾中文注释会被词法器剥掉\n    'negative'\n\n以上 # 中文井号 无碍。\n\"\"\"\n  def classify(x), do: :negative\nend",
+            "defmodule M do\n  @doc \"\"\"\n符号判断。# 这不是注释是正文\n\n以上 # 中文井号 无碍。\n\"\"\"\n  @example \"\"\"\n    gan> classify(-3) # 行尾中文注释会被词法器剥掉\n    'negative'\n\"\"\"\n  def classify(x), do: :negative\nend",
         );
         // prose with Chinese # passes through verbatim
         assert!(py.contains("符号判断。# 这不是注释是正文"), "{py}");
@@ -2678,17 +2762,26 @@ mod doc_robustness_tests {
 }
 
 #[cfg(test)]
-mod example_attr_tests {
+mod doc_merge_tests {
     use super::tests_helpers::{compile, compile_err};
+    use super::*;
+    use crate::expander::{collect_macros, Expander};
+    use crate::parser::parse_file;
 
     #[test]
-    fn shared_example_lands_in_docstring_and_tests() {
+    fn doc_channels_assemble_the_docstring() {
         let py = compile(
-            "defmodule M do\n  @doc \"Adds one.\"\n  @doc_trans zh_CN: \"加一。\"\n  @example \"\"\"\n      gan> inc(1)\n      2\n  \"\"\"\n  def inc(x), do: x + 1\nend",
+            "defmodule M do\n  @doc since: \"1.3.0\"\n  @doc \"Adds one.\"\n  @doc_trans zh_CN: \"加一。\"\n  @example \"\"\"\n      gan> inc(1)\n      2\n  \"\"\"\n  def inc(x), do: x + 1\nend",
         );
         assert!(py.contains("Adds one."), "{py}");
         assert!(py.contains(">>> inc(1)\n      2"), "{py}");
+        assert!(py.contains("Since: 1.3.0"), "{py}");
         assert!(!py.contains("加一"), "{py}");
+        // assembly order: text, examples, trailer
+        let text_at = py.find("Adds one.").unwrap();
+        let ex_at = py.find(">>> inc(1)").unwrap();
+        let meta_at = py.find("Since:").unwrap();
+        assert!(text_at < ex_at && ex_at < meta_at, "{py}");
     }
 
     #[test]
@@ -2700,11 +2793,66 @@ mod example_attr_tests {
     }
 
     #[test]
+    fn doc_text_is_opaque_and_warns_on_gan_prompt() {
+        let src = "defmodule M do\n  @doc \"\"\"\n      gan> f(1)\n      1\n  \"\"\"\n  def f(x), do: x\nend";
+        let module = parse_file("<test>", src).unwrap();
+        let macros = collect_macros("<test>", &module).unwrap();
+        let mut ex = Expander::new("<test>", macros);
+        let expanded = ex.expand_module(&module).unwrap();
+        let mut cg = Codegen::new("<test>", vec![]);
+        let py = cg.compile(&expanded).unwrap();
+        // not compiled, passes through verbatim
+        assert!(py.contains("gan> f(1)"), "{py}");
+        assert!(!py.contains(">>>"), "{py}");
+        assert!(cg.warnings.iter().any(|w| w.contains("GEP-0007-R005")), "{:?}", cg.warnings);
+    }
+
+    #[test]
+    fn doc_text_twice_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  @doc \"one\"\n  @doc \"two\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("twice"), "{err}");
+    }
+
+    #[test]
     fn gan_prompt_in_translation_is_rejected() {
         let err = compile_err(
             "defmodule M do\n  @doc \"d\"\n  @doc_trans zh_CN: \"\"\"\n  示例：\n      gan> f(1)\n      1\n  \"\"\"\n  def f(x), do: x\nend",
         );
-        assert!(err.contains("GEP-0007-R001B"), "{err}");
+        assert!(err.contains("GEP-0007-R007"), "{err}");
         assert!(err.contains("@example"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod doc_meta_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn since_and_deprecated_reach_the_docstring() {
+        let py = compile(
+            "defmodule M do\n  @doc \"Old adder.\"\n  @doc since: \"0.1.0\", deprecated: \"Use add/2 instead.\"\n  def old_add(a, b), do: a + b\nend",
+        );
+        assert!(py.contains("Old adder."), "{py}");
+        assert!(py.contains("Deprecated: Use add/2 instead."), "{py}");
+        assert!(py.contains("Since: 0.1.0"), "{py}");
+    }
+
+    #[test]
+    fn custom_meta_is_tooling_only() {
+        let py = compile(
+            "defmodule M do\n  @doc \"f.\"\n  @doc authors: \"MJ\", stable: true\n  def f(x), do: x\nend",
+        );
+        assert!(!py.contains("MJ"), "{py}");
+        assert!(!py.contains("stable"), "{py}");
+    }
+
+    #[test]
+    fn duplicate_meta_key_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  @doc \"f.\"\n  @doc since: \"1\"\n  @doc since: \"2\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("duplicate"), "{err}");
     }
 }
