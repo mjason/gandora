@@ -143,17 +143,16 @@ end
 ## 文档
 
 `@doc`/`@moduledoc` 是 Markdown；`@doc_trans`/`@moduledoc_trans`
-添加多语言。`gan>` 行是 doctest，会编译成原生 Python doctest。
+添加纯散文的多语言。共享的 `@example` 块承载 `gan>` doctest——
+只写一次、只测一次、所有语言共同展示。
 
 ```elixir
-@doc """
-Factorial.
-
+@doc "Factorial."
+@doc_trans zh_CN: "阶乘。"      # 翻译只写散文
+@example """
     gan> fact(10)
     3628800
-
 """
-@doc_trans zh_CN: "阶乘。"
 def fact(n), do: ...
 ```
 

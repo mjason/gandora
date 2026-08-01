@@ -156,18 +156,16 @@ output unchanged.
 ## Documentation
 
 `@doc`/`@moduledoc` are Markdown; `@doc_trans`/`@moduledoc_trans` add
-locales. `gan>` lines are doctests that compile into native Python
-doctests.
+prose-only locales. Shared `@example` blocks hold the `gan>` doctests —
+written once, tested once, shown in every locale.
 
 ```elixir
-@doc """
-Factorial.
-
+@doc "Factorial."
+@doc_trans zh_CN: "阶乘。"      # translations are prose-only
+@example """
     gan> fact(10)
     3628800
-
 """
-@doc_trans zh_CN: "阶乘。"
 def fact(n), do: ...
 ```
 

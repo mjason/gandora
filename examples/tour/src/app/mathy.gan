@@ -3,40 +3,33 @@ defmodule App.Mathy do
   @moduledoc_trans zh_CN: "展示模式匹配、互操作与文档示例的数学工具。"
 
   @doc """
-  Factorial via multi-clause dispatch. Docs are Markdown; `gan>` lines
-  are doctests that `gan test` runs as native Python doctests.
-
+  Factorial via multi-clause dispatch. Docs are Markdown; the shared
+  `@example` block below is tested by `gan test` and shown in every
+  locale — translations stay prose-only.
+  """
+  @doc_trans zh_CN: """
+  多子句分派实现的阶乘。文档是 Markdown；下方共享的 `@example` 块由
+  `gan test` 测试，并在所有语言中展示——翻译只需要写散文。
+  """
+  @example """
   ## Examples
 
       gan> fact(0)
       1
       gan> fact(10)
       3628800
-
-  """
-  @doc_trans zh_CN: """
-  多子句分派实现的阶乘。文档是 Markdown；`gan>` 行是 doctest，
-  `gan test` 会把它们当作原生 Python doctest 运行。
-
-  ## 示例
-
-      gan> fact(10)
-      3628800
-
   """
   def fact(0), do: 1
   def fact(n) when n > 0, do: n * fact(n - 1)
 
-  @doc """
-  Sign of a number as an atom.
-
+  @doc "Sign of a number as an atom."
+  @doc_trans zh_CN: "以原子返回数字的符号。"
+  @example """
       gan> classify(-3)
       'negative'
       gan> [classify(0), classify(9)]
       ['zero', 'positive']
-
   """
-  @doc_trans zh_CN: "以原子返回数字的符号。"
   def classify(x) do
     cond do
       x < 0 -> :negative
@@ -45,12 +38,10 @@ defmodule App.Mathy do
     end
   end
 
-  @doc """
-  Euclidean norm through a pipeline.
-
+  @doc "Euclidean norm through a pipeline."
+  @example """
       gan> norm([3, 4])
       5.0
-
   """
   def norm(xs) do
     xs

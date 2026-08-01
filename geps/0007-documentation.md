@@ -10,7 +10,7 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 2
+revision: 3
 requires: [1]
 replaces: []
 superseded-by: null
@@ -72,6 +72,15 @@ carrying one or more `<locale>: "text"` pairs whose keys spell BCP 47
 tags with `_` for `-` (`zh_CN` ≡ `zh-CN`). The attribute MAY be repeated
 for additional locales; a duplicate locale, a `default:` key, or a
 `*_trans` without its preceding doc attribute is a compile error.
+
+**GEP-0007-R001B:** `@example "..."` (repeatable, before the `def` it
+documents, usable with or without `@doc`) declares a shared,
+language-neutral example block. Example blocks are appended to the
+default prose in the generated docstring, have their `gan>` lines
+compiled (R006), and are shown by `gan doc` in every locale.
+Translations are prose-only: a `gan>` line inside `@doc_trans` /
+`@moduledoc_trans` is a compile error directing the author to
+`@example`, so examples are written and tested exactly once.
 
 **GEP-0007-R002:** The default text (after doctest compilation, R006)
 becomes the generated Python docstring. Localized texts are tooling
@@ -190,6 +199,8 @@ directly.
 
 ## Change History
 
+- Revision 3, 2026-08-01: Added shared @example blocks (R001B);
+  translations are prose-only so examples cannot rot untested.
 - Revision 2, 2026-08-01: Replaced the locale-keyword form of @doc with
   separate @doc_trans / @moduledoc_trans attributes (R001A).
 - Revision 1, 2026-08-01: Initial version.

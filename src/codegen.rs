@@ -64,6 +64,9 @@ pub fn camel_to_snake(s: &str) -> String {
 pub struct DocInfo {
     /// locale tag -> markdown text; "default" is the fallback
     pub entries: Vec<(String, String)>,
+    /// shared `@example` blocks: language-neutral, tested once, shown in
+    /// every locale (GEP-0007-R001B)
+    pub examples: Vec<String>,
     pub hidden: bool,
 }
 
@@ -156,9 +159,32 @@ pub fn merge_doc_trans(
                 format!("duplicate {attr} locale {tag}"),
             ));
         }
+        if text.lines().any(|l| l.trim_start().starts_with("gan> ")) {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!(
+                    "translations are prose-only: move gan> examples out of {attr} \
+                     into a shared @example block so they are written and tested \
+                     once (GEP-0007-R001B)"
+                ),
+            ));
+        }
         info.entries.push((tag, text));
     }
     Ok(())
+}
+
+/// Parse an `@example` block: one plain string (GEP-0007-R001B).
+pub fn example_from_args(file: &str, call: &Call) -> crate::diag::Result<String> {
+    match call.args.first() {
+        Some(t) if t.as_plain_str().is_some() => Ok(t.as_plain_str().unwrap()),
+        _ => Err(Diagnostic::new(
+            file,
+            call.span,
+            "@example requires one plain string (usually a heredoc with gan> lines)",
+        )),
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -299,6 +325,13 @@ impl Codegen {
                 }
                 "@doc" => {
                     pending_doc = Some(doc_info_from_args(&self.file, call)?);
+                }
+                "@example" => {
+                    let ex = example_from_args(&self.file, call)?;
+                    pending_doc
+                        .get_or_insert_with(DocInfo::default)
+                        .examples
+                        .push(ex);
                 }
                 "@doc_trans" => {
                     let info = pending_doc.as_mut().ok_or_else(|| {
@@ -689,32 +722,22 @@ impl Codegen {
                 .collect();
             lines.push(format!("def {py_name}({}):", names.join(", ")));
             let mut body_lines = Vec::new();
-            if let Some(info) = &f.doc {
-                if !info.hidden {
-                    if let Some(text) = info.default_text() {
-                        let compiled = self.compile_doctests(text, f.span)?;
-                        body_lines.push(format!(
-                            "\"\"\"{}\"\"\"",
-                            compiled.replace("\"\"\"", "\\\"\\\"\\\"")
-                        ));
-                    }
-                }
+            if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
+                body_lines.push(format!(
+                    "\"\"\"{}\"\"\"",
+                    compiled.replace("\"\"\"", "\\\"\\\"\\\"")
+                ));
             }
             self.emit_stmt_block(body, Dest::Return, &mut body_lines)?;
             push_indented(&mut lines, &body_lines);
         } else {
             lines.push(format!("def {py_name}(*_gan_args):"));
             let mut body_lines = Vec::new();
-            if let Some(info) = &f.doc {
-                if !info.hidden {
-                    if let Some(text) = info.default_text() {
-                        let compiled = self.compile_doctests(text, f.span)?;
-                        body_lines.push(format!(
-                            "\"\"\"{}\"\"\"",
-                            compiled.replace("\"\"\"", "\\\"\\\"\\\"")
-                        ));
-                    }
-                }
+            if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
+                body_lines.push(format!(
+                    "\"\"\"{}\"\"\"",
+                    compiled.replace("\"\"\"", "\\\"\\\"\\\"")
+                ));
             }
             body_lines.push("match _gan_args:".to_string());
             for (params, guard, body) in &f.clauses {
@@ -761,6 +784,34 @@ impl Codegen {
             push_indented(&mut lines, &body_lines);
         }
         Ok(format!("\n{}\n", lines.join("\n")))
+    }
+
+    /// The docstring for a doc map: default prose plus shared @example
+    /// blocks, with doctests compiled (GEP-0007-R002/R001B).
+    fn docstring_text(
+        &mut self,
+        info: Option<&DocInfo>,
+        span: Span,
+    ) -> Result<Option<String>> {
+        let Some(info) = info else { return Ok(None) };
+        if info.hidden {
+            return Ok(None);
+        }
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(text) = info.default_text() {
+            parts.push(text.trim_end().to_string());
+        }
+        for ex in &info.examples {
+            parts.push(ex.trim_end().to_string());
+        }
+        if parts.is_empty() {
+            return Ok(None);
+        }
+        let mut joined = parts.join("\n\n");
+        if joined.contains('\n') {
+            joined.push('\n');
+        }
+        Ok(Some(self.compile_doctests(&joined, span)?))
     }
 
     /// Compile `gan> expr` doctest lines into native Python doctests
@@ -2623,5 +2674,37 @@ mod doc_robustness_tests {
             "defmodule M do\n  @doc \"价格 #{price}\"\n  def f(x), do: x\nend",
         );
         assert!(err.contains("interpolation"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod example_attr_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn shared_example_lands_in_docstring_and_tests() {
+        let py = compile(
+            "defmodule M do\n  @doc \"Adds one.\"\n  @doc_trans zh_CN: \"加一。\"\n  @example \"\"\"\n      gan> inc(1)\n      2\n  \"\"\"\n  def inc(x), do: x + 1\nend",
+        );
+        assert!(py.contains("Adds one."), "{py}");
+        assert!(py.contains(">>> inc(1)\n      2"), "{py}");
+        assert!(!py.contains("加一"), "{py}");
+    }
+
+    #[test]
+    fn example_without_doc_still_works() {
+        let py = compile(
+            "defmodule M do\n  @example \"\"\"\n      gan> dbl(2)\n      4\n  \"\"\"\n  def dbl(x), do: x * 2\nend",
+        );
+        assert!(py.contains(">>> dbl(2)"), "{py}");
+    }
+
+    #[test]
+    fn gan_prompt_in_translation_is_rejected() {
+        let err = compile_err(
+            "defmodule M do\n  @doc \"d\"\n  @doc_trans zh_CN: \"\"\"\n  示例：\n      gan> f(1)\n      1\n  \"\"\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("GEP-0007-R001B"), "{err}");
+        assert!(err.contains("@example"), "{err}");
     }
 }

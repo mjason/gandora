@@ -10,17 +10,17 @@ class GanMatchError(Exception):
 
 def fact(*_gan_args):
     """
-  Factorial via multi-clause dispatch. Docs are Markdown; `gan>` lines
-  are doctests that `gan test` runs as native Python doctests.
+  Factorial via multi-clause dispatch. Docs are Markdown; the shared
+  `@example` block below is tested by `gan test` and shown in every
+  locale — translations stay prose-only.
+
 
   ## Examples
 
       >>> fact(0)
       1
       >>> fact(10)
-      3628800
-
-  """
+      3628800"""
     match _gan_args:
         case (0,):
             return 1
@@ -30,15 +30,13 @@ def fact(*_gan_args):
 
 
 def classify(x):
-    """
-  Sign of a number as an atom.
+    """Sign of a number as an atom.
+
 
       >>> classify(-3)
       'negative'
       >>> [classify(0), classify(9)]
-      ['zero', 'positive']
-
-  """
+      ['zero', 'positive']"""
     if x < 0:
         return "negative"
     elif x == 0:
@@ -48,13 +46,11 @@ def classify(x):
 
 
 def norm(xs):
-    """
-  Euclidean norm through a pipeline.
+    """Euclidean norm through a pipeline.
+
 
       >>> norm([3, 4])
-      5.0
-
-  """
+      5.0"""
     return _then_sqrt(_sum_squares(xs))
 
 

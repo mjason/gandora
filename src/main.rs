@@ -598,6 +598,13 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
                         codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;
                     }
                 }
+                "@example" => {
+                    let ex = codegen::example_from_args(&file, c)?;
+                    pending
+                        .get_or_insert_with(codegen::DocInfo::default)
+                        .examples
+                        .push(ex);
+                }
                 "@moduledoc_trans" => {
                     if let Some(info) = module_doc.as_mut() {
                         codegen::merge_doc_trans(&file, c, info, "@moduledoc_trans")?;
@@ -629,10 +636,21 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
     };
     match info {
         Some(info) if info.hidden => println!("{label} is hidden (@doc false)"),
-        Some(info) => match lookup_locale(&info, locale.as_deref()) {
-            Some(text) => print!("{}", ensure_trailing_newline(text)),
-            None => println!("{label} has no documentation"),
-        },
+        Some(info) => {
+            let prose = lookup_locale(&info, locale.as_deref());
+            if prose.is_none() && info.examples.is_empty() {
+                println!("{label} has no documentation");
+            } else {
+                if let Some(text) = prose {
+                    print!("{}", ensure_trailing_newline(text));
+                }
+                // shared @example blocks are shown in every locale
+                for ex in &info.examples {
+                    println!();
+                    print!("{}", ensure_trailing_newline(ex.trim_end()));
+                }
+            }
+        }
         None => println!("{label} has no documentation"),
     }
     Ok(())
