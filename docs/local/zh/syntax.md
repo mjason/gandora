@@ -142,17 +142,18 @@ end
 
 ## 文档
 
-`@doc`/`@moduledoc` 是 Markdown。关键字形式可添加多语言；`gan>`
-行是 doctest，会编译成原生 Python doctest。
+`@doc`/`@moduledoc` 是 Markdown；`@doc_trans`/`@moduledoc_trans`
+添加多语言。`gan>` 行是 doctest，会编译成原生 Python doctest。
 
 ```elixir
-@doc default: """
+@doc """
 Factorial.
 
     gan> fact(10)
     3628800
 
-""", zh_CN: "阶乘。"
+"""
+@doc_trans zh_CN: "阶乘。"
 def fact(n), do: ...
 ```
 

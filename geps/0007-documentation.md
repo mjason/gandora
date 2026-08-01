@@ -10,7 +10,7 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [1]
 replaces: []
 superseded-by: null
@@ -23,9 +23,9 @@ translations:
 
 ## Abstract
 
-`@doc` and `@moduledoc` are Markdown, as in Elixir. A keyword form adds
-localized variants (`@doc default: "...", zh_CN: "..."`), following the
-Osiris model where the default text is the runtime fallback and locales
+`@doc` and `@moduledoc` are Markdown, as in Elixir. Separate
+`@doc_trans <locale>: "..."` attributes add localized variants without
+cluttering the primary text, following the Osiris model where the default text is the runtime fallback and locales
 are tooling metadata. `@doc false` hides a function from documentation.
 Example sessions written with the `gan>` prompt compile into native
 Python doctests inside the generated docstrings, so `gan test` (and any
@@ -62,11 +62,16 @@ doc coverage tooling are deferred.
 
 ### Value forms and Markdown
 
-**GEP-0007-R001:** `@doc` and `@moduledoc` accept: a string (the default
-text), the atom-keyword form `default: "...", <locale>: "..."` with
-locale keys spelling BCP 47 tags with `_` for `-` (`zh_CN` ≡ `zh-CN`),
-or `false`. Doc text is Markdown; the compiler stores it verbatim and
-MUST NOT reflow or reformat it.
+**GEP-0007-R001:** `@doc` and `@moduledoc` accept a string (the default
+text) or `false`. Doc text is Markdown; the compiler stores it verbatim
+and MUST NOT reflow or reformat it.
+
+**GEP-0007-R001A:** Localized variants attach with `@doc_trans` (after
+the `@doc` they translate) and `@moduledoc_trans` (after `@moduledoc`),
+carrying one or more `<locale>: "text"` pairs whose keys spell BCP 47
+tags with `_` for `-` (`zh_CN` ≡ `zh-CN`). The attribute MAY be repeated
+for additional locales; a duplicate locale, a `default:` key, or a
+`*_trans` without its preceding doc attribute is a compile error.
 
 **GEP-0007-R002:** The default text (after doctest compilation, R006)
 becomes the generated Python docstring. Localized texts are tooling
@@ -75,8 +80,6 @@ MUST NOT appear in generated code.
 
 **GEP-0007-R003:** `@doc false` suppresses the docstring and marks the
 function hidden; `gan doc` MUST say so rather than print nothing.
-A missing `default:` entry with other locales present is a compile
-error.
 
 ### Locale lookup and gan doc
 
@@ -148,6 +151,13 @@ of guessing.
 
 ## Rejected Alternatives
 
+### Locale keywords inside @doc (`@doc default: ..., zh_CN: ...`)
+
+The first design. It buries the primary text behind a `default:` label
+and turns every translated function head into one long attribute;
+separate `@doc_trans` lines keep the common case (English only)
+zero-ceremony and translations independently editable.
+
 ### A Gandora-side doctest runner
 
 Re-implements what Python ships, needs a runner in every environment,
@@ -180,4 +190,6 @@ directly.
 
 ## Change History
 
+- Revision 2, 2026-08-01: Replaced the locale-keyword form of @doc with
+  separate @doc_trans / @moduledoc_trans attributes (R001A).
 - Revision 1, 2026-08-01: Initial version.

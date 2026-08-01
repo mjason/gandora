@@ -10,14 +10,14 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [1]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0007-documentation.md
-source-revision: 1
+source-revision: 2
 translation-status: Current
 ---
 
@@ -47,7 +47,9 @@ Elixir 将文档视为一等、可测试的制品（hexdocs 的 writing-document
 
 ### 值形式与 Markdown
 
-**GEP-0007-R001:** `@doc` 和 `@moduledoc` 接受：一个字符串（默认文本）、原子-关键字形式 `default: "...", <locale>: "..."`（区域键使用 `_` 代替 `-` 拼写 BCP 47 标签，如 `zh_CN` ≡ `zh-CN`），或 `false`。文档文本为 Markdown；编译器原样存储，并且 MUST NOT 重新排版或重新格式化。
+**GEP-0007-R001:** `@doc` 和 `@moduledoc` 接受一个字符串（默认文本）或 `false`。文档文本是 Markdown；编译器 MUST 原样保存，MUST NOT 重排或重新格式化。
+
+**GEP-0007-R001A:** 本地化变体通过 `@doc_trans`（紧随其翻译的 `@doc` 之后）与 `@moduledoc_trans`（紧随 `@moduledoc` 之后）附加，携带一个或多个 `<locale>: "text"` 对，键以 `_` 拼写 BCP 47 标签中的 `-`（`zh_CN` ≡ `zh-CN`）。该属性 MAY 重复出现以添加更多语言；重复的 locale、`default:` 键、或缺少前置文档属性的 `*_trans` 均为编译错误。
 
 **GEP-0007-R002:** 默认文本（在 doctest 编译后，R006）成为生成的 Python 文档字符串。本地化文本是从源代码（或包的发行源代码）读取的工具元数据；它们 MUST NOT 出现在生成的代码中。
 
@@ -109,4 +111,5 @@ Agent 应使用 Markdown `@doc` 为公开函数编写文档，对非显而易见
 
 ## 变更历史
 
+- 修订版 2，2026-08-01：以独立的 @doc_trans / @moduledoc_trans 属性取代 @doc 的 locale 关键字形式（R001A）。
 - 修订版 1，2026-08-01：初始版本。

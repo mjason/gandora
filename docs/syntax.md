@@ -155,17 +155,19 @@ output unchanged.
 
 ## Documentation
 
-`@doc`/`@moduledoc` are Markdown. The keyword form adds locales; `gan>`
-lines are doctests that compile into native Python doctests.
+`@doc`/`@moduledoc` are Markdown; `@doc_trans`/`@moduledoc_trans` add
+locales. `gan>` lines are doctests that compile into native Python
+doctests.
 
 ```elixir
-@doc default: """
+@doc """
 Factorial.
 
     gan> fact(10)
     3628800
 
-""", zh_CN: "阶乘。"
+"""
+@doc_trans zh_CN: "阶乘。"
 def fact(n), do: ...
 ```
 
