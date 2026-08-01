@@ -369,10 +369,13 @@ impl Expander {
                             let fbody = Term::keyword_arg(&call.args, "do")
                                 .cloned()
                                 .unwrap_or(Term::Nil);
+                            // a keyword list is a list of {atom, value}
+                            // tuples (GEP-0001-R009), so hooks can match
+                            // [{:name, value} | rest]
                             let attrs = Term::List(
                                 pending
                                     .drain(..)
-                                    .map(|(n, v)| Term::Pair(n, Box::new(v)))
+                                    .map(|(n, v)| Term::Tuple(vec![Term::Atom(n), v]))
                                     .collect(),
                             );
                             let hook_call = Call {

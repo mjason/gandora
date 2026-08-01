@@ -1,0 +1,47 @@
+defmodule Tour.Annotations do
+  @moduledoc """
+  Wrapping a native Python decorator as an Elixir-style attribute — the
+  same mechanism @doc itself uses (GEP-0008). `@cache 64` before a def
+  applies functools.lru_cache(maxsize: 64); functions without the
+  attribute pass through untouched.
+  """
+
+  defattr :cache
+
+  defmacro on_def(kind, head, attrs, body) do
+    case attrs do
+      [{:cache, maxsize}] ->
+        quote do
+          @decorate :functools.lru_cache(maxsize: unquote(maxsize))
+          def unquote(head) do
+            unquote(body)
+          end
+        end
+      [] ->
+        quote do
+          def unquote(head) do
+            unquote(body)
+          end
+        end
+    end
+  end
+
+  @on_definition Tour.Annotations.on_def
+
+  @cache 128
+  def fib(n) do
+    if n < 2 do
+      n
+    else
+      fib(n - 1) + fib(n - 2)
+    end
+  end
+
+  def plain(x), do: x + 1
+
+  def main() do
+    IO.puts("fib(60) = #{fib(60)}")
+    IO.puts("cache   = #{fib.cache_info()}")
+    IO.puts("plain has no cache_info: #{inspect(:builtins.hasattr(plain, "cache_info"))}")
+  end
+end
