@@ -331,3 +331,35 @@ fn copy_tree(from: &Path, to: &Path) {
         }
     }
 }
+
+#[test]
+fn fastapi_chapter_runs() {
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let venv_py = tour.join(".venv/bin/python");
+    if !venv_py.exists() {
+        eprintln!("skipping: examples/tour/.venv not present (run `uv sync`)");
+        return;
+    }
+    let deps = Command::new(&venv_py)
+        .args(["-c", "import fastapi, httpx"])
+        .status()
+        .unwrap();
+    if !deps.success() {
+        eprintln!("skipping: fastapi not installed (run `uv sync`)");
+        return;
+    }
+    let out = gan().current_dir(&tour).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let out = Command::new(&venv_py)
+        .arg("-P")
+        .arg(tour.join("dist/tour/webapi.py"))
+        .env("PYTHONPATH", tour.join("dist"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("-> 200 {'message': 'hello from gandora'"), "{stdout}");
+    assert!(stdout.contains("'slug': 'hello-gandora-world'"), "{stdout}");
+    assert!(stdout.contains("'fact': 3628800"), "{stdout}");
+    assert!(stdout.contains("GET /nope             -> 404"), "{stdout}");
+}

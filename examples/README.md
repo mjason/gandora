@@ -28,6 +28,7 @@ a `main`, or inspect it with `gan expand` / `gan build`.
 | [`src/sigils.gan`](tour/src/sigils.gan) | `Sigils` | `~w`, `~s`, `~r`, embedded-Python `~python` (GEP-0005) |
 | [`src/tour/dataframe.gan`](tour/src/tour/dataframe.gan) | `Tour.Dataframe` | **pandas** as a `uv` dev dependency: DataFrame from a map literal, `\|> .groupby(...) \|> .agg(...)` method pipes, `.assign` with a `~python` lambda column, `.query` chains |
 | [`src/tour/numpy.gan`](tour/src/tour/numpy.gan) | `Tour.Numpy` | **numpy**: broadcasting through plain operators, `\|> .reshape(3, 4)` chains, `np.linalg.norm`, `~python` boolean indexing |
+| [`src/tour/webapi.gan`](tour/src/tour/webapi.gan) | `Tour.Webapi` | **FastAPI**: the app in a module attribute, routes via `@decorate @app.get("/")`, multi-clause `defp` behind a route; serves with plain `uvicorn tour.webapi:app --app-dir dist`, self-tests with TestClient |
 
 The pandas/numpy chapters need the dev dependencies installed and run
 standalone (they are not part of `main.gan`, so the rest of the tour stays

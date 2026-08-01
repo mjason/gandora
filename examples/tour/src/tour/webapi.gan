@@ -1,0 +1,42 @@
+defmodule Tour.Webapi do
+  @moduledoc """
+  FastAPI end to end: the app lives in a module attribute, routes attach
+  with @decorate, and the generated module serves with plain uvicorn:
+
+      uv run uvicorn tour.webapi:app --app-dir dist
+
+  `gan run src/tour/webapi.gan` self-tests the app with TestClient.
+  """
+
+  @app :fastapi.FastAPI(title: "Gandora Tour API")
+
+  @decorate @app.get("/")
+  def root() do
+    %{message: "hello from gandora", framework: "fastapi"}
+  end
+
+  @decorate @app.get("/slug/{text}")
+  def slug(text) do
+    %{input: text, slug: text.lower().replace(" ", "-")}
+  end
+
+  @decorate @app.get("/fact/{n}")
+  def fact_route(n) do
+    %{n: n, fact: fact(:builtins.int(n))}
+  end
+
+  defp fact(0), do: 1
+  defp fact(n), do: n * fact(n - 1)
+
+  def main() do
+    client = :"fastapi.testclient".TestClient(@app)
+    resp = client.get("/")
+    IO.puts("GET /                 -> #{resp.status_code} #{resp.json()}")
+    resp = client.get("/slug/Hello Gandora World")
+    IO.puts("GET /slug/...         -> #{resp.status_code} #{resp.json()}")
+    resp = client.get("/fact/10")
+    IO.puts("GET /fact/10          -> #{resp.status_code} #{resp.json()}")
+    resp = client.get("/nope")
+    IO.puts("GET /nope             -> #{resp.status_code}")
+  end
+end
