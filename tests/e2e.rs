@@ -153,3 +153,36 @@ fn sigils_run() {
     assert!(stdout.contains("sum of squares: 285"), "{stdout}");
     assert!(stdout.contains("[2, 4, 6]"), "{stdout}");
 }
+
+#[test]
+fn generated_snapshot_is_current() {
+    // examples/tour/generated/ is the checked-in compilation result shown in
+    // the docs; this test fails when the compiler output drifts from it.
+    // Refresh with: cd examples/tour && gan build && cp -r dist/* generated/
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let out = gan().current_dir(&tour).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let mut stack = vec![tour.join("generated")];
+    let mut checked = 0;
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "py") {
+                let rel = path.strip_prefix(tour.join("generated")).unwrap();
+                let dist = tour.join("dist").join(rel);
+                let want = std::fs::read_to_string(&path).unwrap();
+                let got = std::fs::read_to_string(&dist).unwrap();
+                assert_eq!(
+                    got,
+                    want,
+                    "stale snapshot for {} — refresh examples/tour/generated/",
+                    rel.display()
+                );
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked >= 10, "expected at least 10 snapshot files, found {checked}");
+}

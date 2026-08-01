@@ -1,0 +1,65 @@
+defmodule Tour.Patterns do
+  @moduledoc "Pattern matching everywhere: =, case, cond, with, guards, multi-clause heads."
+
+  # multi-clause dispatch with guards, top to bottom
+  def describe(0), do: "zero"
+  def describe(n) when n < 0, do: "negative #{n}"
+  def describe(n) when rem(n, 2) == 0, do: "even #{n}"
+  def describe(n), do: "odd #{n}"
+
+  # destructuring with =
+  def destructure() do
+    {status, payload} = {:ok, [1, 2, 3]}
+    [first | rest] = payload
+    %{"name" => name} = %{"name" => "gandora", "extra" => true}
+    {status, first, rest, name}
+  end
+
+  # case with tuple patterns, a pinned value, nested maps, and a catch-all
+  def handle(result, expected) do
+    case result do
+      {:ok, ^expected} -> "matched the pinned value #{inspect(expected)}"
+      {:ok, other} -> "ok with #{inspect(other)}"
+      {:error, %{reason: r}} -> "failed: #{r}"
+      _ -> "unknown shape"
+    end
+  end
+
+  # cond: first truthy branch wins
+  def bucket(score) do
+    cond do
+      score >= 90 -> :a
+      score >= 60 -> :b
+      true -> :c
+    end
+  end
+
+  # with: chain of matches, else on the first failure
+  def parse_pair(text) do
+    with [a, b] <- text.split(","),
+         {:ok, x} <- parse_int(a),
+         {:ok, y} <- parse_int(b) do
+      {:ok, {x, y}}
+    else
+      _ -> :error
+    end
+  end
+
+  defp parse_int(s) do
+    if s.strip().isdigit() do
+      {:ok, :builtins.int(s)}
+    else
+      :error
+    end
+  end
+
+  def demo() do
+    IO.puts("describe:    #{inspect([describe(0), describe(-3), describe(4), describe(7)])}")
+    IO.puts("destructure: #{inspect(destructure())}")
+    IO.puts(handle({:ok, 42}, 42))
+    IO.puts(handle({:ok, :other}, 42))
+    IO.puts(handle({:error, %{reason: "boom"}}, 42))
+    IO.puts("buckets:     #{inspect([bucket(95), bucket(70), bucket(10)])}")
+    IO.puts("parse_pair:  #{inspect([parse_pair("3,4"), parse_pair("nope")])}")
+  end
+end

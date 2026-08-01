@@ -1,0 +1,54 @@
+defmodule Tour.Basics do
+  @moduledoc "Literals, operators, strings, and Elixir truthiness."
+
+  def literals() do
+    [
+      42,
+      1_000_000,
+      3.14,
+      :ok,
+      :"quoted atom",
+      "text",
+      true,
+      nil,
+      [1, 2, 3],
+      {:pair, "tuple"},
+      %{"key" => "value", atom_key: 1},
+      [name: "keyword", list: true],
+    ]
+  end
+
+  def arithmetic() do
+    a = 7 + 3 * 2        # 13, Elixir precedence
+    b = 10 / 4           # 2.5, / is true division
+    c = 10 // 4          # 2, truncated division (same as div(10, 4))
+    d = rem(-7, 2)       # -1, truncated remainder (Python % would give 1)
+    {a, b, c, d}
+  end
+
+  def strings(name) do
+    greeting = "Hello, #{name}!"     # interpolation -> f-string
+    upper = greeting.upper()         # any Python method, no wrapper
+    joined = "a b c" <> " d"         # <> is string concatenation
+    {greeting, upper, joined}
+  end
+
+  def truthiness(x) do
+    # only false and nil are falsy (Elixir semantics, not Python's!)
+    if x do
+      "truthy: #{inspect(x)}"
+    else
+      "falsy: #{inspect(x)}"
+    end
+  end
+
+  def demo() do
+    IO.puts("literals:   #{inspect(literals())}")
+    IO.puts("arithmetic: #{inspect(arithmetic())}")
+    IO.puts("strings:    #{inspect(strings("gandora"))}")
+    IO.puts(truthiness(0))       # 0 is truthy in Gandora
+    IO.puts(truthiness(nil))
+    total = 1..10 |> :builtins.list() |> :builtins.sum()
+    IO.puts("sum of 1..10 = #{total}")
+  end
+end

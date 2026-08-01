@@ -1,4 +1,6 @@
 defmodule App.Cli do
+  @moduledoc "Cross-module calls, required macros, and destructuring in action."
+
   require App.Macros
   alias App.Mathy
 
@@ -12,5 +14,8 @@ defmodule App.Cli do
     [h | t] = [10, 20, 30]
     IO.puts("destructured: #{a} #{b} #{h} #{inspect(t)}")
     IO.puts("json: #{:json.dumps(%{lang: "gandora"}, indent: 0)}")
+    IO.puts("sum_all([1, 2, 3, 4]) = #{App.Macros.sum_all([1, 2, 3, 4])}")
+    App.Macros.with_timer("fact(200)", Mathy.fact(200))
+    IO.puts("timer_result has #{:builtins.len(to_string(timer_result))} digits")
   end
 end

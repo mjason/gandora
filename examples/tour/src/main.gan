@@ -1,9 +1,26 @@
 defmodule Main do
-  @moduledoc "The front door of the tour: `gan run src/main.gan`."
+  @moduledoc "Runs every chapter of the tour: `gan run src/main.gan`."
 
+  alias Tour.Basics
+  alias Tour.Patterns
+  alias Tour.Functions
+  alias Tour.Interop
   alias App.Cli
+  alias App.Shop
 
   def main() do
-    Cli.main()
+    section("basics", &Basics.demo/0)
+    section("patterns", &Patterns.demo/0)
+    section("functions", &Functions.demo/0)
+    section("interop", &Interop.demo/0)
+    section("macros + modules", &Cli.main/0)
+    section("structs + attributes", &Shop.main/0)
+    section("sigils", &Sigils.main/0)
+  end
+
+  defp section(title, run) do
+    IO.puts("== #{title} ==")
+    run.()
+    IO.puts("")
   end
 end

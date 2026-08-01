@@ -1,10 +1,31 @@
 defmodule App.Macros do
+  @moduledoc "Hygienic macros: quote/unquote, splicing, deliberate capture with var!."
+
   defmacro unless_nil(value, fallback) do
     quote do
       case unquote(value) do
         nil -> unquote(fallback)
         found -> found
       end
+    end
+  end
+
+  # unquote_splicing inlines a list of syntax into the surrounding form
+  defmacro sum_all(items) do
+    quote do
+      :builtins.sum([unquote_splicing(items)])
+    end
+  end
+
+  # `start` and `elapsed` are hygienic (renamed per expansion);
+  # var!(timer_result) deliberately escapes into the caller's scope
+  defmacro with_timer(label, body) do
+    quote do
+      start = :time.perf_counter()
+      var!(timer_result) = unquote(body)
+      elapsed = :time.perf_counter() - start
+      IO.puts("#{unquote(label)} took #{:builtins.round(elapsed * 1000, 3)} ms")
+      var!(timer_result)
     end
   end
 end
