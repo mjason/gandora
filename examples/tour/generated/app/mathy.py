@@ -33,7 +33,7 @@ def classify(x):
     """
   Sign of a number as an atom.
 
-      >>> classify(-(3))
+      >>> classify(-3)
       'negative'
       >>> [classify(0), classify(9)]
       ['zero', 'positive']

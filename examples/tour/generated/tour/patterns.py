@@ -113,7 +113,7 @@ def _parse_int(s):
 
 
 def demo():
-    print(f"describe:    {repr([describe(0), describe(-(3)), describe(4), describe(7)])}")
+    print(f"describe:    {repr([describe(0), describe(-3), describe(4), describe(7)])}")
     print(f"destructure: {repr(destructure())}")
     print(handle(("ok", 42), 42))
     print(handle(("ok", "other"), 42))

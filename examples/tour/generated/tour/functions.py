@@ -41,7 +41,7 @@ def demo():
     add = lambda _gan_cap1, _gan_cap2: _gan_cap1 + _gan_cap2
     sqrt = math.sqrt
     print(f"double.(21)  = {double(21)}")
-    print(f"classify     = {repr([classify(0), classify(5), classify(-(5))])}")
+    print(f"classify     = {repr([classify(0), classify(5), classify(-5)])}")
     print(f"add.(40, 2)  = {add(40, 2)}")
     print(f"sqrt.(81.0)  = {sqrt(81.0)}")
     result = builtins.sum(_keep(_map_list(builtins.list(range(1, (10) + 1)), lambda x: x * x), lambda x: _gan_rem(x, 2) == 0))

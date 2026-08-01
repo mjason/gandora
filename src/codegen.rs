@@ -89,6 +89,12 @@ pub fn doc_info_from_args(file: &str, call: &Call) -> crate::diag::Result<DocInf
                 .push(("default".to_string(), t.as_plain_str().unwrap()));
             Ok(info)
         }
+        Some(Term::Str(_)) => Err(Diagnostic::new(
+            file,
+            call.span,
+            "doc text cannot use #{} interpolation; write \\#{ for a literal \
+             #{ (GEP-0007-R001)",
+        )),
         _ => Err(Diagnostic::new(
             file,
             call.span,
@@ -1422,10 +1428,18 @@ impl Codegen {
                 let e = self.emit_bool_expr(&args[0], pre)?;
                 Ok(format!("not ({e})"))
             }
-            ("-", 1) => {
-                let e = self.emit_expr(&args[0], pre)?;
-                Ok(format!("-({e})"))
-            }
+            ("-", 1) => match &args[0] {
+                Term::Int(n) => Ok(format!("-{n}")),
+                Term::Float(v) => {
+                    let e = self.emit_expr(&args[0], pre)?;
+                    let _ = v;
+                    Ok(format!("-{e}"))
+                }
+                other => {
+                    let e = self.emit_expr(other, pre)?;
+                    Ok(format!("-({e})"))
+                }
+            },
             ("++", 2) => {
                 let a = self.emit_operand(&args[0], "+", pre)?;
                 let b = self.emit_operand(&args[1], "+", pre)?;
@@ -2583,5 +2597,31 @@ mod gep0007_tests {
             "defmodule M do\n  @doc \"\"\"\n    gan> 1 +\n    2\n\"\"\"\n  def f(x), do: x\nend",
         );
         assert!(err.contains("in doctest"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod doc_robustness_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn chinese_prose_and_comments_survive_extraction() {
+        let py = compile(
+            "defmodule M do\n  @doc \"\"\"\n符号判断。# 这不是注释是正文\n\n## 示例\n\n    gan> classify(-3) # 行尾中文注释会被词法器剥掉\n    'negative'\n\n以上 # 中文井号 无碍。\n\"\"\"\n  def classify(x), do: :negative\nend",
+        );
+        // prose with Chinese # passes through verbatim
+        assert!(py.contains("符号判断。# 这不是注释是正文"), "{py}");
+        assert!(py.contains("以上 # 中文井号 无碍。"), "{py}");
+        // the doctest compiled, trailing comment stripped by the lexer
+        assert!(py.contains(">>> classify(-3)\n    'negative'"), "{py}");
+        assert!(!py.contains("行尾中文注释"), "{py}");
+    }
+
+    #[test]
+    fn interpolation_in_doc_has_a_clear_error() {
+        let err = compile_err(
+            "defmodule M do\n  @doc \"价格 #{price}\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("interpolation"), "{err}");
     }
 }

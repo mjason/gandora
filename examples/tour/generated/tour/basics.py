@@ -25,7 +25,7 @@ def arithmetic():
     a = 7 + (3 * 2)
     b = 10 / 4
     c = _gan_div(10, 4)
-    d = _gan_rem(-(7), 2)
+    d = _gan_rem(-7, 2)
     return (a, b, c, d)
 
 
