@@ -4,9 +4,11 @@ import app.cli
 import app.shop
 import sigils
 import tour.basics
+import tour.dsl
 import tour.functions
 import tour.interop
 import tour.patterns
+import tour.templates
 
 
 def main():
@@ -14,6 +16,8 @@ def main():
     _section("patterns", tour.patterns.demo)
     _section("functions", tour.functions.demo)
     _section("interop", tour.interop.demo)
+    _section("templates", tour.templates.main)
+    _section("metaprogramming dsl", tour.dsl.main)
     _section("macros + modules", app.cli.main)
     _section("structs + attributes", app.shop.main)
     return _section("sigils", sigils.main)

@@ -1,0 +1,47 @@
+defmodule Tour.Templates do
+  @moduledoc """
+  GEP-0009: the ~<lang> embedded-language family with EEx-style
+  <%= expr %> splices. Any sigil name is a language tag; bodies are raw
+  (no \#{} — it collides with target-language syntax). Splices insert
+  runtime values in every language, and compiled code in ~python.
+  """
+
+  def sales_query(min_units) do
+    ~sql"""
+    SELECT product, SUM(units) AS total
+    FROM sales
+    WHERE units >= <%= min_units %>
+    GROUP BY product
+    """
+  end
+
+  def report(name, xs) do
+    ~markdown"""
+    # Sales report for <%= name.upper() %>
+
+    | metric | value |
+    | --- | --- |
+    | count | <%= :builtins.len(xs) %> |
+    | total | <%= xs |> :builtins.sum() %> |
+    | best  | <%= :builtins.max(xs) %> |
+    """
+  end
+
+  def evens_capped(xs, limit) do
+    # ~python splices are CODE: the compiled expression lands inside
+    # the comprehension — Python-only syntax, Gandora bindings
+    ~python([x for x in <%= xs %> if x % 2 == 0][:<%= limit %>])
+  end
+
+  def eex_docs() do
+    # <%%= escapes a literal marker, so templates can document templates
+    ~markdown(Use <%%= expr %> to splice a value; this line shows it literally.)
+  end
+
+  def main() do
+    IO.puts(sales_query(10))
+    IO.puts(report("gandora", [12, 30, 7, 45]))
+    IO.puts("evens_capped = #{inspect(evens_capped([1, 2, 3, 4, 5, 6, 7, 8], 3))}")
+    IO.puts(eex_docs())
+  end
+end

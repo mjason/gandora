@@ -5,6 +5,8 @@ defmodule Main do
   alias Tour.Patterns
   alias Tour.Functions
   alias Tour.Interop
+  alias Tour.Templates
+  alias Tour.Dsl
   alias App.Cli
   alias App.Shop
 
@@ -13,6 +15,8 @@ defmodule Main do
     section("patterns", &Patterns.demo/0)
     section("functions", &Functions.demo/0)
     section("interop", &Interop.demo/0)
+    section("templates", &Templates.main/0)
+    section("metaprogramming dsl", &Dsl.main/0)
     section("macros + modules", &Cli.main/0)
     section("structs + attributes", &Shop.main/0)
     section("sigils", &Sigils.main/0)
