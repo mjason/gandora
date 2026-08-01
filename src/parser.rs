@@ -180,6 +180,12 @@ impl Parser {
             let span = self.span();
             self.bump();
             self.skip_newlines();
+            // `x |> .method(args)` pipes into a method call on the piped
+            // value itself (GEP-0001-R025)
+            if op == "|>" && *self.peek() == Tok::Op(".") {
+                lhs = self.parse_postfix(lhs)?;
+                continue;
+            }
             let next_min = if right { prec } else { prec + 1 };
             let rhs = self.parse_expr(next_min, command && op == "=")?;
             if op == "|>" {
@@ -960,5 +966,36 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod pipe_method_tests {
+    use super::*;
+    use crate::ast::{Callee, Term};
+
+    #[test]
+    fn pipes_into_method_calls() {
+        let t = parse_expr_str("<test>", "df |> .groupby(\"p\") |> .agg(spec)").unwrap();
+        // outermost is .agg on (.groupby on df)
+        match &t {
+            Term::Call(c) => match &c.callee {
+                Callee::Dot { base, name, is_call } => {
+                    assert_eq!(name, "agg");
+                    assert!(is_call);
+                    assert!(matches!(&**base, Term::Call(inner)
+                        if matches!(&inner.callee, Callee::Dot { name, .. } if name == "groupby")));
+                }
+                other => panic!("{other:?}"),
+            },
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn pipes_into_methods_across_lines() {
+        let t = parse_expr_str("<test>", "df\n|> .head(3)\n|> .describe()").unwrap();
+        assert!(matches!(&t, Term::Call(c)
+            if matches!(&c.callee, Callee::Dot { name, .. } if name == "describe")));
     }
 }

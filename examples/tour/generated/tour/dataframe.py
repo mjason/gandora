@@ -20,8 +20,7 @@ def _with_revenue(df):
 
 
 def _summarize(df):
-    grouped = df.groupby("product", as_index=False).agg({"units": "sum", "revenue": "sum"})
-    return grouped.sort_values("revenue", ascending=False)
+    return df.groupby("product", as_index=False).agg({"units": "sum", "revenue": "sum"}).sort_values("revenue", ascending=False)
 
 
 def main():

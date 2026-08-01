@@ -370,6 +370,10 @@ fn cmd_run(args: &[String]) -> ExitCode {
     }
     let script = cache_root.join(&target.py_path);
     let (program, mut pre_args) = project::interpreter_command(&config.root);
+    // -P (PYTHONSAFEPATH) keeps the script's own directory off sys.path, so
+    // a generated module like tour/numpy.py cannot shadow the real numpy
+    // for its siblings; project modules resolve through PYTHONPATH instead.
+    pre_args.push("-P".to_string());
     pre_args.push(script.display().to_string());
     pre_args.extend(args[1..].iter().cloned());
     let mut command = std::process::Command::new(&program);

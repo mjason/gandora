@@ -11,7 +11,7 @@ areas:
   - Configuration
 created: 2026-08-01
 updated: 2026-08-01
-revision: 2
+revision: 3
 requires: [0]
 replaces: []
 superseded-by: null
@@ -252,6 +252,12 @@ machinery.
 failure, 2 for command-line misuse. Diagnostics MUST name the file, line,
 and column of the primary span and MUST be written to stderr.
 
+**GEP-0001-R025:** When the right-hand side of `|>` begins with `.`, the
+pipe is a method pipe: `x |> .name(args)` evaluates to the postfix call
+`x.name(args)` on the piped value (GEP-0003-R004), and further postfix
+segments may follow. This composes Python fluent APIs (pandas, numpy)
+with Elixir pipelines without intermediate bindings.
+
 **GEP-0001-R024:** Generated Python MUST be deterministic: compiling the
 same sources with the same compiler version and configuration produces
 byte-identical output.
@@ -336,6 +342,8 @@ R021–R024. The repository's test suite maps test names to these requirement
 identifiers.
 
 ## Change History
+
+- Revision 3, 2026-08-01: Added R025, the `|> .method(args)` method pipe.
 
 - Revision 2, 2026-08-01: R007 exclusion list updated — structs and sigils
   are now specified by GEP-0004 and GEP-0005.

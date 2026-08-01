@@ -11,14 +11,14 @@ areas:
   - Configuration
 created: 2026-08-01
 updated: 2026-08-01
-revision: 2
+revision: 3
 requires: [0]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0001-language-and-cli.md
-source-revision: 2
+source-revision: 3
 translation-status: Current
 ---
 
@@ -152,6 +152,8 @@ Python 拥有最大的库生态系统；Elixir 拥有最令人愉悦的函数式
 
 **GEP-0001-R023：** 退出码：0 表示成功，1 表示编译或运行时失败，2 表示命令行误用。诊断信息 MUST 指明主作用域的文件、行和列，且 MUST 写入 stderr。
 
+**GEP-0001-R025：** 当 `|>` 的右侧以 `.` 开头时，管道为方法管道：`x |> .name(args)` 求值为对管道值的后缀调用 `x.name(args)`（GEP-0003-R004），其后可以继续接后缀段。这让 Python 的流式 API（pandas、numpy）无需中间绑定即可与 Elixir 管道组合。
+
 **GEP-0001-R024：** 生成的 Python MUST 是确定性的：使用相同的编译器版本和配置编译相同的源文件，会产生字节完全相同的输出。
 
 ## 理由
@@ -199,6 +201,8 @@ v0 无；被排除的构造（R007）被有意推迟到未来的 GEP 中，而�
 当以下条件满足时，实现即为一致：`gan init && gan build && gan run` 在新项目上能正常工作；每个 R006 构造都能以指定的语义编译和运行；每个 R007 排除都会产生一个命名的诊断；生成的输出满足 R009、R013–R017 的映射；CLI 满足 R021–R024。仓库的测试套件将测试名称映射到这些需求标识符。
 
 ## 变更历史
+
+- 修订版 3，2026-08-01：新增 R025——`|> .method(args)` 方法管道。
 
 - 修订版 2，2026-08-01：更新 R007 排除清单——结构体与 sigil 现分别由 GEP-0004 和 GEP-0005 规定。
 - 修订版 1，2026-08-01：初始版本。引导接受记录由仓库的初始设计提交记录，而非外部决议 URL。

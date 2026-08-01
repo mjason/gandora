@@ -208,3 +208,49 @@ fn macro_only_module_emits_no_file() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("defines only macros"), "{stderr}");
 }
+
+#[test]
+fn pandas_and_numpy_chapters_run() {
+    // these chapters need the tour's uv dev dependencies; skip cleanly when
+    // the .venv is absent so stdlib-only environments still pass
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let venv_py = tour.join(".venv/bin/python");
+    if !venv_py.exists() {
+        eprintln!("skipping: examples/tour/.venv not present (run `uv sync`)");
+        return;
+    }
+    let deps = Command::new(&venv_py)
+        .args(["-c", "import pandas, numpy"])
+        .status()
+        .unwrap();
+    if !deps.success() {
+        eprintln!("skipping: pandas/numpy not installed (run `uv sync`)");
+        return;
+    }
+    let out = gan().current_dir(&tour).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let run = |script: &str| -> String {
+        let out = Command::new(&venv_py)
+            .arg("-P")
+            .arg(tour.join(script))
+            .env("PYTHONPATH", tour.join("dist"))
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{script} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    let stdout = run("dist/tour/dataframe.py");
+    assert!(stdout.contains("total revenue = 6810.5"), "{stdout}");
+    assert!(stdout.contains("east units    = 50"), "{stdout}");
+
+    let stdout = run("dist/tour/numpy.py");
+    assert!(stdout.contains("a * 10 + 1   = [11. 21. 31. 41.]"), "{stdout}");
+    assert!(stdout.contains("norm([3,4])  = 5.0"), "{stdout}");
+    assert!(stdout.contains("std          = 3.452"), "{stdout}");
+}

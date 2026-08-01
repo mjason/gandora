@@ -26,17 +26,33 @@ a `main`, or inspect it with `gan expand` / `gan build`.
 | [`src/app/cli.gan`](tour/src/app/cli.gan) | `App.Cli` | `require`d macros across modules, `alias`, the `var!(timer_result)` escape in action |
 | [`src/app/shop.gan`](tour/src/app/shop.gan) | `App.Shop` | `defstruct` → frozen dataclass, `%Mod{...}` literal/pattern/update, module attributes, a decorator registry (GEP-0004) |
 | [`src/sigils.gan`](tour/src/sigils.gan) | `Sigils` | `~w`, `~s`, `~r`, embedded-Python `~python` (GEP-0005) |
-| [`src/tour/dataframe.gan`](tour/src/tour/dataframe.gan) | `Tour.Dataframe` | **pandas** as a `uv` dev dependency: DataFrame from a map literal, `.assign` with a `~python` lambda column, groupby/agg with kwargs, `.query` chains |
+| [`src/tour/dataframe.gan`](tour/src/tour/dataframe.gan) | `Tour.Dataframe` | **pandas** as a `uv` dev dependency: DataFrame from a map literal, `\|> .groupby(...) \|> .agg(...)` method pipes, `.assign` with a `~python` lambda column, `.query` chains |
+| [`src/tour/numpy.gan`](tour/src/tour/numpy.gan) | `Tour.Numpy` | **numpy**: broadcasting through plain operators, `\|> .reshape(3, 4)` chains, `np.linalg.norm`, `~python` boolean indexing |
 
-The pandas chapter needs the dev dependency installed and runs standalone
-(it is not part of `main.gan`, so the rest of the tour stays
+The pandas/numpy chapters need the dev dependencies installed and run
+standalone (they are not part of `main.gan`, so the rest of the tour stays
 stdlib-only):
 
 ```console
 cd examples/tour
-uv sync                            # installs pandas into .venv
+uv sync                            # installs pandas + numpy into .venv
 gan run src/tour/dataframe.gan
+gan run src/tour/numpy.gan
 ```
+
+The method pipe (GEP-0001-R025) is what makes fluent Python APIs read as
+pipelines: when the right side of `|>` starts with `.`, the call applies to
+the piped value itself —
+
+```elixir
+df
+|> .groupby("product", as_index: false)
+|> .agg(%{"units" => "sum", "revenue" => "sum"})
+|> .sort_values("revenue", ascending: false)
+```
+
+compiles to
+`df.groupby("product", as_index=False).agg({...}).sort_values("revenue", ascending=False)`.
 
 ### Reading the compilation results
 

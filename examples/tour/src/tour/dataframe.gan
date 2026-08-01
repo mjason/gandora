@@ -24,12 +24,16 @@ defmodule Tour.Dataframe do
   # pandas .assign takes keyword arguments whose values are callables;
   # the column expression is pure Python, so ~python says it directly
   defp with_revenue(df) do
-    df.assign(revenue: ~python(lambda d: d["units"] * d["price"]))
+    df |> .assign(revenue: ~python(lambda d: d["units"] * d["price"]))
   end
 
+  # `|> .method(args)` pipes into a method call on the piped value,
+  # so pandas fluent chains read like Elixir pipelines
   defp summarize(df) do
-    grouped = df.groupby("product", as_index: false).agg(%{"units" => "sum", "revenue" => "sum"})
-    grouped.sort_values("revenue", ascending: false)
+    df
+    |> .groupby("product", as_index: false)
+    |> .agg(%{"units" => "sum", "revenue" => "sum"})
+    |> .sort_values("revenue", ascending: false)
   end
 
   def main() do
