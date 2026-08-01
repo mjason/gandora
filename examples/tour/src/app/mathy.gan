@@ -1,0 +1,28 @@
+defmodule App.Mathy do
+  @moduledoc "Math helpers showing patterns and interop."
+
+  @doc "Truncated factorial via multi-clause dispatch."
+  def fact(0), do: 1
+  def fact(n) when n > 0, do: n * fact(n - 1)
+
+  def classify(x) do
+    cond do
+      x < 0 -> :negative
+      x == 0 -> :zero
+      true -> :positive
+    end
+  end
+
+  def norm(xs) do
+    xs
+    |> sum_squares()
+    |> then_sqrt()
+  end
+
+  defp sum_squares(xs) do
+    total = :functools.reduce(fn acc, x -> acc + x * x end, xs, 0)
+    total
+  end
+
+  defp then_sqrt(x), do: :math.sqrt(x)
+end

@@ -1,0 +1,10 @@
+defmodule App.Macros do
+  defmacro unless_nil(value, fallback) do
+    quote do
+      case unquote(value) do
+        nil -> unquote(fallback)
+        found -> found
+      end
+    end
+  end
+end

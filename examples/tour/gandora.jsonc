@@ -1,0 +1,6 @@
+{
+  // Gandora compiler configuration (GEP-0001).
+  "source": ["src"],
+  "outDir": "dist",
+  "targetPython": "3.12",
+}

@@ -1,0 +1,9 @@
+defmodule Main do
+  @moduledoc "The front door of the tour: `gan run src/main.gan`."
+
+  alias App.Cli
+
+  def main() do
+    Cli.main()
+  end
+end

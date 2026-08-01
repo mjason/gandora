@@ -1,0 +1,16 @@
+defmodule App.Cli do
+  require App.Macros
+  alias App.Mathy
+
+  def main() do
+    IO.puts("fact(10) = #{Mathy.fact(10)}")
+    IO.puts("classify(-3) = #{Mathy.classify(-3)}")
+    IO.puts("norm([3, 4]) = #{Mathy.norm([3, 4])}")
+    picked = App.Macros.unless_nil(nil, :fallback)
+    IO.puts("unless_nil(nil, :fallback) = #{picked}")
+    {a, b} = {1, 2}
+    [h | t] = [10, 20, 30]
+    IO.puts("destructured: #{a} #{b} #{h} #{inspect(t)}")
+    IO.puts("json: #{:json.dumps(%{lang: "gandora"}, indent: 0)}")
+  end
+end

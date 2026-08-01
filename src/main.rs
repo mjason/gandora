@@ -288,10 +288,29 @@ fn cmd_expand(args: &[String]) -> Result<(), Diagnostic> {
         .first()
         .ok_or_else(|| usage_err("expand requires a file"))?;
     let path = Path::new(file);
-    let text = std::fs::read_to_string(path).map_err(io_err(path))?;
-    let term = parser::parse_file(file, &text)?;
-    let macros = expander::collect_macros(file, &term)?;
-    let mut ex = expander::Expander::new(file, macros);
+    let config = config_for_file(path)?;
+    let canon = path.canonicalize().map_err(io_err(path))?;
+    // macros from the whole project are visible, as during compilation
+    let mut sources = project::discover_sources(&config)?;
+    if !sources.iter().any(|(p, _)| *p == canon) {
+        let module = module_for(&config, &canon)?;
+        sources.push((canon.clone(), module));
+    }
+    let mut table = expander::MacroTable::new();
+    let mut target = None;
+    for (source, _) in &sources {
+        let name = source.display().to_string();
+        let text = std::fs::read_to_string(source).map_err(io_err(source))?;
+        let term = parser::parse_file(&name, &text)?;
+        for (k, v) in expander::collect_macros(&name, &term)? {
+            table.entry(k).or_insert(v);
+        }
+        if *source == canon {
+            target = Some(term);
+        }
+    }
+    let term = target.ok_or_else(|| usage_err("expand requires a file"))?;
+    let mut ex = expander::Expander::new(file, table);
     let expanded = ex.expand_module(&term)?;
     print!("{}", printer::print_module(&expanded));
     Ok(())
