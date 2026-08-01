@@ -363,3 +363,41 @@ fn fastapi_chapter_runs() {
     assert!(stdout.contains("'fact': 3628800"), "{stdout}");
     assert!(stdout.contains("GET /nope             -> 404"), "{stdout}");
 }
+
+#[test]
+fn doctests_and_localized_docs() {
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    // gan doc: default, exact locale, and prefix fallback
+    let out = gan().current_dir(&tour).args(["doc", "App.Mathy.fact"]).output().unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Factorial via multi-clause dispatch"), "{stdout}");
+    let out = gan()
+        .current_dir(&tour)
+        .args(["doc", "App.Mathy.fact", "--locale", "zh-CN"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("多子句分派实现的阶乘"), "{stdout}");
+    let out = gan()
+        .current_dir(&tour)
+        .args(["doc", "App.Mathy.classify", "--locale", "zh"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("以原子返回数字的符号"), "{stdout}");
+
+    // a failing doctest is detected by gan test
+    let dir = temp_dir("doctest");
+    let proj = dir.join("app");
+    let out = gan().arg("init").arg(&proj).output().unwrap();
+    assert!(out.status.success());
+    std::fs::write(
+        proj.join("src/main.gan"),
+        "defmodule Main do\n  @doc \"\"\"\n      gan> broken(1)\n      999\n  \"\"\"\n  def broken(x), do: x + 1\n\n  def main(), do: nil\nend\n",
+    )
+    .unwrap();
+    let out = gan().current_dir(&proj).arg("test").output().unwrap();
+    assert_eq!(out.status.code(), Some(1), "{}", String::from_utf8_lossy(&out.stdout));
+    let _ = std::fs::remove_dir_all(&dir);
+}

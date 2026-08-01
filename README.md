@@ -54,6 +54,9 @@ The practical guide is the [language manual](docs/syntax.md)
 - [GEP-0006](geps/0006-package-publication.md) — publishing packages as
   ordinary PyPI wheels, with macros shipped as source and zero runtime
   ([中文](geps/local/zh/0006-package-publication.md))
+- [GEP-0007](geps/0007-documentation.md) — Markdown `@doc` with locale
+  variants, doctests compiled to native Python doctests, `gan doc` /
+  `gan test` ([中文](geps/local/zh/0007-documentation.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -169,7 +172,7 @@ cargo test             # unit + end-to-end tests
 
 ## Status
 
-v0: the language, compiler, macro system, interop, and CLI described by
-GEP-0001..0005 are implemented and tested. Deferred (tracked for future
-GEPs): protocols, comprehensions, `try/rescue`, binaries,
-a formatter, and an LSP.
+v0: the language, compiler, macro system, interop, packages, docs, and
+CLI described by GEP-0001..0007 are implemented and tested. Deferred
+(tracked for future GEPs): protocols, comprehensions, `try/rescue`,
+binaries, a formatter, and an LSP.

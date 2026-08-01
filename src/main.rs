@@ -23,6 +23,8 @@ Usage:
   gan compile <file...> [--out <dir>]
   gan run <file> [args...]       compile and execute with the project Python
   gan expand <file>              print a module after macro expansion
+  gan doc <Mod>[.<fun>] [--locale <tag>]   print documentation
+  gan test                       run doctests of every compiled module
   gan --version                  print the compiler version
 ";
 
@@ -51,6 +53,8 @@ fn main() -> ExitCode {
         "compile" => cmd_compile(rest),
         "run" => return cmd_run(rest),
         "expand" => cmd_expand(rest),
+        "doc" => cmd_doc(rest),
+        "test" => return cmd_test(),
         other => {
             eprintln!("gan: unknown command '{other}'\n\n{USAGE}");
             return ExitCode::from(2);
@@ -492,5 +496,199 @@ fn cmd_run(args: &[String]) -> ExitCode {
             eprintln!("gan: failed to launch {program}: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+// ---- documentation (GEP-0007) --------------------------------------------
+
+/// RFC 4647-style lookup over doc entries (GEP-0007-R004).
+fn lookup_locale<'a>(info: &'a codegen::DocInfo, locale: Option<&str>) -> Option<&'a str> {
+    if let Some(tag) = locale {
+        let want = tag.to_lowercase();
+        // exact, then an entry the request is a prefix of, then shorten
+        if let Some((_, text)) = info
+            .entries
+            .iter()
+            .find(|(t, _)| t.to_lowercase() == want)
+        {
+            return Some(text);
+        }
+        if let Some((_, text)) = info
+            .entries
+            .iter()
+            .find(|(t, _)| t.to_lowercase().starts_with(&format!("{want}-")))
+        {
+            return Some(text);
+        }
+        if let Some((head, _)) = want.rsplit_once('-') {
+            return lookup_locale(info, Some(head));
+        }
+    }
+    info.default_text()
+}
+
+fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
+    let mut target: Option<String> = None;
+    let mut locale: Option<String> = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if a == "--locale" {
+            locale = it.next().cloned();
+            if locale.is_none() {
+                return Err(usage_err("--locale requires a BCP 47 tag"));
+            }
+        } else {
+            target = Some(a.clone());
+        }
+    }
+    let Some(target) = target else {
+        return Err(usage_err("doc requires a Module or Module.function target"));
+    };
+    // `App.Mod.fun` -> module App.Mod + function fun; `App.Mod` -> module doc
+    let segs: Vec<&str> = target.split('.').collect();
+    let (module_name, fun) = match segs.last() {
+        Some(last) if last.chars().next().is_some_and(|c| c.is_lowercase()) => {
+            (segs[..segs.len() - 1].join("."), Some((*last).to_string()))
+        }
+        _ => (target.clone(), None),
+    };
+    if module_name.is_empty() {
+        return Err(usage_err("doc target must include a module name"));
+    }
+    let config = config_for_cwd()?;
+    // locate the module source: project first, then installed packages
+    let mut source: Option<PathBuf> = None;
+    for (path, module) in project::discover_sources(&config)? {
+        if module.join(".") == module_name {
+            source = Some(path);
+            break;
+        }
+    }
+    if source.is_none() {
+        source = project::find_installed_source(&config, &module_name);
+    }
+    let Some(source) = source else {
+        return Err(Diagnostic::new(
+            "gan",
+            Span::default(),
+            format!("module {module_name} not found in project sources or installed packages"),
+        ));
+    };
+    let file = source.display().to_string();
+    let text = std::fs::read_to_string(&source).map_err(io_err(&source))?;
+    let term = parser::parse_file(&file, &text)?;
+
+    let mut module_doc: Option<codegen::DocInfo> = None;
+    let mut fun_doc: Option<codegen::DocInfo> = None;
+    let mut pending: Option<codegen::DocInfo> = None;
+    for stmt in term.as_block() {
+        if !stmt.is_call_named("defmodule") {
+            continue;
+        }
+        let ast::Term::Call(dm) = &stmt else { continue };
+        let Some(body) = ast::Term::keyword_arg(&dm.args, "do") else { continue };
+        for inner in body.as_block() {
+            let ast::Term::Call(c) = &inner else { continue };
+            let ast::Callee::Name(name) = &c.callee else { continue };
+            match name.as_str() {
+                "@moduledoc" => module_doc = Some(codegen::doc_info_from_args(&file, c)?),
+                "@doc" => pending = Some(codegen::doc_info_from_args(&file, c)?),
+                "def" | "defp" | "defmacro" => {
+                    let head_name = c.args.first().and_then(|h| match h {
+                        ast::Term::Call(hc) => match &hc.callee {
+                            ast::Callee::Name(n) => Some(n.clone()),
+                            _ => None,
+                        },
+                        ast::Term::Var(n, _) => Some(n.clone()),
+                        _ => None,
+                    });
+                    if let (Some(f), Some(h)) = (&fun, &head_name) {
+                        if f == h && fun_doc.is_none() {
+                            fun_doc = pending.take();
+                        }
+                    }
+                    pending = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    let (label, info) = match &fun {
+        Some(f) => (format!("{module_name}.{f}"), fun_doc),
+        None => (module_name.clone(), module_doc),
+    };
+    match info {
+        Some(info) if info.hidden => println!("{label} is hidden (@doc false)"),
+        Some(info) => match lookup_locale(&info, locale.as_deref()) {
+            Some(text) => print!("{}", ensure_trailing_newline(text)),
+            None => println!("{label} has no documentation"),
+        },
+        None => println!("{label} has no documentation"),
+    }
+    Ok(())
+}
+
+fn ensure_trailing_newline(s: &str) -> String {
+    if s.ends_with('\n') {
+        s.to_string()
+    } else {
+        format!("{s}\n")
+    }
+}
+
+/// Run every generated module through Python's doctest runner (GEP-0007-R008).
+fn cmd_test() -> ExitCode {
+    let config = match config_for_cwd() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let modules = match project::compile_project(&config) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let cache_root = config.root.join(".gandora/cache");
+    if let Err(e) = project::write_outputs(&modules, &cache_root) {
+        eprintln!("{e}");
+        return ExitCode::FAILURE;
+    }
+    let (program, base_args) = project::interpreter_command(&config.root);
+    let mut checked = 0usize;
+    let mut failed = 0usize;
+    // import by dotted module name (not file path): `python -m doctest file`
+    // inserts the file's own directory into sys.path, which lets a module
+    // like tour/numpy.py shadow the real numpy for its siblings
+    const RUNNER: &str = "import sys, doctest, importlib\n\
+                          mod = importlib.import_module(sys.argv[1])\n\
+                          sys.exit(1 if doctest.testmod(mod).failed else 0)";
+    for m in modules.iter().filter(|m| !m.compile_time_only) {
+        let dotted = m.py_path.trim_end_matches(".py").replace('/', ".");
+        let mut command = std::process::Command::new(&program);
+        command.args(&base_args);
+        command.args(["-P", "-c", RUNNER, &dotted]);
+        command.env("PYTHONPATH", &cache_root);
+        checked += 1;
+        match command.status() {
+            Ok(status) if status.success() => {}
+            Ok(_) => {
+                eprintln!("doctest failures in {}", m.module.join("."));
+                failed += 1;
+            }
+            Err(e) => {
+                eprintln!("gan: failed to launch {program}: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    println!("doctests: {checked} module(s) checked, {failed} failed");
+    if failed == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }

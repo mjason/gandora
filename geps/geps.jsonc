@@ -12,5 +12,6 @@
     "0004-structs-and-module-attributes.md",
     "0005-sigils.md",
     "0006-package-publication.md",
+    "0007-documentation.md",
   ],
 }

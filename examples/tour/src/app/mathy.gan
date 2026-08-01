@@ -1,10 +1,39 @@
 defmodule App.Mathy do
-  @moduledoc "Math helpers showing patterns and interop."
+  @moduledoc "Math helpers showing patterns, interop, and documented examples."
 
-  @doc "Truncated factorial via multi-clause dispatch."
+  @doc default: """
+  Factorial via multi-clause dispatch. Docs are Markdown; `gan>` lines
+  are doctests that `gan test` runs as native Python doctests.
+
+  ## Examples
+
+      gan> fact(0)
+      1
+      gan> fact(10)
+      3628800
+
+  """, zh_CN: """
+  多子句分派实现的阶乘。文档是 Markdown；`gan>` 行是 doctest，
+  `gan test` 会把它们当作原生 Python doctest 运行。
+
+  ## 示例
+
+      gan> fact(10)
+      3628800
+
+  """
   def fact(0), do: 1
   def fact(n) when n > 0, do: n * fact(n - 1)
 
+  @doc default: """
+  Sign of a number as an atom.
+
+      gan> classify(-3)
+      'negative'
+      gan> [classify(0), classify(9)]
+      ['zero', 'positive']
+
+  """, zh_CN: "以原子返回数字的符号。"
   def classify(x) do
     cond do
       x < 0 -> :negative
@@ -13,6 +42,13 @@ defmodule App.Mathy do
     end
   end
 
+  @doc """
+  Euclidean norm through a pipeline.
+
+      gan> norm([3, 4])
+      5.0
+
+  """
   def norm(xs) do
     xs
     |> sum_squares()

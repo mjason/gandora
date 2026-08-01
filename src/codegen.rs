@@ -59,6 +59,77 @@ pub fn camel_to_snake(s: &str) -> String {
     out
 }
 
+/// A parsed `@doc`/`@moduledoc` value (GEP-0007-R001).
+#[derive(Debug, Clone, Default)]
+pub struct DocInfo {
+    /// locale tag -> markdown text; "default" is the fallback
+    pub entries: Vec<(String, String)>,
+    pub hidden: bool,
+}
+
+impl DocInfo {
+    pub fn default_text(&self) -> Option<&str> {
+        self.entries
+            .iter()
+            .find(|(tag, _)| tag == "default")
+            .map(|(_, text)| text.as_str())
+    }
+}
+
+/// Parse `@doc` arguments: a string, `false`, or `default:`/locale pairs.
+pub fn doc_info_from_args(file: &str, call: &Call) -> crate::diag::Result<DocInfo> {
+    let mut info = DocInfo::default();
+    match call.args.first() {
+        Some(Term::Bool(false)) => {
+            info.hidden = true;
+            return Ok(info);
+        }
+        Some(t) if t.as_plain_str().is_some() => {
+            info.entries
+                .push(("default".to_string(), t.as_plain_str().unwrap()));
+            return Ok(info);
+        }
+        _ => {}
+    }
+    let mut pairs: Vec<&Term> = Vec::new();
+    for arg in &call.args {
+        match arg {
+            Term::List(items) => pairs.extend(items.iter()),
+            other => pairs.push(other),
+        }
+    }
+    for p in pairs {
+        let Term::Pair(key, value) = p else {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                "@doc accepts a string, false, or default:/locale: pairs (GEP-0007-R001)",
+            ));
+        };
+        let tag = if key == "default" {
+            "default".to_string()
+        } else {
+            key.replace('_', "-")
+        };
+        let Some(text) = value.as_plain_str() else {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!("@doc {key}: value must be a plain string"),
+            ));
+        };
+        info.entries.push((tag, text));
+    }
+    if info.entries.is_empty() || info.default_text().is_none() {
+        return Err(Diagnostic::new(
+            file,
+            call.span,
+            "@doc with locale entries requires a default: entry (GEP-0007-R003)",
+        ));
+    }
+    Ok(info)
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Dest {
     Return,
@@ -69,7 +140,7 @@ enum Dest {
 struct FnDef {
     name: String,
     private: bool,
-    doc: Option<String>,
+    doc: Option<DocInfo>,
     decorators: Vec<Term>,
     clauses: Vec<(Vec<Term>, Option<Term>, Term)>, // params, guard, body
     span: Span,
@@ -168,8 +239,8 @@ impl Codegen {
             .ok_or_else(|| self.err(dm.span, "defmodule requires a do block"))?
             .clone();
 
-        let mut moduledoc: Option<String> = None;
-        let mut pending_doc: Option<String> = None;
+        let mut moduledoc: Option<DocInfo> = None;
+        let mut pending_doc: Option<DocInfo> = None;
         let mut pending_decorators: Vec<Term> = Vec::new();
         let mut funs: Vec<FnDef> = Vec::new();
         let mut order: BTreeMap<String, usize> = BTreeMap::new();
@@ -193,10 +264,10 @@ impl Codegen {
             };
             match name.as_str() {
                 "@moduledoc" => {
-                    moduledoc = call.args.first().and_then(|t| t.as_plain_str());
+                    moduledoc = Some(doc_info_from_args(&self.file, call)?);
                 }
                 "@doc" => {
-                    pending_doc = call.args.first().and_then(|t| t.as_plain_str());
+                    pending_doc = Some(doc_info_from_args(&self.file, call)?);
                 }
                 "@decorate" => {
                     if let Some(e) = call.args.first() {
@@ -351,7 +422,14 @@ impl Codegen {
         }
 
         let mut out = String::new();
-        if let Some(doc) = &moduledoc {
+        let module_docstring = match &moduledoc {
+            Some(info) if !info.hidden => match info.default_text() {
+                Some(text) => Some(self.compile_doctests(text, Span::default())?),
+                None => None,
+            },
+            _ => None,
+        };
+        if let Some(doc) = &module_docstring {
             let _ = writeln!(out, "\"\"\"{}\"\"\"", doc.replace("\"\"\"", "\\\"\\\"\\\""));
         }
         let mut import_lines: Vec<String> = Vec::new();
@@ -562,22 +640,32 @@ impl Codegen {
                 .collect();
             lines.push(format!("def {py_name}({}):", names.join(", ")));
             let mut body_lines = Vec::new();
-            if let Some(doc) = &f.doc {
-                body_lines.push(format!(
-                    "\"\"\"{}\"\"\"",
-                    doc.replace("\"\"\"", "\\\"\\\"\\\"")
-                ));
+            if let Some(info) = &f.doc {
+                if !info.hidden {
+                    if let Some(text) = info.default_text() {
+                        let compiled = self.compile_doctests(text, f.span)?;
+                        body_lines.push(format!(
+                            "\"\"\"{}\"\"\"",
+                            compiled.replace("\"\"\"", "\\\"\\\"\\\"")
+                        ));
+                    }
+                }
             }
             self.emit_stmt_block(body, Dest::Return, &mut body_lines)?;
             push_indented(&mut lines, &body_lines);
         } else {
             lines.push(format!("def {py_name}(*_gan_args):"));
             let mut body_lines = Vec::new();
-            if let Some(doc) = &f.doc {
-                body_lines.push(format!(
-                    "\"\"\"{}\"\"\"",
-                    doc.replace("\"\"\"", "\\\"\\\"\\\"")
-                ));
+            if let Some(info) = &f.doc {
+                if !info.hidden {
+                    if let Some(text) = info.default_text() {
+                        let compiled = self.compile_doctests(text, f.span)?;
+                        body_lines.push(format!(
+                            "\"\"\"{}\"\"\"",
+                            compiled.replace("\"\"\"", "\\\"\\\"\\\"")
+                        ));
+                    }
+                }
             }
             body_lines.push("match _gan_args:".to_string());
             for (params, guard, body) in &f.clauses {
@@ -624,6 +712,42 @@ impl Codegen {
             push_indented(&mut lines, &body_lines);
         }
         Ok(format!("\n{}\n", lines.join("\n")))
+    }
+
+    /// Compile `gan> expr` doctest lines into native Python doctests
+    /// (GEP-0007-R006).
+    fn compile_doctests(&mut self, text: &str, span: Span) -> Result<String> {
+        if !text.contains("gan> ") {
+            return Ok(text.to_string());
+        }
+        let mut out = Vec::new();
+        for line in text.lines() {
+            let trimmed = line.trim_start();
+            if let Some(expr_src) = trimmed.strip_prefix("gan> ") {
+                let indent = &line[..line.len() - trimmed.len()];
+                let term =
+                    crate::parser::parse_expr_str(&self.file, expr_src).map_err(|mut d| {
+                        d.span = span;
+                        d.message = format!("in doctest `{expr_src}`: {}", d.message);
+                        d
+                    })?;
+                let mut pre = Vec::new();
+                let e = self.emit_expr(&term, &mut pre)?;
+                if !pre.is_empty() {
+                    return Err(self.err(
+                        span,
+                        format!(
+                            "doctest `{expr_src}` needs statements; doctest expressions \
+                             must be single simple expressions (GEP-0007-R007)"
+                        ),
+                    ));
+                }
+                out.push(format!("{indent}>>> {e}"));
+            } else {
+                out.push(line.to_string());
+            }
+        }
+        Ok(out.join("\n"))
     }
 
     // ---- statements ------------------------------------------------------
@@ -2361,5 +2485,52 @@ mod gep0005_tests {
     fn rejects_unknown_sigil() {
         let err = compile_err("defmodule M do\n  def f(), do: ~z(nope)\nend");
         assert!(err.contains("GEP-0005-R009"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod gep0007_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn doctests_compile_to_python_doctests() {
+        let py = compile(
+            "defmodule M do\n  @doc \"\"\"\nAdds one.\n\n## Examples\n\n    gan> inc(1)\n    2\n    gan> [1, 2] |> :builtins.len()\n    2\n\"\"\"\n  def inc(x), do: x + 1\nend",
+        );
+        assert!(py.contains("    >>> inc(1)\n    2"), "{py}");
+        assert!(py.contains("    >>> builtins.len([1, 2])\n    2"), "{py}");
+    }
+
+    #[test]
+    fn localized_doc_keeps_default_in_docstring() {
+        let py = compile(
+            "defmodule M do\n  @doc default: \"Adds one.\", zh_CN: \"加一。\"\n  def inc(x), do: x + 1\nend",
+        );
+        assert!(py.contains("\"\"\"Adds one.\"\"\""), "{py}");
+        assert!(!py.contains("加一"), "{py}");
+    }
+
+    #[test]
+    fn doc_false_hides_docstring() {
+        let py = compile(
+            "defmodule M do\n  @doc false\n  def secret(x), do: x\nend",
+        );
+        assert!(!py.contains("\"\"\""), "{py}");
+    }
+
+    #[test]
+    fn locale_without_default_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  @doc zh_CN: \"只有中文\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("GEP-0007-R003"), "{err}");
+    }
+
+    #[test]
+    fn broken_doctest_is_a_compile_error() {
+        let err = compile_err(
+            "defmodule M do\n  @doc \"\"\"\n    gan> 1 +\n    2\n\"\"\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("in doctest"), "{err}");
     }
 }

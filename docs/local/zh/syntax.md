@@ -140,6 +140,27 @@ end
 
 `~python` 是用于 Python 特有拼写（推导式、布尔索引）的逃逸出口；它将表达式原样拼接至输出中。
 
+## 文档
+
+`@doc`/`@moduledoc` 是 Markdown。关键字形式可添加多语言；`gan>`
+行是 doctest，会编译成原生 Python doctest。
+
+```elixir
+@doc default: """
+Factorial.
+
+    gan> fact(10)
+    3628800
+
+""", zh_CN: "阶乘。"
+def fact(n), do: ...
+```
+
+`@doc false` 隐藏函数。`gan test` 运行每个模块的 doctest（期望输出
+是 Python 的 `repr`，即 `inspect/1` 打印的内容）；
+`gan doc App.Mathy.fact --locale zh` 按 RFC 4647 回退规则打印对应
+语言的文档。
+
 ## 项目、包与 CLI
 
 `gandora.jsonc` 配置编译器（`source`、`outDir`、`targetPython`、`exclude`、`package`）；`pyproject.toml` + `uv` 管理依赖和 `.venv`。

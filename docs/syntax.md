@@ -153,6 +153,27 @@ then call `Mod.some_macro(...)`. Inspect results with `gan expand file`.
 (comprehensions, boolean indexing); it splices the expression into the
 output unchanged.
 
+## Documentation
+
+`@doc`/`@moduledoc` are Markdown. The keyword form adds locales; `gan>`
+lines are doctests that compile into native Python doctests.
+
+```elixir
+@doc default: """
+Factorial.
+
+    gan> fact(10)
+    3628800
+
+""", zh_CN: "阶乘。"
+def fact(n), do: ...
+```
+
+`@doc false` hides a function. `gan test` runs every module's doctests
+(expected output is the Python `repr`, i.e. what `inspect/1` shows);
+`gan doc App.Mathy.fact --locale zh` prints the localized text with
+RFC 4647 fallback to the default.
+
 ## Projects, packages, and the CLI
 
 `gandora.jsonc` configures the compiler (`source`, `outDir`,
