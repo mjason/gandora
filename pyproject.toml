@@ -15,6 +15,11 @@ classifiers = [
     "Programming Language :: Rust",
 ]
 
+[project.urls]
+Homepage = "https://github.com/mjason/gandora"
+Repository = "https://github.com/mjason/gandora"
+Issues = "https://github.com/mjason/gandora/issues"
+
 [tool.maturin]
 bindings = "bin"
 
