@@ -1,7 +1,9 @@
 mod ast;
 mod diag;
+mod expander;
 mod lexer;
 mod parser;
+mod printer;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
