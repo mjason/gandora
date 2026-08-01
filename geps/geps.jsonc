@@ -1,0 +1,13 @@
+{
+  // Machine-readable manifest for Gandora Enhancement Proposals (GEP-0000-R042).
+  // Status, revision, and titles live in each GEP's front matter, never here.
+  "schemaVersion": 1,
+  "normativeLocale": "en",
+  "translationLocales": ["zh-CN"],
+  "geps": [
+    "0000-gep-process.md",
+    "0001-language-and-cli.md",
+    "0002-macro-system.md",
+    "0003-python-interop.md",
+  ],
+}
