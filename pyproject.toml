@@ -1,0 +1,31 @@
+[project]
+name = "gandora-lang"
+version = "0.1.0"
+description = "The gan compiler: an Elixir-flavored language that compiles to Python"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "MJ", email = "tywf91@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+]
+
+[tool.maturin]
+bindings = "bin"
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "src/**/*.rs" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+]
+
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"

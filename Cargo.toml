@@ -1,0 +1,12 @@
+[package]
+name = "gandora"
+version = "0.1.0"
+edition = "2021"
+description = "The gan compiler: an Elixir-flavored language that compiles to Python"
+license = "MIT"
+
+[[bin]]
+name = "gan"
+path = "src/main.rs"
+
+[dependencies]
