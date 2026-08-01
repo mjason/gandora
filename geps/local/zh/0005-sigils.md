@@ -10,14 +10,14 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [1, 3]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0005-sigils.md
-source-revision: 1
+source-revision: 2
 translation-status: Current
 ---
 
@@ -105,4 +105,5 @@ Agents 应当优先使用 `~w`/`~r` 而非手动构建的等价形式，仅当 P
 
 ## 变更历史
 
+- 修订版 2，2026-08-01：R009 被 GEP-0009 废除；~python 拼接由 GEP-0009-R003 修订。
 - 修订版 1, 2026-08-01: 初始版本。

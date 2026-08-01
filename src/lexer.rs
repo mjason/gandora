@@ -402,9 +402,9 @@ impl<'a> Lexer<'a> {
         if name.is_empty() {
             return Err(self.err("expected a sigil name after '~'"));
         }
-        // uppercase sigils are raw; `~python` is the embedded-language sigil
-        // and is raw as in Osiris (GEP-0005-R002/R007)
-        let raw = name.chars().next().is_some_and(|c| c.is_uppercase()) || name == "python";
+        // built-ins (~w ~s ~r) interpolate with #{}; every other name is an
+        // embedded-language sigil with a raw body (GEP-0009-R001)
+        let raw = !matches!(name.as_str(), "w" | "s" | "r");
         let open = self
             .peek()
             .ok_or_else(|| self.err("expected a sigil delimiter"))?;

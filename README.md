@@ -57,6 +57,12 @@ The practical guide is the [language manual](docs/syntax.md)
 - [GEP-0007](geps/0007-documentation.md) — Markdown `@doc` with locale
   variants, doctests compiled to native Python doctests, `gan doc` /
   `gan test` ([中文](geps/local/zh/0007-documentation.md))
+- [GEP-0008](geps/0008-metaprogramming-completion.md) — definition-generating
+  macros, `use`/`__using__`, and the `defattr`/`@on_definition` attribute
+  system ([中文](geps/local/zh/0008-metaprogramming-completion.md))
+- [GEP-0009](geps/0009-embedded-languages-and-templates.md) — the `~<lang>`
+  embedded-language family (`~sql`, `~markdown`, ...) with EEx-style
+  `<%= %>` splices ([中文](geps/local/zh/0009-embedded-languages-and-templates.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -172,7 +178,8 @@ cargo test             # unit + end-to-end tests
 
 ## Status
 
-v0: the language, compiler, macro system, interop, packages, docs, and
-CLI described by GEP-0001..0007 are implemented and tested. Deferred
-(tracked for future GEPs): protocols, comprehensions, `try/rescue`,
-binaries, a formatter, and an LSP.
+v0: GEP-0001..0007 and GEP-0009 (embedded-language sigils with EEx-style
+`<%= %>` splices) are implemented and tested. GEP-0008 (definition-
+generating macros, `use`, the `defattr`/`@on_definition` attribute
+system) is Accepted with implementation in progress. Deferred:
+protocols, comprehensions, `try/rescue`, binaries, a formatter, an LSP.

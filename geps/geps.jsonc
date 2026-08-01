@@ -13,5 +13,7 @@
     "0005-sigils.md",
     "0006-package-publication.md",
     "0007-documentation.md",
+    "0008-metaprogramming-completion.md",
+    "0009-embedded-languages-and-templates.md",
   ],
 }

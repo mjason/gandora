@@ -1628,22 +1628,79 @@ impl Codegen {
                 Ok(format!("re.compile({s})"))
             }
             ("~python", 1) => {
-                // verbatim embedded Python expression (GEP-0005-R007)
+                // embedded Python: verbatim code with <%= %> code splices
+                // (GEP-0005-R007, GEP-0009-R003)
                 let body = args[0].as_plain_str().ok_or_else(|| {
                     self.err(call.span, "~python bodies are raw and cannot interpolate")
                 })?;
-                let body = body.trim();
+                let mut out = String::new();
+                for part in split_splices(&body) {
+                    match part {
+                        SplicePart::Text(t) => out.push_str(&t),
+                        SplicePart::Expr(src) => {
+                            let term = crate::parser::parse_expr_str(&self.file, &src)
+                                .map_err(|mut d| {
+                                    d.span = call.span;
+                                    d.message =
+                                        format!("in ~python splice: {}", d.message);
+                                    d
+                                })?;
+                            let mut pre = Vec::new();
+                            let e = self.emit_expr(&term, &mut pre)?;
+                            if !pre.is_empty() {
+                                return Err(self.err(
+                                    call.span,
+                                    "splices must be single simple expressions \
+                                     (GEP-0009-R002)",
+                                ));
+                            }
+                            out.push_str(&format!("({e})"));
+                        }
+                    }
+                }
+                let body = out.trim().to_string();
                 if body.is_empty() {
                     return Err(self.err(call.span, "~python requires a Python expression"));
                 }
                 Ok(format!("({body})"))
             }
-            (sigil, 1) if sigil.starts_with('~') => Err(self.err(
-                call.span,
-                format!(
-                    "unknown sigil {sigil} (supported: ~w, ~s, ~r, ~python) (GEP-0005-R009)"
-                ),
-            )),
+            (sigil, 1) if sigil.starts_with('~') => {
+                // embedded-language sigil: a string with value splices
+                // (GEP-0009-R001/R004)
+                let body = args[0].as_plain_str().ok_or_else(|| {
+                    self.err(call.span, "embedded sigil bodies are raw")
+                })?;
+                let parts = split_splices(&body);
+                if parts.iter().all(|p| matches!(p, SplicePart::Text(_))) {
+                    let text: String = parts
+                        .iter()
+                        .map(|p| match p {
+                            SplicePart::Text(s) => s.as_str(),
+                            SplicePart::Expr(_) => unreachable!(),
+                        })
+                        .collect();
+                    return Ok(py_str_lit(&text));
+                }
+                let mut out = String::from("f\"");
+                for part in parts {
+                    match part {
+                        SplicePart::Text(t) => out.push_str(&escape_py_str(&t, true)),
+                        SplicePart::Expr(src) => {
+                            let term = crate::parser::parse_expr_str(&self.file, &src)
+                                .map_err(|mut d| {
+                                    d.span = call.span;
+                                    d.message =
+                                        format!("in {sigil} splice: {}", d.message);
+                                    d
+                                })?;
+                            let e = self.emit_expr(&term, pre)?;
+                            let _ = write!(out, "{{{e}}}");
+                        }
+                    }
+                }
+                out.push('"');
+                Ok(out)
+            }
             ("%struct%", 2) => {
                 let Term::Alias(segs) = &args[0] else {
                     return Err(self.err(call.span, "struct literals need a module name"));
@@ -2249,6 +2306,54 @@ fn rename_placeholders(term: &Term) -> Term {
     }
 }
 
+enum SplicePart {
+    Text(String),
+    Expr(String),
+}
+
+/// Split an embedded body on `<%= expr %>` markers; `<%%=` escapes a
+/// literal `<%=` (GEP-0009-R002).
+fn split_splices(body: &str) -> Vec<SplicePart> {
+    let mut parts = Vec::new();
+    let mut text = String::new();
+    let mut rest = body;
+    loop {
+        match rest.find("<%") {
+            None => break,
+            Some(i) => {
+                text.push_str(&rest[..i]);
+                let after = &rest[i + 2..];
+                if let Some(stripped) = after.strip_prefix("%=") {
+                    text.push_str("<%=");
+                    rest = stripped;
+                } else if let Some(after_eq) = after.strip_prefix('=') {
+                    match after_eq.find("%>") {
+                        Some(j) => {
+                            if !text.is_empty() {
+                                parts.push(SplicePart::Text(std::mem::take(&mut text)));
+                            }
+                            parts.push(SplicePart::Expr(after_eq[..j].trim().to_string()));
+                            rest = &after_eq[j + 2..];
+                        }
+                        None => {
+                            text.push_str("<%=");
+                            rest = after_eq;
+                        }
+                    }
+                } else {
+                    text.push_str("<%");
+                    rest = after;
+                }
+            }
+        }
+    }
+    text.push_str(rest);
+    if !text.is_empty() || parts.is_empty() {
+        parts.push(SplicePart::Text(text));
+    }
+    parts
+}
+
 fn py_str_lit(s: &str) -> String {
     format!("\"{}\"", escape_py_str(s, false))
 }
@@ -2674,9 +2779,10 @@ mod gep0005_tests {
     }
 
     #[test]
-    fn rejects_unknown_sigil() {
-        let err = compile_err("defmodule M do\n  def f(), do: ~z(nope)\nend");
-        assert!(err.contains("GEP-0005-R009"), "{err}");
+    fn any_name_is_an_embedded_sigil_now() {
+        // GEP-0005-R009 was repealed by GEP-0009-R001
+        let py = compile("defmodule M do\n  def f(), do: ~z(nope)\nend");
+        assert!(py.contains("return \"nope\""), "{py}");
     }
 }
 
@@ -2854,5 +2960,42 @@ mod doc_meta_tests {
             "defmodule M do\n  @doc \"f.\"\n  @doc since: \"1\"\n  @doc since: \"2\"\n  def f(x), do: x\nend",
         );
         assert!(err.contains("duplicate"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod gep0009_tests {
+    use super::tests_helpers::compile;
+
+    #[test]
+    fn arbitrary_language_sigils_are_strings() {
+        let py = compile(
+            "defmodule M do\n  def q(), do: ~sql(SELECT * FROM users WHERE age > 30)\nend",
+        );
+        assert!(py.contains("return \"SELECT * FROM users WHERE age > 30\""), "{py}");
+    }
+
+    #[test]
+    fn value_splices_compile_to_fstrings() {
+        let py = compile(
+            "defmodule M do\n  def report(name, xs) do\n    ~markdown\"\"\"\n# Report for <%= name.upper() %>\n\nTotal: <%= xs |> :builtins.sum() %>\n\"\"\"\n  end\nend",
+        );
+        assert!(py.contains("f\"\\n# Report for {name.upper()}\\n\\nTotal: {builtins.sum(xs)}\\n\""), "{py}");
+    }
+
+    #[test]
+    fn python_sigil_code_splices() {
+        let py = compile(
+            "defmodule M do\n  def evens(xs, limit) do\n    ~python([x for x in <%= xs %> if x % 2 == 0][:<%= limit + 1 %>])\n  end\nend",
+        );
+        assert!(py.contains("return ([x for x in (xs) if x % 2 == 0][:(limit + 1)])"), "{py}");
+    }
+
+    #[test]
+    fn escaped_marker_stays_literal() {
+        let py = compile(
+            "defmodule M do\n  def t(), do: ~eex(a <%%= b %> c)\nend",
+        );
+        assert!(py.contains("\"a <%= b %> c\""), "{py}");
     }
 }
