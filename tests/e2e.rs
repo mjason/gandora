@@ -184,5 +184,27 @@ fn generated_snapshot_is_current() {
             }
         }
     }
-    assert!(checked >= 10, "expected at least 10 snapshot files, found {checked}");
+    assert!(checked >= 9, "expected at least 9 snapshot files, found {checked}");
+}
+
+#[test]
+fn macro_only_module_emits_no_file() {
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let out = gan().current_dir(&tour).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("macro-only"), "{stdout}");
+    assert!(
+        !tour.join("dist/app/macros.py").exists(),
+        "macro-only modules must not produce a runtime file (GEP-0002-R009)"
+    );
+    // running a macro-only module is a clear error
+    let out = gan()
+        .current_dir(&tour)
+        .args(["run", "src/app/macros.gan"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("defines only macros"), "{stderr}");
 }

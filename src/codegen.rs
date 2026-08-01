@@ -87,6 +87,9 @@ pub struct Codegen {
     private_funs: BTreeSet<(String, usize)>,
     attr_names: BTreeSet<String>,
     struct_fields: Option<Vec<(String, Term)>>,
+    /// true after `compile` when the module defines no runtime code
+    /// (macros only) and should produce no Python file (GEP-0002-R009).
+    pub compile_time_only: bool,
     tmp_counter: usize,
     tmp_names: Vec<String>,
     fn_counter: usize,
@@ -106,6 +109,7 @@ impl Codegen {
             private_funs: BTreeSet::new(),
             attr_names: BTreeSet::new(),
             struct_fields: None,
+            compile_time_only: false,
             tmp_counter: 0,
             tmp_names: Vec::new(),
             fn_counter: 0,
@@ -294,6 +298,16 @@ impl Codegen {
                     ))
                 }
             }
+        }
+
+        // a module of nothing but macros has no runtime existence
+        if funs.is_empty()
+            && attrs.is_empty()
+            && self.struct_fields.is_none()
+            && self.star_imports.is_empty()
+        {
+            self.compile_time_only = true;
+            return Ok(String::new());
         }
 
         for (attr, _) in &attrs {

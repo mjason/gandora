@@ -10,7 +10,7 @@ areas:
   - Macros
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [1]
 replaces: []
 superseded-by: null
@@ -98,6 +98,12 @@ This restriction MAY be lifted by a future GEP.
 **GEP-0002-R008:** `gan expand <file>` MUST print the module after full
 macro expansion, rendered in surface syntax, without writing any artifact.
 
+**GEP-0002-R009:** Macros exist only at compile time. A module whose body
+declares no runtime code — no functions, no struct, no module attributes,
+no `import` re-exports — MUST produce no generated Python file, and a
+build MUST remove a previously generated file for it. Running such a
+module MUST fail with a diagnostic naming the module.
+
 ## Rationale
 
 Interpreting macro bodies inside the compiler (rather than compiling them
@@ -154,4 +160,6 @@ output stability.
 
 ## Change History
 
+- Revision 2, 2026-08-01: Added R009 — macro-only modules produce no
+  runtime Python file.
 - Revision 1, 2026-08-01: Initial version.

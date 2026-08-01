@@ -237,6 +237,8 @@ pub struct CompiledModule {
     pub module: Vec<String>,
     pub py_path: String,
     pub python: String,
+    /// macros-only module: no Python file is written (GEP-0002-R009)
+    pub compile_time_only: bool,
 }
 
 /// Parse, expand, and compile every module of a project.
@@ -323,6 +325,7 @@ pub fn compile_files(sources: &[(PathBuf, Vec<String>)]) -> Result<Vec<CompiledM
             module: p.module.clone(),
             py_path: module_py_path(&p.module).replace('.', "/") + ".py",
             python,
+            compile_time_only: cg.compile_time_only,
         });
     }
     Ok(out)
@@ -356,6 +359,11 @@ pub fn write_outputs(modules: &[CompiledModule], out_root: &Path) -> Result<Vec<
     let mut written = Vec::new();
     for m in modules {
         let target = out_root.join(&m.py_path);
+        if m.compile_time_only {
+            // remove a stale file left by an earlier compiler version
+            let _ = std::fs::remove_file(&target);
+            continue;
+        }
         if let Some(dir) = target.parent() {
             std::fs::create_dir_all(dir).map_err(|e| {
                 Diagnostic::new(dir.display().to_string(), Span::default(), e.to_string())

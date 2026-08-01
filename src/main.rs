@@ -244,11 +244,20 @@ fn cmd_build() -> Result<(), Diagnostic> {
     }
     let out_root = config.root.join(&config.out_dir);
     project::write_outputs(&modules, &out_root)?;
-    println!(
-        "compiled {} module(s) into {}",
-        modules.len(),
-        out_root.display()
-    );
+    let macro_only = modules.iter().filter(|m| m.compile_time_only).count();
+    if macro_only > 0 {
+        println!(
+            "compiled {} module(s) into {} ({macro_only} macro-only, no runtime output)",
+            modules.len() - macro_only,
+            out_root.display()
+        );
+    } else {
+        println!(
+            "compiled {} module(s) into {}",
+            modules.len(),
+            out_root.display()
+        );
+    }
     Ok(())
 }
 
@@ -352,6 +361,13 @@ fn cmd_run(args: &[String]) -> ExitCode {
         eprintln!("gan: internal error: target module missing from build");
         return ExitCode::FAILURE;
     };
+    if target.compile_time_only {
+        eprintln!(
+            "gan: {} defines only macros; there is nothing to run (GEP-0002-R009)",
+            target.module.join(".")
+        );
+        return ExitCode::FAILURE;
+    }
     let script = cache_root.join(&target.py_path);
     let (program, mut pre_args) = project::interpreter_command(&config.root);
     pre_args.push(script.display().to_string());

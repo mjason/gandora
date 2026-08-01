@@ -10,14 +10,14 @@ areas:
   - Macros
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [1]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0002-macro-system.md
-source-revision: 1
+source-revision: 2
 translation-status: Current
 ---
 
@@ -61,6 +61,8 @@ Gandora 宏是编译时从语法到语法的函数，使用 Elixir 写法的 `de
 
 **GEP-0002-R008:** `gan expand <file>` MUST 打印经过完整宏展开后的模块，以表面语法呈现，不写入任何产物。
 
+**GEP-0002-R009:** 宏只存在于编译期。若模块体未声明任何运行时代码——没有函数、没有结构体、没有模块属性、没有 `import` 再导出——则 MUST 不生成 Python 文件，且构建 MUST 删除先前为其生成的文件。运行此类模块 MUST 失败并给出指明该模块的诊断。
+
 ## 理由
 
 在编译器内部解释宏体（而不是将其编译为 Python 并导入）使得编译过程不受用户代码执行的影响，并保持构建的可确定性——这与 Osiris 在其第一阶段求值器中的决定相同。Elixir 的 `{name, meta, args}` 引用形式被保留，以便文档和直觉直接传递。
@@ -99,4 +101,5 @@ v0 无。
 
 ## 变更历史
 
+- 修订版 2，2026-08-01：新增 R009——纯宏模块不产生运行时 Python 文件。
 - 修订版 1，2026-08-01：初始版本。
