@@ -175,6 +175,37 @@ NOTICE = {
 }
 
 
+DOC_NOTICE = {
+    "zh-CN": (
+        "> 本文件是非规范性翻译，仅供参考；原文为英文版 "
+        "[{source}](../../{source})。"
+    ),
+}
+
+
+def translate_doc(env: dict[str, str], path: Path, lang: str) -> Path:
+    """Translate a plain manual page from docs/ into docs/local/<lang>/."""
+    locale, language_name = LANG_NAMES[lang]
+    text = path.read_text(encoding="utf-8")
+    system = SYSTEM_PROMPT.format(language=language_name)
+    sections = split_sections(text)
+    translated: list[str] = []
+    for index, section in enumerate(sections, start=1):
+        print(f"  translating section {index}/{len(sections)} ...", flush=True)
+        translated.append(chat(env, system, section).rstrip("\n") + "\n")
+    out_dir = REPO_ROOT / "docs" / "local" / lang
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / path.name
+    notice = DOC_NOTICE.get(locale, "").format(source=path.name)
+    body = "\n".join(translated)
+    if notice:
+        # place the notice right under the first heading
+        lines = body.split("\n", 1)
+        body = lines[0] + "\n\n" + notice + "\n" + (lines[1] if len(lines) > 1 else "")
+    out_path.write_text(body, encoding="utf-8")
+    return out_path
+
+
 def translate_gep(env: dict[str, str], path: Path, lang: str, status: str) -> Path:
     locale, language_name = LANG_NAMES[lang]
     text = path.read_text(encoding="utf-8")
@@ -204,6 +235,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="*", help="source GEP files to translate")
     parser.add_argument("--all", action="store_true", help="translate every source GEP")
+    parser.add_argument(
+        "--doc",
+        action="store_true",
+        help="treat inputs as plain docs/ manual pages (no GEP front matter)",
+    )
     parser.add_argument("--lang", default="zh", choices=sorted(LANG_NAMES))
     parser.add_argument(
         "--status",
@@ -227,7 +263,10 @@ def main() -> None:
 
     for path in files:
         print(f"translating {path.name} -> local/{args.lang}/", flush=True)
-        out = translate_gep(env, path.resolve(), args.lang, args.status)
+        if args.doc:
+            out = translate_doc(env, path.resolve(), args.lang)
+        else:
+            out = translate_gep(env, path.resolve(), args.lang, args.status)
         print(f"  wrote {out.relative_to(REPO_ROOT)}", flush=True)
 
 

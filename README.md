@@ -33,8 +33,9 @@ compiles to plain Python with multi-clause dispatch as a `match` statement,
 private functions as `_`-prefixed functions, and the interop as direct
 imports — no Gandora runtime is needed to execute the output.
 
-Design decisions are recorded as **Gandora Enhancement Proposals** in
-[`geps/`](geps/):
+The practical guide is the [language manual](docs/syntax.md)
+([中文版](docs/local/zh/syntax.md)). Design decisions are recorded as
+**Gandora Enhancement Proposals** in [`geps/`](geps/):
 
 - [GEP-0000](geps/0000-gep-process.md) — the proposal process and translation
   policy ([中文](geps/local/zh/0000-gep-process.md))
@@ -156,6 +157,7 @@ inserts explicit truthiness checks where needed.
 
 - `src/` — the Rust compiler (`lexer`, `parser`, `expander`, `codegen`,
   `project`, CLI in `main.rs`)
+- `docs/` — the language manual (+ `docs/local/zh/` translations)
 - `geps/` — Gandora Enhancement Proposals (+ `geps/local/zh/` translations)
 - `examples/tour` — a runnable multi-module example
 - `tests/e2e.rs` — end-to-end tests driving the real binary
