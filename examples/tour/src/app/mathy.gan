@@ -1,7 +1,8 @@
 defmodule App.Mathy do
   @moduledoc "Math helpers showing patterns, interop, and documented examples."
+  @moduledoc_trans zh_CN: "展示模式匹配、互操作与文档示例的数学工具。"
 
-  @doc default: """
+  @doc """
   Factorial via multi-clause dispatch. Docs are Markdown; `gan>` lines
   are doctests that `gan test` runs as native Python doctests.
 
@@ -12,7 +13,8 @@ defmodule App.Mathy do
       gan> fact(10)
       3628800
 
-  """, zh_CN: """
+  """
+  @doc_trans zh_CN: """
   多子句分派实现的阶乘。文档是 Markdown；`gan>` 行是 doctest，
   `gan test` 会把它们当作原生 Python doctest 运行。
 
@@ -25,7 +27,7 @@ defmodule App.Mathy do
   def fact(0), do: 1
   def fact(n) when n > 0, do: n * fact(n - 1)
 
-  @doc default: """
+  @doc """
   Sign of a number as an atom.
 
       gan> classify(-3)
@@ -33,7 +35,8 @@ defmodule App.Mathy do
       gan> [classify(0), classify(9)]
       ['zero', 'positive']
 
-  """, zh_CN: "以原子返回数字的符号。"
+  """
+  @doc_trans zh_CN: "以原子返回数字的符号。"
   def classify(x) do
     cond do
       x < 0 -> :negative

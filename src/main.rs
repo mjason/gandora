@@ -593,6 +593,16 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
             match name.as_str() {
                 "@moduledoc" => module_doc = Some(codegen::doc_info_from_args(&file, c)?),
                 "@doc" => pending = Some(codegen::doc_info_from_args(&file, c)?),
+                "@doc_trans" => {
+                    if let Some(info) = pending.as_mut() {
+                        codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;
+                    }
+                }
+                "@moduledoc_trans" => {
+                    if let Some(info) = module_doc.as_mut() {
+                        codegen::merge_doc_trans(&file, c, info, "@moduledoc_trans")?;
+                    }
+                }
                 "def" | "defp" | "defmacro" => {
                     let head_name = c.args.first().and_then(|h| match h {
                         ast::Term::Call(hc) => match &hc.callee {

@@ -76,21 +76,36 @@ impl DocInfo {
     }
 }
 
-/// Parse `@doc` arguments: a string, `false`, or `default:`/locale pairs.
+/// Parse `@doc` arguments: a string or `false` (GEP-0007-R001).
 pub fn doc_info_from_args(file: &str, call: &Call) -> crate::diag::Result<DocInfo> {
     let mut info = DocInfo::default();
     match call.args.first() {
         Some(Term::Bool(false)) => {
             info.hidden = true;
-            return Ok(info);
+            Ok(info)
         }
         Some(t) if t.as_plain_str().is_some() => {
             info.entries
                 .push(("default".to_string(), t.as_plain_str().unwrap()));
-            return Ok(info);
+            Ok(info)
         }
-        _ => {}
+        _ => Err(Diagnostic::new(
+            file,
+            call.span,
+            "@doc accepts a string or false; translations go on separate \
+             @doc_trans lines (GEP-0007-R001)",
+        )),
     }
+}
+
+/// Merge `@doc_trans <locale>: "..."` pairs into a doc map
+/// (GEP-0007-R001A). May be repeated, one or more locales per line.
+pub fn merge_doc_trans(
+    file: &str,
+    call: &Call,
+    info: &mut DocInfo,
+    attr: &str,
+) -> crate::diag::Result<()> {
     let mut pairs: Vec<&Term> = Vec::new();
     for arg in &call.args {
         match arg {
@@ -98,36 +113,46 @@ pub fn doc_info_from_args(file: &str, call: &Call) -> crate::diag::Result<DocInf
             other => pairs.push(other),
         }
     }
+    if pairs.is_empty() {
+        return Err(Diagnostic::new(
+            file,
+            call.span,
+            format!("{attr} requires locale: \"text\" pairs"),
+        ));
+    }
     for p in pairs {
         let Term::Pair(key, value) = p else {
             return Err(Diagnostic::new(
                 file,
                 call.span,
-                "@doc accepts a string, false, or default:/locale: pairs (GEP-0007-R001)",
+                format!("{attr} requires locale: \"text\" pairs, e.g. {attr} zh_CN: \"...\""),
             ));
         };
-        let tag = if key == "default" {
-            "default".to_string()
-        } else {
-            key.replace('_', "-")
-        };
+        if key == "default" {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!("the default text belongs in @doc, not {attr}"),
+            ));
+        }
+        let tag = key.replace('_', "-");
         let Some(text) = value.as_plain_str() else {
             return Err(Diagnostic::new(
                 file,
                 call.span,
-                format!("@doc {key}: value must be a plain string"),
+                format!("{attr} {key}: value must be a plain string"),
             ));
         };
+        if info.entries.iter().any(|(t, _)| *t == tag) {
+            return Err(Diagnostic::new(
+                file,
+                call.span,
+                format!("duplicate {attr} locale {tag}"),
+            ));
+        }
         info.entries.push((tag, text));
     }
-    if info.entries.is_empty() || info.default_text().is_none() {
-        return Err(Diagnostic::new(
-            file,
-            call.span,
-            "@doc with locale entries requires a default: entry (GEP-0007-R003)",
-        ));
-    }
-    Ok(info)
+    Ok(())
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -268,6 +293,24 @@ impl Codegen {
                 }
                 "@doc" => {
                     pending_doc = Some(doc_info_from_args(&self.file, call)?);
+                }
+                "@doc_trans" => {
+                    let info = pending_doc.as_mut().ok_or_else(|| {
+                        self.err(
+                            call.span,
+                            "@doc_trans must follow the @doc it translates (GEP-0007-R001A)",
+                        )
+                    })?;
+                    merge_doc_trans(&self.file, call, info, "@doc_trans")?;
+                }
+                "@moduledoc_trans" => {
+                    let info = moduledoc.as_mut().ok_or_else(|| {
+                        self.err(
+                            call.span,
+                            "@moduledoc_trans must follow @moduledoc (GEP-0007-R001A)",
+                        )
+                    })?;
+                    merge_doc_trans(&self.file, call, info, "@moduledoc_trans")?;
                 }
                 "@decorate" => {
                     if let Some(e) = call.args.first() {
@@ -2504,7 +2547,7 @@ mod gep0007_tests {
     #[test]
     fn localized_doc_keeps_default_in_docstring() {
         let py = compile(
-            "defmodule M do\n  @doc default: \"Adds one.\", zh_CN: \"加一。\"\n  def inc(x), do: x + 1\nend",
+            "defmodule M do\n  @doc \"Adds one.\"\n  @doc_trans zh_CN: \"加一。\"\n  @doc_trans ja: \"一を足す。\"\n  def inc(x), do: x + 1\nend",
         );
         assert!(py.contains("\"\"\"Adds one.\"\"\""), "{py}");
         assert!(!py.contains("加一"), "{py}");
@@ -2519,11 +2562,19 @@ mod gep0007_tests {
     }
 
     #[test]
-    fn locale_without_default_is_an_error() {
+    fn doc_trans_without_doc_is_an_error() {
         let err = compile_err(
-            "defmodule M do\n  @doc zh_CN: \"只有中文\"\n  def f(x), do: x\nend",
+            "defmodule M do\n  @doc_trans zh_CN: \"只有中文\"\n  def f(x), do: x\nend",
         );
-        assert!(err.contains("GEP-0007-R003"), "{err}");
+        assert!(err.contains("GEP-0007-R001A"), "{err}");
+    }
+
+    #[test]
+    fn duplicate_doc_trans_locale_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  @doc \"d\"\n  @doc_trans zh_CN: \"一\"\n  @doc_trans zh_CN: \"二\"\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("duplicate"), "{err}");
     }
 
     #[test]
