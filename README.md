@@ -50,6 +50,9 @@ Design decisions are recorded as **Gandora Enhancement Proposals** in
   ([中文](geps/local/zh/0004-structs-and-module-attributes.md))
 - [GEP-0005](geps/0005-sigils.md) — sigils (`~w`, `~s`, `~r`, and the raw
   embedded-Python `~python`) ([中文](geps/local/zh/0005-sigils.md))
+- [GEP-0006](geps/0006-package-publication.md) — publishing packages as
+  ordinary PyPI wheels, with macros shipped as source and zero runtime
+  ([中文](geps/local/zh/0006-package-publication.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -107,6 +110,31 @@ output, Gandora's rendering of Osiris's embedded-language sigils.
 Anything outside the surface produces a diagnostic naming the construct
 (GEP-0001-R007) rather than a silent mistranslation. See
 [`examples/tour`](examples/tour) for a working multi-module program.
+
+## Publishing a package
+
+A Gandora package is an ordinary PyPI wheel (GEP-0006):
+
+```console
+gan init --package acme-text
+cd acme-text            # write modules under src/acme_text/
+gan build               # compiles into pkg/, emits marker + .gan sources
+uv build && uv publish  # standard hatchling wheel, standard PyPI
+```
+
+Consumers just `uv add acme-text`, then use it from Gandora:
+
+```elixir
+require AcmeText.Core     # macros: expanded at compile time from the
+alias AcmeText.Core       #         .gan sources shipped in the wheel
+Core.hello("world")       # functions: a plain `import acme_text.core`
+```
+
+The wheel introduces no runtime: its `.py` modules are self-contained,
+Python-only consumers can use them without knowing Gandora exists, and
+macro expansion leaves nothing behind at runtime. The compiler discovers
+installed packages by reading their `gandora.toml` markers from
+`.venv` — it never imports or executes package code.
 
 ## Data mapping
 

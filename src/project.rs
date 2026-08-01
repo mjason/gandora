@@ -16,6 +16,9 @@ pub struct Config {
     pub out_dir: String,
     pub target_python: String,
     pub exclude: Vec<String>,
+    /// package project: `gan build` also emits marker + shipped sources
+    /// (GEP-0006-R001/R002)
+    pub package: bool,
 }
 
 impl Config {
@@ -26,6 +29,7 @@ impl Config {
             out_dir: "dist".into(),
             target_python: "3.12".into(),
             exclude: Vec::new(),
+            package: false,
         }
     }
 }
@@ -71,6 +75,16 @@ pub fn load_config(path: &Path) -> Result<Config> {
             "exclude" => {
                 config.exclude = string_array(&file, &key, val)?;
             }
+            "package" => match val {
+                JsonValue::Bool(b) => config.package = b,
+                _ => {
+                    return Err(Diagnostic::new(
+                        &file,
+                        Span::default(),
+                        "'package' must be a boolean",
+                    ))
+                }
+            },
             "$schema" => {}
             other => {
                 return Err(Diagnostic::new(
@@ -244,10 +258,13 @@ pub struct CompiledModule {
 /// Parse, expand, and compile every module of a project.
 pub fn compile_project(config: &Config) -> Result<Vec<CompiledModule>> {
     let sources = discover_sources(config)?;
-    compile_files(&sources)
+    compile_files(&sources, Some(config))
 }
 
-pub fn compile_files(sources: &[(PathBuf, Vec<String>)]) -> Result<Vec<CompiledModule>> {
+pub fn compile_files(
+    sources: &[(PathBuf, Vec<String>)],
+    config: Option<&Config>,
+) -> Result<Vec<CompiledModule>> {
     // 1. parse everything and collect local macro tables
     struct Parsed {
         path: PathBuf,
@@ -304,6 +321,40 @@ pub fn compile_files(sources: &[(PathBuf, Vec<String>)]) -> Result<Vec<CompiledM
         }
     }
 
+    // 2b. resolve require/import deps that are not project modules against
+    //     installed package markers (GEP-0006-R006/R008)
+    let mut external: BTreeMap<String, MacroTable> = BTreeMap::new();
+    for p in &parsed {
+        for dep in &p.deps {
+            if by_name.contains_key(dep) || external.contains_key(dep) {
+                continue;
+            }
+            let Some(cfg) = config else {
+                return Err(Diagnostic::new(
+                    p.path.display().to_string(),
+                    Span::default(),
+                    format!("module {dep} named by require/import is not among the compiled files"),
+                ));
+            };
+            let Some(source) = find_installed_source(cfg, dep) else {
+                return Err(Diagnostic::new(
+                    p.path.display().to_string(),
+                    Span::default(),
+                    format!(
+                        "module {dep} named by require/import was found neither in project \
+                         sources nor in an installed package under {} (GEP-0006-R008)",
+                        cfg.root.join(".venv").display()
+                    ),
+                ));
+            };
+            let file = source.display().to_string();
+            let text = std::fs::read_to_string(&source)
+                .map_err(|e| Diagnostic::new(&file, Span::default(), e.to_string()))?;
+            let term = parse_file(&file, &text)?;
+            external.insert(dep.clone(), collect_macros(&file, &term)?);
+        }
+    }
+
     // 3. expand and compile each module with its visible macros
     let mut out = Vec::new();
     for p in &parsed {
@@ -312,6 +363,10 @@ pub fn compile_files(sources: &[(PathBuf, Vec<String>)]) -> Result<Vec<CompiledM
         for dep in &p.deps {
             if let Some(&j) = by_name.get(dep) {
                 for (k, v) in &parsed[j].macros {
+                    table.entry(k.clone()).or_insert_with(|| v.clone());
+                }
+            } else if let Some(ext) = external.get(dep) {
+                for (k, v) in ext {
                     table.entry(k.clone()).or_insert_with(|| v.clone());
                 }
             }
@@ -380,6 +435,133 @@ pub fn write_outputs(modules: &[CompiledModule], out_root: &Path) -> Result<Vec<
         written.push(target);
     }
     Ok(written)
+}
+
+/// Marker + shipped sources for package projects (GEP-0006-R002/R004).
+pub fn write_package_artifacts(
+    modules: &[CompiledModule],
+    out_root: &Path,
+) -> Result<Vec<String>> {
+    let mut by_top: BTreeMap<String, Vec<&CompiledModule>> = BTreeMap::new();
+    for m in modules {
+        let top = m.py_path.split('/').next().unwrap_or_default().to_string();
+        by_top.entry(top).or_default().push(m);
+    }
+    let mut tops = Vec::new();
+    for (top, mods) in by_top {
+        let mut marker = format!(
+            "schema = 1\ncompiler = \"{}\"\n",
+            env!("CARGO_PKG_VERSION")
+        );
+        for m in &mods {
+            let gan_rel = format!(
+                "{top}/_gan/{}.gan",
+                m.py_path.trim_end_matches(".py")
+            );
+            let dest = out_root.join(&gan_rel);
+            if let Some(dir) = dest.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| {
+                    Diagnostic::new(dir.display().to_string(), Span::default(), e.to_string())
+                })?;
+            }
+            std::fs::copy(&m.source, &dest).map_err(|e| {
+                Diagnostic::new(dest.display().to_string(), Span::default(), e.to_string())
+            })?;
+            marker.push_str("\n[[modules]]\n");
+            marker.push_str(&format!("name = \"{}\"\n", m.module.join(".")));
+            if !m.compile_time_only {
+                marker.push_str(&format!("python = \"{}\"\n", m.py_path));
+            }
+            marker.push_str(&format!("source = \"{gan_rel}\"\n"));
+        }
+        let path = out_root.join(&top).join("gandora.toml");
+        std::fs::write(&path, marker).map_err(|e| {
+            Diagnostic::new(path.display().to_string(), Span::default(), e.to_string())
+        })?;
+        tops.push(top);
+    }
+    Ok(tops)
+}
+
+/// Parse a marker into (module name, source path) entries; unknown schema
+/// yields nothing (GEP-0006-R004).
+fn parse_marker(text: &str) -> Vec<(String, String)> {
+    let mut entries = Vec::new();
+    let mut name: Option<String> = None;
+    let mut source: Option<String> = None;
+    let mut schema_ok = false;
+    let mut flush = |name: &mut Option<String>, source: &mut Option<String>,
+                     entries: &mut Vec<(String, String)>| {
+        if let (Some(n), Some(s)) = (name.take(), source.take()) {
+            entries.push((n, s));
+        }
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line == "[[modules]]" {
+            flush(&mut name, &mut source, &mut entries);
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            let v = v.trim().trim_matches('"');
+            match k.trim() {
+                "schema" => schema_ok = v == "1",
+                "name" => name = Some(v.to_string()),
+                "source" => source = Some(v.to_string()),
+                _ => {}
+            }
+        }
+    }
+    flush(&mut name, &mut source, &mut entries);
+    if schema_ok {
+        entries
+    } else {
+        Vec::new()
+    }
+}
+
+fn site_packages_dirs(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for lib in ["lib", "Lib"] {
+        let lib_dir = root.join(".venv").join(lib);
+        let direct = lib_dir.join("site-packages");
+        if direct.is_dir() {
+            out.push(direct);
+            continue;
+        }
+        if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+            for e in entries.flatten() {
+                let sp = e.path().join("site-packages");
+                if sp.is_dir() {
+                    out.push(sp);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Locate a module shipped by an installed package by scanning markers in
+/// the project's site-packages (GEP-0006-R006). Static reads only.
+pub fn find_installed_source(config: &Config, module_name: &str) -> Option<PathBuf> {
+    for sp in site_packages_dirs(&config.root) {
+        let Ok(entries) = std::fs::read_dir(&sp) else { continue };
+        let mut dirs: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+        dirs.sort();
+        for dir in dirs {
+            let marker_path = dir.join("gandora.toml");
+            let Ok(text) = std::fs::read_to_string(&marker_path) else { continue };
+            for (name, source) in parse_marker(&text) {
+                if name == module_name {
+                    let path = sp.join(source);
+                    if path.exists() {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// The interpreter for `gan run`: `.venv/bin/python`, `uv run python`, or python3.

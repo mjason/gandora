@@ -94,6 +94,9 @@ const INIT_CONFIG: &str = r#"{
 const INIT_GITIGNORE: &str = "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n";
 
 fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
+    if args.iter().any(|a| a == "--package") {
+        return cmd_init_package(args);
+    }
     let existing = args.iter().any(|a| a == "--existing");
     let path: PathBuf = args
         .iter()
@@ -137,6 +140,95 @@ fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
         println!("  cd {}", path.display());
     }
     println!("  gan run src/main.gan");
+    Ok(())
+}
+
+/// `gan init --package <name>`: a publishable package project (GEP-0006-R001).
+fn cmd_init_package(args: &[String]) -> Result<(), Diagnostic> {
+    let path: PathBuf = args
+        .iter()
+        .find(|a| !a.starts_with("--"))
+        .map(PathBuf::from)
+        .ok_or_else(|| usage_err("init --package requires a package name"))?;
+    if path.exists() {
+        return Err(Diagnostic::new(
+            path.display().to_string(),
+            Span::default(),
+            "path already exists",
+        ));
+    }
+    let dist_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "gandora-pkg".to_string());
+    let py_pkg = dist_name.replace('-', "_");
+    let module = project::snake_to_camel(&py_pkg);
+    std::fs::create_dir_all(path.join("src").join(&py_pkg)).map_err(io_err(&path))?;
+
+    // outDir must not be `dist`: hatchling excludes its own artifact
+    // directory from wheel inputs
+    let config = r#"{
+  // Gandora package project (GEP-0006): `gan build` also emits the
+  // gandora.toml marker and ships .gan sources for macro consumers.
+  "source": ["src"],
+  "outDir": "pkg",
+  "targetPython": "3.12",
+  "package": true,
+}
+"#;
+    std::fs::write(path.join("gandora.jsonc"), config).map_err(io_err(&path))?;
+    let pyproject = format!(
+        r#"[project]
+name = "{dist_name}"
+version = "0.1.0"
+description = "A Gandora package"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# pkg/ is gitignored build output but must enter the distribution
+[tool.hatch.build]
+ignore-vcs = true
+
+# the sdist carries sources and the compiled output of `gan build`
+[tool.hatch.build.targets.sdist]
+include = ["pkg", "src", "gandora.jsonc"]
+
+# the wheel packages the compiled output (marker and .gan sources included)
+[tool.hatch.build.targets.wheel]
+packages = ["pkg/{py_pkg}"]
+"#
+    );
+    std::fs::write(path.join("pyproject.toml"), pyproject).map_err(io_err(&path))?;
+    std::fs::write(
+        path.join(".gitignore"),
+        format!("{INIT_GITIGNORE}pkg/\n"),
+    )
+    .map_err(io_err(&path))?;
+    std::fs::write(path.join(".python-version"), "3.12\n").map_err(io_err(&path))?;
+    let starter = format!(
+        r#"defmodule {module}.Core do
+  @moduledoc "Public surface of {dist_name}: functions run anywhere, macros expand in consumers."
+
+  def hello(name), do: "Hello from {dist_name}, #{{name}}!"
+
+  defmacro twice(expr) do
+    quote do
+      {{unquote(expr), unquote(expr)}}
+    end
+  end
+end
+"#
+    );
+    std::fs::write(path.join("src").join(&py_pkg).join("core.gan"), starter)
+        .map_err(io_err(&path))?;
+    println!("Initialized Gandora package {dist_name} in {}", path.display());
+    println!("Publish with:");
+    println!("  cd {}", path.display());
+    println!("  gan build && uv build && uv publish");
     Ok(())
 }
 
@@ -218,7 +310,7 @@ fn compile_project_with(
         sources.push((canon, module));
     }
     project::check_collisions(&sources)?;
-    project::compile_files(&sources)
+    project::compile_files(&sources, Some(&config))
 }
 
 // ---- commands ------------------------------------------------------------
@@ -230,7 +322,7 @@ fn cmd_check(args: &[String]) -> Result<(), Diagnostic> {
         println!("no .gan sources found");
         return Ok(());
     }
-    let modules = project::compile_files(&sources)?;
+    let modules = project::compile_files(&sources, Some(&config))?;
     println!("checked {} module(s), no errors", modules.len());
     Ok(())
 }
@@ -244,6 +336,12 @@ fn cmd_build() -> Result<(), Diagnostic> {
     }
     let out_root = config.root.join(&config.out_dir);
     project::write_outputs(&modules, &out_root)?;
+    if config.package {
+        let tops = project::write_package_artifacts(&modules, &out_root)?;
+        for top in tops {
+            println!("packaged {top} (marker + shipped sources)");
+        }
+    }
     let macro_only = modules.iter().filter(|m| m.compile_time_only).count();
     if macro_only > 0 {
         println!(
@@ -280,7 +378,7 @@ fn cmd_compile(args: &[String]) -> Result<(), Diagnostic> {
     }
     let config = config_for_file(Path::new(&files[0]))?;
     let sources = sources_or_explicit(&config, &files)?;
-    let modules = project::compile_files(&sources)?;
+    let modules = project::compile_files(&sources, Some(&config))?;
     let out_root = match out_dir {
         Some(d) => PathBuf::from(d),
         None => config.root.join(&config.out_dir),

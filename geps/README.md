@@ -18,3 +18,4 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0003](0003-python-interop.md) | Python Interop | Standards Track | Accepted | 1 | [zh](local/zh/0003-python-interop.md) |
 | [0004](0004-structs-and-module-attributes.md) | Structs and Module Attributes | Standards Track | Accepted | 1 | [zh](local/zh/0004-structs-and-module-attributes.md) |
 | [0005](0005-sigils.md) | Sigils | Standards Track | Accepted | 1 | [zh](local/zh/0005-sigils.md) |
+| [0006](0006-package-publication.md) | Package Publication | Standards Track | Accepted | 1 | [zh](local/zh/0006-package-publication.md) |

@@ -254,3 +254,80 @@ fn pandas_and_numpy_chapters_run() {
     assert!(stdout.contains("norm([3,4])  = 5.0"), "{stdout}");
     assert!(stdout.contains("std          = 3.452"), "{stdout}");
 }
+
+#[test]
+fn package_publication_round_trip() {
+    // publisher side: scaffold, build, verify marker + shipped sources
+    let dir = temp_dir("pkg");
+    let pkg = dir.join("acme-demo");
+    let out = gan().args(["init", "--package"]).arg(&pkg).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let out = gan().current_dir(&pkg).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let marker = std::fs::read_to_string(pkg.join("pkg/acme_demo/gandora.toml")).unwrap();
+    assert!(marker.contains("schema = 1"), "{marker}");
+    assert!(marker.contains("name = \"AcmeDemo.Core\""), "{marker}");
+    assert!(pkg.join("pkg/acme_demo/_gan/acme_demo/core.gan").exists());
+
+    // consumer side: simulate an installed wheel by copying the built
+    // package into a fake site-packages, then use it from Gandora
+    let consumer = dir.join("app");
+    let out = gan().arg("init").arg(&consumer).output().unwrap();
+    assert!(out.status.success());
+    let site = consumer.join(".venv/lib/python3.12/site-packages");
+    copy_tree(&pkg.join("pkg/acme_demo"), &site.join("acme_demo"));
+    std::fs::write(
+        consumer.join("src/main.gan"),
+        "defmodule Main do\n  require AcmeDemo.Core\n  alias AcmeDemo.Core\n\n  def main() do\n    IO.puts(Core.hello(\"e2e\"))\n    IO.puts(inspect(AcmeDemo.Core.twice(1 + 2)))\n  end\nend\n",
+    )
+    .unwrap();
+    let out = gan().current_dir(&consumer).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let main_py = std::fs::read_to_string(consumer.join("dist/main.py")).unwrap();
+    // the macro expanded at compile time; the function is a plain import
+    assert!(main_py.contains("import acme_demo.core"), "{main_py}");
+    assert!(main_py.contains("((1 + 2), (1 + 2))") || main_py.contains("(1 + 2, 1 + 2)"), "{main_py}");
+    assert!(!main_py.contains("gandora"), "no runtime import allowed: {main_py}");
+    // and the program runs against the "installed" package
+    let stdout = {
+        let out = Command::new("python3")
+            .arg("-P")
+            .arg(consumer.join("dist/main.py"))
+            .env(
+                "PYTHONPATH",
+                format!("{}:{}", consumer.join("dist").display(), site.display()),
+            )
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+    assert!(stdout.contains("Hello from acme-demo, e2e!"), "{stdout}");
+    assert!(stdout.contains("(3, 3)"), "{stdout}");
+
+    // an unresolvable require has a named diagnostic (GEP-0006-R008)
+    std::fs::write(
+        consumer.join("src/missing.gan"),
+        "defmodule Missing do\n  require NoSuch.Package\n  def main(), do: nil\nend\n",
+    )
+    .unwrap();
+    let out = gan().current_dir(&consumer).arg("build").output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("NoSuch.Package"), "{stderr}");
+    assert!(stderr.contains("GEP-0006-R008"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let dest = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &dest);
+        } else {
+            std::fs::copy(entry.path(), &dest).unwrap();
+        }
+    }
+}
