@@ -1,0 +1,50 @@
+defmodule Tour.Dsl do
+  @moduledoc """
+  GEP-0008 metaprogramming: declaration macros generate defs, `use`
+  injects an API, and defattr + @on_definition build a route table —
+  an annotation system in userland, the way @doc itself works.
+  """
+
+  defmacro __using__() do
+    quote do
+      def injected_greeting(), do: "hello from __using__"
+    end
+  end
+
+  defmacro define_getter(name, value) do
+    quote do
+      def unquote(name)(), do: unquote(value)
+    end
+  end
+
+  defattr :route, accumulate: true
+
+  defmacro on_def(kind, head, attrs, body) do
+    quote do
+      def unquote(head) do
+        unquote(body)
+      end
+    end
+  end
+
+  @on_definition Tour.Dsl.on_def
+
+  use Tour.Dsl
+  define_getter(:answer, 42)
+  define_getter(:language, :gandora)
+
+  @route {:get, "/users"}
+  def list_users(), do: [:alice, :bob]
+
+  @route {:post, "/users"}
+  def create_user(), do: :created
+
+  def routes(), do: @route
+
+  def main() do
+    IO.puts(injected_greeting())
+    IO.puts("answer = #{answer()}, language = #{language()}")
+    IO.puts("routes = #{inspect(routes())}")
+    IO.puts("handlers = #{inspect([list_users(), create_user()])}")
+  end
+end

@@ -178,8 +178,8 @@ cargo test             # unit + end-to-end tests
 
 ## Status
 
-v0: GEP-0001..0007 and GEP-0009 (embedded-language sigils with EEx-style
-`<%= %>` splices) are implemented and tested. GEP-0008 (definition-
-generating macros, `use`, the `defattr`/`@on_definition` attribute
-system) is Accepted with implementation in progress. Deferred:
+v0: GEP-0001..0009 are implemented and tested — including GEP-0008's
+definition-generating macros, `use`/`__using__`, `def unquote(name)`,
+and the `defattr`/`@on_definition` annotation system, and GEP-0009's
+embedded-language sigils with EEx-style `<%= %>` splices. Deferred:
 protocols, comprehensions, `try/rescue`, binaries, a formatter, an LSP.

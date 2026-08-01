@@ -397,7 +397,10 @@ fn macro_deps(term: &Term) -> Vec<String> {
             if let Term::Call(dm) = &stmt {
                 if let Some(body) = Term::keyword_arg(&dm.args, "do") {
                     for inner in body.as_block() {
-                        if inner.is_call_named("require") || inner.is_call_named("import") {
+                        if inner.is_call_named("require")
+                            || inner.is_call_named("import")
+                            || inner.is_call_named("use")
+                        {
                             if let Term::Call(c) = &inner {
                                 if let Some(Term::Alias(segs)) = c.args.first() {
                                     deps.push(segs.join("."));

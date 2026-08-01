@@ -734,6 +734,24 @@ impl Codegen {
         let (name, params) = match head {
             Term::Call(c) => match &c.callee {
                 Callee::Name(n) => (n.clone(), c.args.clone()),
+                // `def unquote(name)(params)` after expansion: the callee is
+                // an Apply of the computed name (GEP-0008-R002)
+                Callee::Apply(inner) => match inner.as_ref() {
+                    Term::Atom(s) => (s.clone(), c.args.clone()),
+                    t if t.as_plain_str().is_some() => {
+                        (t.as_plain_str().unwrap(), c.args.clone())
+                    }
+                    Term::Var(s, _) => (s.clone(), c.args.clone()),
+                    other => {
+                        return Err(self.err(
+                            c.span,
+                            format!(
+                                "a computed def name must be an atom or string, \
+                                 found {other:?} (GEP-0008-R002)"
+                            ),
+                        ))
+                    }
+                },
                 _ => return Err(self.err(c.span, "def head must be a plain function call")),
             },
             Term::Var(n, _) => (n.clone(), Vec::new()),
@@ -2997,5 +3015,84 @@ mod gep0009_tests {
             "defmodule M do\n  def t(), do: ~eex(a <%%= b %> c)\nend",
         );
         assert!(py.contains("\"a <%= b %> c\""), "{py}");
+    }
+}
+
+#[cfg(test)]
+mod gep0008_tests {
+    use super::tests_helpers::compile;
+    use crate::expander::{collect_macros, Expander};
+    use crate::parser::parse_file;
+
+    fn expand_err(src: &str) -> String {
+        let module = parse_file("<test>", src).unwrap();
+        let macros = collect_macros("<test>", &module).unwrap();
+        let mut ex = Expander::new("<test>", macros);
+        ex.expand_module(&module).unwrap_err().message
+    }
+
+    #[test]
+    fn declaration_macro_generates_defs() {
+        let py = compile(
+            "defmodule M do\n  defmacro make_pair() do\n    quote do\n      def left(), do: 1\n      def right(), do: 2\n    end\n  end\n  make_pair()\n  def sum(), do: left() + right()\nend",
+        );
+        assert!(py.contains("def left():"), "{py}");
+        assert!(py.contains("def right():"), "{py}");
+        assert!(py.contains("return left() + right()"), "{py}");
+    }
+
+    #[test]
+    fn def_unquote_computes_names() {
+        let py = compile(
+            "defmodule M do\n  defmacro define_getter(name, value) do\n    quote do\n      def unquote(name)(), do: unquote(value)\n    end\n  end\n  define_getter(:answer, 42)\n  define_getter(:pi, 3.14)\nend",
+        );
+        assert!(py.contains("def answer():\n    return 42"), "{py}");
+        assert!(py.contains("def pi():\n    return 3.14"), "{py}");
+    }
+
+    #[test]
+    fn use_invokes_using_macro() {
+        let py = compile(
+            "defmodule M do\n  defmacro __using__() do\n    quote do\n      def injected(), do: :from_using\n    end\n  end\n  use M\nend",
+        );
+        assert!(py.contains("def injected():"), "{py}");
+        assert!(py.contains("return \"from_using\""), "{py}");
+    }
+
+    #[test]
+    fn use_without_using_is_an_error() {
+        let err = expand_err("defmodule M do\n  use NoSuch.Thing\nend");
+        assert!(err.contains("GEP-0008-R003"), "{err}");
+    }
+
+    #[test]
+    fn defattr_hook_rewrites_definitions() {
+        let py = compile(
+            "defmodule M do\n  defattr :route, accumulate: true\n  defmacro on_def(kind, head, attrs, body) do\n    quote do\n      def unquote(head) do\n        unquote(body)\n      end\n      def route_count(), do: unquote(length(attrs))\n    end\n  end\n  @on_definition M.on_def\n  @route {:get, \"/users\"}\n  @route {:post, \"/users\"}\n  def list_users(), do: :ok\nend",
+        );
+        assert!(py.contains("def list_users():"), "{py}");
+        assert!(py.contains("def route_count():\n    return 2"), "{py}");
+    }
+
+    #[test]
+    fn accumulated_attr_reads_as_list() {
+        let py = compile(
+            "defmodule M do\n  defattr :tag, accumulate: true\n  @tag :a\n  @tag :b\n  def tags(), do: @tag\nend",
+        );
+        assert!(py.contains("return [\"a\", \"b\"]"), "{py}");
+    }
+
+    #[test]
+    fn builtin_attr_collision_is_an_error() {
+        let err = expand_err("defmodule M do\n  defattr :doc\nend");
+        assert!(err.contains("GEP-0008-R006"), "{err}");
+    }
+
+    #[test]
+    fn non_accumulating_duplicate_is_an_error() {
+        let err = expand_err(
+            "defmodule M do\n  defattr :owner\n  @owner :a\n  @owner :b\n  def f(), do: nil\nend",
+        );
+        assert!(err.contains("GEP-0008-R004"), "{err}");
     }
 }

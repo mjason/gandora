@@ -11,12 +11,13 @@ use std::collections::HashMap;
 use crate::ast::{Call, Callee, StrPart, Term};
 use crate::diag::{Diagnostic, Result, Span};
 
-const MAX_DEPTH: u32 = 128;
+const MAX_DEPTH: u32 = 64;
 const MAX_STEPS: u64 = 1_000_000;
 
 /// Forms the expander must never treat as macro calls.
 const SPECIAL_FORMS: &[&str] = &[
     "__block__", "__clauses__", "defmodule", "def", "defp", "defmacro", "alias", "import",
+    "use", "defattr",
     "require", "pyimport", "quote", "unquote", "unquote_splicing", "var!", "if", "unless",
     "case", "cond", "with", "fn", "->", "when", "=", "|", "|>", "&", "^", "not", "and", "or",
     "+", "-", "*", "/", "//", "==", "!=", "<", ">", "<=", ">=", "++", "<>", "..", "<-",
@@ -157,6 +158,45 @@ impl Expander {
                         // macro definitions are already collected; keep as-is
                         return Ok(term.clone());
                     }
+                    if name == "defmodule" {
+                        // module bodies get the attribute-aware sequential
+                        // pass (GEP-0008-R001/R004/R005)
+                        let mut new_call = call.as_ref().clone();
+                        for arg in &mut new_call.args {
+                            if let Term::Pair(k, v) = arg {
+                                if k == "do" {
+                                    let stmts = self.process_module_body(v, depth)?;
+                                    **v = Term::block(stmts, call.span);
+                                    continue;
+                                }
+                            }
+                            *arg = self.expand_term(arg, depth)?;
+                        }
+                        return Ok(Term::Call(Box::new(new_call)));
+                    }
+                    if name == "use" {
+                        // `use Mod[, opts]` expands Mod.__using__ in place
+                        // (GEP-0008-R003)
+                        let opts = call.args.len() - 1;
+                        let key = ("__using__".to_string(), opts);
+                        let Some(def) = self.macros.get(&key).cloned() else {
+                            let target = match call.args.first() {
+                                Some(Term::Alias(segs)) => segs.join("."),
+                                _ => "<module>".to_string(),
+                            };
+                            return Err(self.err(
+                                call.span,
+                                format!(
+                                    "use target {target} has no __using__/{opts} macro \
+                                     (GEP-0008-R003)"
+                                ),
+                            ));
+                        };
+                        let mut using_call = call.as_ref().clone();
+                        using_call.args.remove(0);
+                        let expanded = self.invoke_macro(&def, "__using__", &using_call)?;
+                        return self.expand_term(&expanded, depth + 1);
+                    }
                     let key = (name.clone(), call.args.len());
                     let arity_key = self.macros.contains_key(&key);
                     if arity_key && !SPECIAL_FORMS.contains(&name.as_str()) {
@@ -224,6 +264,171 @@ impl Expander {
 
     fn expand_all(&mut self, items: &[Term], depth: u32) -> Result<Vec<Term>> {
         items.iter().map(|t| self.expand_term(t, depth)).collect()
+    }
+
+    /// Sequential module-body pass: registers attributes, collects values,
+    /// runs the definition hook, and flattens generated blocks
+    /// (GEP-0008-R001/R004/R005).
+    fn process_module_body(&mut self, body: &Term, depth: u32) -> Result<Vec<Term>> {
+        const BUILTIN_ATTRS: &[&str] = &[
+            "doc", "moduledoc", "example", "decorate", "doc_trans", "moduledoc_trans",
+            "on_definition",
+        ];
+        let mut registered: std::collections::BTreeMap<String, bool> = Default::default();
+        let mut values: std::collections::BTreeMap<String, Vec<Term>> = Default::default();
+        let mut pending: Vec<(String, Term)> = Vec::new();
+        let mut hook: Option<String> = None;
+        let mut out: Vec<Term> = Vec::new();
+
+        for stmt in body.as_block() {
+            if let Term::Call(call) = &stmt {
+                if let Callee::Name(name) = &call.callee {
+                    match name.as_str() {
+                        "defattr" => {
+                            let Some(Term::Atom(attr)) = call.args.first() else {
+                                return Err(self.err(
+                                    call.span,
+                                    "defattr requires an atom name, e.g. defattr :route",
+                                ));
+                            };
+                            if BUILTIN_ATTRS.contains(&attr.as_str()) {
+                                return Err(self.err(
+                                    call.span,
+                                    format!(
+                                        "@{attr} is a built-in attribute and cannot be \
+                                         registered (GEP-0008-R006)"
+                                    ),
+                                ));
+                            }
+                            let accumulate = matches!(
+                                Term::keyword_arg(&call.args, "accumulate"),
+                                Some(Term::Bool(true))
+                            );
+                            registered.insert(attr.clone(), accumulate);
+                            continue;
+                        }
+                        "@on_definition" => {
+                            match call.args.first() {
+                                Some(Term::Call(c)) => match &c.callee {
+                                    Callee::Dot { name, is_call: false, .. } => {
+                                        hook = Some(name.clone());
+                                    }
+                                    _ => {
+                                        return Err(self.err(
+                                            call.span,
+                                            "@on_definition expects Mod.hook_macro",
+                                        ))
+                                    }
+                                },
+                                _ => {
+                                    return Err(self.err(
+                                        call.span,
+                                        "@on_definition expects Mod.hook_macro",
+                                    ))
+                                }
+                            }
+                            continue;
+                        }
+                        attr if attr.starts_with('@')
+                            && registered.contains_key(attr.trim_start_matches('@')) =>
+                        {
+                            let plain = attr.trim_start_matches('@').to_string();
+                            let accumulate = registered[&plain];
+                            if !accumulate && pending.iter().any(|(n, _)| *n == plain) {
+                                return Err(self.err(
+                                    call.span,
+                                    format!(
+                                        "@{plain} is not accumulating; register it with \
+                                         defattr :{plain}, accumulate: true (GEP-0008-R004)"
+                                    ),
+                                ));
+                            }
+                            let Some(value) = call.args.first() else {
+                                return Err(self.err(
+                                    call.span,
+                                    format!("@{plain} requires a value"),
+                                ));
+                            };
+                            pending.push((plain.clone(), value.clone()));
+                            values.entry(plain).or_default().push(value.clone());
+                            continue;
+                        }
+                        "def" | "defp" if hook.is_some() => {
+                            let hook_name = hook.clone().unwrap();
+                            let key = (hook_name.clone(), 4);
+                            let Some(def) = self.macros.get(&key).cloned() else {
+                                return Err(self.err(
+                                    call.span,
+                                    format!(
+                                        "@on_definition hook {hook_name}/4 is not a known \
+                                         macro (GEP-0008-R005)"
+                                    ),
+                                ));
+                            };
+                            let head = call.args.first().cloned().unwrap_or(Term::Nil);
+                            let fbody = Term::keyword_arg(&call.args, "do")
+                                .cloned()
+                                .unwrap_or(Term::Nil);
+                            let attrs = Term::List(
+                                pending
+                                    .drain(..)
+                                    .map(|(n, v)| Term::Pair(n, Box::new(v)))
+                                    .collect(),
+                            );
+                            let hook_call = Call {
+                                callee: Callee::Name(hook_name.clone()),
+                                args: vec![
+                                    Term::Atom(name.clone()),
+                                    head,
+                                    attrs,
+                                    fbody,
+                                ],
+                                span: call.span,
+                            };
+                            let expanded =
+                                self.invoke_macro(&def, &hook_name, &hook_call)?;
+                            // hook output is expanded but does NOT re-trigger
+                            // the hook (prevents unbounded rewriting)
+                            let expanded = self.expand_term(&expanded, depth + 1)?;
+                            flatten_into(&mut out, expanded);
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if stmt.is_call_named("def") || stmt.is_call_named("defp") {
+                pending.clear();
+            }
+            let expanded = self.expand_term(&stmt, depth)?;
+            flatten_into(&mut out, expanded);
+        }
+
+        // substitute reads of registered attributes (GEP-0008-R004)
+        if !registered.is_empty() {
+            let subst = |term: &Term| -> Option<Term> {
+                if let Term::Call(c) = term {
+                    if let Callee::Name(n) = &c.callee {
+                        if let Some(plain) = n.strip_prefix('@') {
+                            if c.args.is_empty() {
+                                if let Some(acc) = registered.get(plain) {
+                                    let vals =
+                                        values.get(plain).cloned().unwrap_or_default();
+                                    return Some(if *acc {
+                                        Term::List(vals)
+                                    } else {
+                                        vals.last().cloned().unwrap_or(Term::Nil)
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            };
+            out = out.iter().map(|t| rewrite_term(t, &subst)).collect();
+        }
+        Ok(out)
     }
 
     fn invoke_macro(&mut self, def: &MacroDef, name: &str, call: &Call) -> Result<Term> {
@@ -740,6 +945,59 @@ fn term_to_display(t: &Term) -> String {
     match t.as_plain_str() {
         Some(s) => s,
         None => crate::printer::print_module(t).trim_end().to_string(),
+    }
+}
+
+/// Splice a `__block__` expansion result into a statement list
+/// (GEP-0008-R001).
+fn flatten_into(out: &mut Vec<Term>, term: Term) {
+    if term.is_call_named("__block__") {
+        for stmt in term.as_block() {
+            flatten_into(out, stmt);
+        }
+    } else {
+        out.push(term);
+    }
+}
+
+/// Bottom-up rewrite: apply `subst` to every node, keeping the tree
+/// otherwise intact.
+fn rewrite_term(term: &Term, subst: &dyn Fn(&Term) -> Option<Term>) -> Term {
+    if let Some(replacement) = subst(term) {
+        return replacement;
+    }
+    match term {
+        Term::List(items) => Term::List(items.iter().map(|t| rewrite_term(t, subst)).collect()),
+        Term::Tuple(items) => {
+            Term::Tuple(items.iter().map(|t| rewrite_term(t, subst)).collect())
+        }
+        Term::Map(entries) => Term::Map(
+            entries
+                .iter()
+                .map(|(k, v)| (rewrite_term(k, subst), rewrite_term(v, subst)))
+                .collect(),
+        ),
+        Term::Pair(k, v) => Term::Pair(k.clone(), Box::new(rewrite_term(v, subst))),
+        Term::Str(parts) => Term::Str(
+            parts
+                .iter()
+                .map(|p| match p {
+                    StrPart::Interp(e) => StrPart::Interp(Box::new(rewrite_term(e, subst))),
+                    other => other.clone(),
+                })
+                .collect(),
+        ),
+        Term::Call(c) => {
+            let mut new_c = c.as_ref().clone();
+            match &mut new_c.callee {
+                Callee::Dot { base, .. } => **base = rewrite_term(base, subst),
+                Callee::Apply(f) => **f = rewrite_term(f, subst),
+                Callee::Name(_) => {}
+            }
+            new_c.args = new_c.args.iter().map(|t| rewrite_term(t, subst)).collect();
+            Term::Call(Box::new(new_c))
+        }
+        other => other.clone(),
     }
 }
 
