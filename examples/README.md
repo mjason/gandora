@@ -26,6 +26,17 @@ a `main`, or inspect it with `gan expand` / `gan build`.
 | [`src/app/cli.gan`](tour/src/app/cli.gan) | `App.Cli` | `require`d macros across modules, `alias`, the `var!(timer_result)` escape in action |
 | [`src/app/shop.gan`](tour/src/app/shop.gan) | `App.Shop` | `defstruct` → frozen dataclass, `%Mod{...}` literal/pattern/update, module attributes, a decorator registry (GEP-0004) |
 | [`src/sigils.gan`](tour/src/sigils.gan) | `Sigils` | `~w`, `~s`, `~r`, embedded-Python `~python` (GEP-0005) |
+| [`src/tour/dataframe.gan`](tour/src/tour/dataframe.gan) | `Tour.Dataframe` | **pandas** as a `uv` dev dependency: DataFrame from a map literal, `.assign` with a `~python` lambda column, groupby/agg with kwargs, `.query` chains |
+
+The pandas chapter needs the dev dependency installed and runs standalone
+(it is not part of `main.gan`, so the rest of the tour stays
+stdlib-only):
+
+```console
+cd examples/tour
+uv sync                            # installs pandas into .venv
+gan run src/tour/dataframe.gan
+```
 
 ### Reading the compilation results
 

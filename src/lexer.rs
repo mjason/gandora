@@ -285,6 +285,12 @@ impl<'a> Lexer<'a> {
 
     fn lex_string(&mut self) -> Result<Tok> {
         self.bump(); // opening quote
+        // heredoc: """ ... """ (Elixir-style multi-line string)
+        let heredoc = self.matches("\"\"");
+        if heredoc {
+            self.bump();
+            self.bump();
+        }
         let mut parts: Vec<LexStrPart> = Vec::new();
         let mut text = String::new();
         loop {
@@ -292,6 +298,16 @@ impl<'a> Lexer<'a> {
                 .peek()
                 .ok_or_else(|| self.err("unterminated string literal"))?;
             match c {
+                '"' if heredoc => {
+                    if self.matches("\"\"\"") {
+                        self.bump();
+                        self.bump();
+                        self.bump();
+                        break;
+                    }
+                    text.push(c);
+                    self.bump();
+                }
                 '"' => {
                     self.bump();
                     break;

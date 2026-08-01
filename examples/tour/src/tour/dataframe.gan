@@ -1,0 +1,52 @@
+defmodule Tour.Dataframe do
+  @moduledoc """
+  pandas end to end: a dev dependency from pyproject.toml, used with zero
+  wrapper code. Needs `uv sync` first, then: gan run src/tour/dataframe.gan
+  """
+
+  pyimport pandas, as: pd
+
+  def sales() do
+    pd.DataFrame(%{
+      "product" => ~w(keyboard mouse monitor cable keyboard monitor),
+      "region" => ~w(east east west west east west),
+      "units" => [12, 30, 7, 45, 8, 5],
+      "price" => [100.0, 25.5, 300.0, 9.9, 100.0, 300.0]
+    })
+  end
+
+  def report(df) do
+    df
+    |> with_revenue()
+    |> summarize()
+  end
+
+  # pandas .assign takes keyword arguments whose values are callables;
+  # the column expression is pure Python, so ~python says it directly
+  defp with_revenue(df) do
+    df.assign(revenue: ~python(lambda d: d["units"] * d["price"]))
+  end
+
+  defp summarize(df) do
+    grouped = df.groupby("product", as_index: false).agg(%{"units" => "sum", "revenue" => "sum"})
+    grouped.sort_values("revenue", ascending: false)
+  end
+
+  def main() do
+    df = sales()
+    IO.puts("rows = #{:builtins.len(df)}, columns = #{df.columns.tolist()}")
+
+    top = report(df)
+    IO.puts("\nrevenue by product:")
+    IO.puts(top.to_string(index: false))
+
+    IO.puts("\nover 500:")
+    IO.puts(top.query("revenue > 500").to_string(index: false))
+
+    total = top.revenue.sum()
+    IO.puts("\ntotal revenue = #{total}")
+
+    east_units = df.query("region == 'east'").units.sum()
+    IO.puts("east units    = #{east_units}")
+  end
+end
