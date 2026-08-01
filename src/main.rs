@@ -1,4 +1,5 @@
 mod ast;
+mod codegen;
 mod diag;
 mod expander;
 mod lexer;

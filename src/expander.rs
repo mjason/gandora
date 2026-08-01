@@ -34,7 +34,19 @@ pub type MacroTable = HashMap<(String, usize), MacroDef>;
 /// Collect `defmacro` definitions from a module body (GEP-0002-R001).
 pub fn collect_macros(file: &str, module_body: &Term) -> Result<MacroTable> {
     let mut table = MacroTable::new();
+    let mut stmts = Vec::new();
     for stmt in module_body.as_block() {
+        if stmt.is_call_named("defmodule") {
+            if let Term::Call(dm) = &stmt {
+                if let Some(body) = Term::keyword_arg(&dm.args, "do") {
+                    stmts.extend(body.as_block());
+                    continue;
+                }
+            }
+        }
+        stmts.push(stmt);
+    }
+    for stmt in stmts {
         let Term::Call(call) = &stmt else { continue };
         if !matches!(&call.callee, Callee::Name(n) if n == "defmacro") {
             continue;
