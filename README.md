@@ -122,7 +122,10 @@ gan build               # compiles into pkg/, emits marker + .gan sources
 uv build && uv publish  # standard hatchling wheel, standard PyPI
 ```
 
-Consumers just `uv add acme-text`, then use it from Gandora:
+A live example is [gandora-text](https://github.com/mjason/gandora-text),
+installable straight from GitHub with
+`uv add git+https://github.com/mjason/gandora-text`. Consumers then use
+it from Gandora:
 
 ```elixir
 require AcmeText.Core     # macros: expanded at compile time from the
