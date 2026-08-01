@@ -127,3 +127,15 @@ fn cli_misuse_exits_2() {
     let out = gan().output().unwrap();
     assert_eq!(out.status.code(), Some(2));
 }
+
+#[test]
+fn structs_and_module_attributes_run() {
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let out = gan().current_dir(&tour).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let dist = tour.join("dist");
+    let stdout = run_generated(&dist, &dist.join("app/shop.py"));
+    assert!(stdout.contains("expensive: 100"), "{stdout}");
+    assert!(stdout.contains("keyboard now 50, tags ['sale']"), "{stdout}");
+    assert!(stdout.contains("registered routes: ['/sale']"), "{stdout}");
+}

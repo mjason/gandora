@@ -157,6 +157,30 @@ fn print_term(term: &Term, level: usize, out: &mut String) {
 fn print_call(call: &Call, level: usize, out: &mut String) {
     match &call.callee {
         Callee::Name(name) => {
+            if name == "%struct%" || name == "%struct_update%" || name == "%map_update%" {
+                let mut idx = 0;
+                out.push('%');
+                if name != "%map_update%" {
+                    print_term(&call.args[idx], level, out);
+                    idx += 1;
+                }
+                out.push('{');
+                if name != "%struct%" {
+                    print_term(&call.args[idx], level, out);
+                    idx += 1;
+                    out.push_str(" | ");
+                }
+                if let Term::List(pairs) = &call.args[idx] {
+                    for (i, p) in pairs.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str(", ");
+                        }
+                        print_term(p, level, out);
+                    }
+                }
+                out.push('}');
+                return;
+            }
             if name == "__block__" {
                 for (i, stmt) in call.args.iter().enumerate() {
                     if i > 0 {

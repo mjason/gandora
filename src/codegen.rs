@@ -85,6 +85,8 @@ pub struct Codegen {
     helpers: BTreeSet<&'static str>,
     local_funs: BTreeSet<(String, usize)>,
     private_funs: BTreeSet<(String, usize)>,
+    attr_names: BTreeSet<String>,
+    struct_fields: Option<Vec<(String, Term)>>,
     tmp_counter: usize,
     tmp_names: Vec<String>,
     fn_counter: usize,
@@ -102,6 +104,8 @@ impl Codegen {
             helpers: BTreeSet::new(),
             local_funs: BTreeSet::new(),
             private_funs: BTreeSet::new(),
+            attr_names: BTreeSet::new(),
+            struct_fields: None,
             tmp_counter: 0,
             tmp_names: Vec::new(),
             fn_counter: 0,
@@ -143,6 +147,9 @@ impl Codegen {
             Some(Term::Alias(segs)) => segs.clone(),
             _ => return Err(self.err(dm.span, "defmodule requires a module name")),
         };
+        if self.module_segs.is_empty() {
+            self.module_segs = declared.clone();
+        }
         if !self.module_segs.is_empty() && declared != self.module_segs {
             return Err(self.err(
                 dm.span,
@@ -162,6 +169,7 @@ impl Codegen {
         let mut pending_decorators: Vec<Term> = Vec::new();
         let mut funs: Vec<FnDef> = Vec::new();
         let mut order: BTreeMap<String, usize> = BTreeMap::new();
+        let mut attrs: Vec<(String, Term)> = Vec::new();
 
         for stmt in body.as_block() {
             let Term::Call(call) = &stmt else {
@@ -214,6 +222,15 @@ impl Codegen {
                 }
                 "require" => { /* compile-time only */ }
                 "defmacro" => { /* compile-time only */ }
+                "defstruct" => {
+                    if self.struct_fields.is_some() {
+                        return Err(self.err(
+                            call.span,
+                            "a module may declare at most one defstruct (GEP-0004-R001)",
+                        ));
+                    }
+                    self.struct_fields = Some(self.parse_defstruct(call)?);
+                }
                 "def" | "defp" => {
                     let (fname, params, guard, fbody) = self.parse_def(call)?;
                     let key = format!("{fname}/{}", params.len());
@@ -249,17 +266,62 @@ impl Codegen {
                     }
                     funs[idx].clauses.push((params, guard, fbody));
                 }
+                other if other.starts_with('@') => {
+                    // a module attribute declaration: `@name expr` (GEP-0004-R009)
+                    let attr = other.trim_start_matches('@').to_string();
+                    if call.args.len() != 1 {
+                        return Err(self.err(
+                            call.span,
+                            format!("@{attr} requires exactly one initializer expression"),
+                        ));
+                    }
+                    if !self.attr_names.insert(attr.clone()) {
+                        return Err(self.err(
+                            call.span,
+                            format!("module attribute @{attr} is declared twice (GEP-0004-R010)"),
+                        ));
+                    }
+                    attrs.push((attr, call.args[0].clone()));
+                }
                 other => {
                     return Err(self.err(
                         call.span,
                         format!(
                             "'{other}' is not supported at module level \
-                             (supported: def, defp, defmacro, alias, import, require, \
-                             pyimport, @doc, @moduledoc, @decorate)"
+                             (supported: def, defp, defmacro, defstruct, alias, import, \
+                             require, pyimport, @doc, @moduledoc, @decorate, @<attribute>)"
                         ),
                     ))
                 }
             }
+        }
+
+        for (attr, _) in &attrs {
+            if self.local_funs.iter().any(|(n, _)| n == attr) {
+                return Err(self.err(
+                    Span::default(),
+                    format!("module attribute @{attr} collides with a function name"),
+                ));
+            }
+        }
+
+        // struct class (GEP-0004-R002)
+        let struct_code = match self.struct_fields.clone() {
+            Some(fields) => Some(self.emit_struct_class(&fields)?),
+            None => None,
+        };
+
+        // module attribute assignments, in source order (GEP-0004-R009)
+        let mut attr_code = String::new();
+        for (attr, init) in &attrs {
+            let mut pre = Vec::new();
+            let e = self.emit_expr(init, &mut pre)?;
+            attr_code.push('\n');
+            for line in pre {
+                attr_code.push_str(&line);
+                attr_code.push('\n');
+            }
+            attr_code.push_str(&format!("{} = {e}\n", map_ident(attr)));
         }
 
         // compile function bodies first so imports/helpers are collected
@@ -302,6 +364,11 @@ impl Codegen {
             out.push('\n');
             out.push_str(&helper_code);
         }
+        if let Some(sc) = struct_code {
+            out.push('\n');
+            out.push_str(&sc);
+        }
+        out.push_str(&attr_code);
         out.push_str(&fun_code);
         if has_main0 {
             out.push_str("\n\nif __name__ == \"__main__\":\n    main()\n");
@@ -330,6 +397,82 @@ impl Codegen {
             _ => return Err(self.err(call.span, "as: must name a plain identifier")),
         }
         Ok(())
+    }
+
+    /// Field list of a `defstruct`: keyword pairs, atoms, or a list of both
+    /// (GEP-0004-R001).
+    fn parse_defstruct(&mut self, call: &Call) -> Result<Vec<(String, Term)>> {
+        let mut fields = Vec::new();
+        let mut items: Vec<&Term> = Vec::new();
+        for arg in &call.args {
+            match arg {
+                Term::List(inner) => items.extend(inner.iter()),
+                other => items.push(other),
+            }
+        }
+        for item in items {
+            match item {
+                Term::Pair(k, v) => fields.push((k.clone(), (**v).clone())),
+                Term::Atom(a) => fields.push((a.clone(), Term::Nil)),
+                other => {
+                    return Err(self.err(
+                        call.span,
+                        format!(
+                            "defstruct fields must be `name: default` pairs or atoms, \
+                             found {other:?}"
+                        ),
+                    ))
+                }
+            }
+        }
+        if fields.is_empty() {
+            return Err(self.err(call.span, "defstruct requires at least one field"));
+        }
+        Ok(fields)
+    }
+
+    fn struct_class_name(&self) -> String {
+        self.module_segs
+            .last()
+            .cloned()
+            .unwrap_or_else(|| "Struct".to_string())
+    }
+
+    fn emit_struct_class(&mut self, fields: &[(String, Term)]) -> Result<String> {
+        self.py_imports.insert("dataclasses".into());
+        let mut out = String::new();
+        out.push_str("\n@dataclasses.dataclass(frozen=True)\n");
+        out.push_str(&format!("class {}:\n", self.struct_class_name()));
+        for (name, default) in fields {
+            let mut pre = Vec::new();
+            let e = self.emit_expr(default, &mut pre)?;
+            if !pre.is_empty() {
+                return Err(self.err(
+                    default.span(),
+                    "struct field defaults must be simple expressions",
+                ));
+            }
+            // mutable literal defaults become per-instance factories
+            let rhs = match default {
+                Term::List(_) | Term::Map(_) | Term::Tuple(_) => {
+                    format!("dataclasses.field(default_factory=lambda: {e})")
+                }
+                _ => e,
+            };
+            out.push_str(&format!("    {}: object = {rhs}\n", map_ident(name)));
+        }
+        Ok(out)
+    }
+
+    /// The Python reference for the struct class of `segs` (imports as needed).
+    fn struct_ref(&mut self, segs: &[String]) -> String {
+        let resolved = self.resolve_alias(segs);
+        if resolved == self.module_segs {
+            return self.struct_class_name();
+        }
+        let path = module_py_path(&resolved);
+        self.gan_imports.insert(path.clone());
+        format!("{path}.{}", resolved.last().unwrap())
     }
 
     fn parse_def(&mut self, call: &Call) -> Result<(String, Vec<Term>, Option<Term>, Term)> {
@@ -1125,6 +1268,48 @@ impl Codegen {
                 pre.extend(lines);
                 Ok(self.tmp(t).to_string())
             }
+            ("%struct%", 2) => {
+                let Term::Alias(segs) = &args[0] else {
+                    return Err(self.err(call.span, "struct literals need a module name"));
+                };
+                let class = self.struct_ref(&segs.clone());
+                let kwargs = self.emit_struct_kwargs(&args[1], pre)?;
+                Ok(format!("{class}({kwargs})"))
+            }
+            ("%struct_update%", 3) => {
+                let Term::Alias(segs) = &args[0] else {
+                    return Err(self.err(call.span, "struct updates need a module name"));
+                };
+                let _class = self.struct_ref(&segs.clone());
+                self.py_imports.insert("dataclasses".into());
+                let base = self.emit_expr(&args[1], pre)?;
+                let kwargs = self.emit_struct_kwargs(&args[2], pre)?;
+                Ok(format!("dataclasses.replace({base}, {kwargs})"))
+            }
+            ("%map_update%", 2) => {
+                let base = self.emit_operand(&args[0], "+", pre)?;
+                let Term::List(pairs) = &args[1] else {
+                    return Err(self.err(call.span, "map updates need field: value pairs"));
+                };
+                let mut parts = vec![format!("**{base}")];
+                for p in pairs.clone() {
+                    let Term::Pair(k, v) = p else { continue };
+                    let ve = self.emit_expr(&v, pre)?;
+                    parts.push(format!("{}: {ve}", py_str_lit(&k)));
+                }
+                Ok(format!("{{{}}}", parts.join(", ")))
+            }
+            (attr, 0) if attr.starts_with('@') => {
+                let name = attr.trim_start_matches('@');
+                if self.attr_names.contains(name) {
+                    Ok(map_ident(name))
+                } else {
+                    Err(self.err(
+                        call.span,
+                        format!("undefined module attribute @{name} (GEP-0004-R011)"),
+                    ))
+                }
+            }
             ("__block__", _) => {
                 let stmts = Term::Call(Box::new(call.clone())).as_block();
                 if stmts.len() == 1 {
@@ -1258,6 +1443,19 @@ impl Codegen {
                 Ok(format!("{f}({rendered})"))
             }
         }
+    }
+
+    fn emit_struct_kwargs(&mut self, pairs: &Term, pre: &mut Vec<String>) -> Result<String> {
+        let Term::List(items) = pairs else {
+            return Err(self.err(pairs.span(), "expected field: value pairs"));
+        };
+        let mut parts = Vec::new();
+        for p in items.clone() {
+            let Term::Pair(k, v) = p else { continue };
+            let ve = self.emit_expr(&v, pre)?;
+            parts.push(format!("{}={ve}", map_ident(&k)));
+        }
+        Ok(parts.join(", "))
     }
 
     fn emit_operand(&mut self, term: &Term, _parent: &str, pre: &mut Vec<String>) -> Result<String> {
@@ -1510,6 +1708,23 @@ impl Codegen {
                 Ok(format!("{{{}}}", ps.join(", ")))
             }
             Term::Call(c) => {
+                // struct pattern: %Mod{field: pat} (GEP-0004-R007)
+                if matches!(&c.callee, Callee::Name(n) if n == "%struct%") {
+                    let Term::Alias(segs) = &c.args[0] else {
+                        return Err(self.err(c.span, "struct patterns need a module name"));
+                    };
+                    let class = self.struct_ref(&segs.clone());
+                    let Term::List(pairs) = &c.args[1] else {
+                        return Err(self.err(c.span, "struct patterns need field: pattern pairs"));
+                    };
+                    let mut parts = Vec::new();
+                    for p in pairs.clone() {
+                        let Term::Pair(k, v) = p else { continue };
+                        let vp = self.compile_pattern(&v, guards)?;
+                        parts.push(format!("{}={vp}", map_ident(&k)));
+                    }
+                    return Ok(format!("{class}({})", parts.join(", ")));
+                }
                 if matches!(&c.callee, Callee::Name(n) if n == "^") {
                     let t = self.fresh_tmp("pin");
                     let tname = self.tmp(t).to_string();
@@ -1701,6 +1916,31 @@ fn push_indented(out: &mut Vec<String>, lines: &[String]) {
         } else {
             out.push(format!("    {l}"));
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests_helpers {
+    use super::*;
+    use crate::expander::{collect_macros, Expander};
+    use crate::parser::parse_file;
+
+    pub fn compile(src: &str) -> String {
+        let module = parse_file("<test>", src).unwrap();
+        let macros = collect_macros("<test>", &module).unwrap();
+        let mut ex = Expander::new("<test>", macros);
+        let expanded = ex.expand_module(&module).unwrap();
+        let mut cg = Codegen::new("<test>", vec![]);
+        cg.compile(&expanded).unwrap()
+    }
+
+    pub fn compile_err(src: &str) -> String {
+        let module = parse_file("<test>", src).unwrap();
+        let macros = collect_macros("<test>", &module).unwrap();
+        let mut ex = Expander::new("<test>", macros);
+        let expanded = ex.expand_module(&module).unwrap();
+        let mut cg = Codegen::new("<test>", vec![]);
+        cg.compile(&expanded).unwrap_err().message
     }
 }
 
@@ -1903,5 +2143,117 @@ mod tests {
         );
         assert!(py.contains("_gan_div(a, b)"), "{py}");
         assert!(py.contains("_gan_rem(a, b)"), "{py}");
+    }
+}
+
+#[cfg(test)]
+mod gep0004_tests {
+    use super::tests_helpers::compile;
+    use super::*;
+
+    #[test]
+    fn compiles_defstruct_to_frozen_dataclass() {
+        let py = compile(
+            "defmodule App.User do\n  defstruct name: nil, age: 0, tags: []\nend",
+        );
+        assert!(py.contains("@dataclasses.dataclass(frozen=True)"), "{py}");
+        assert!(py.contains("class User:"), "{py}");
+        assert!(py.contains("name: object = None"), "{py}");
+        assert!(py.contains("age: object = 0"), "{py}");
+        assert!(
+            py.contains("tags: object = dataclasses.field(default_factory=lambda: [])"),
+            "{py}"
+        );
+    }
+
+    #[test]
+    fn compiles_atom_list_defstruct() {
+        let py = compile("defmodule App.Point do\n  defstruct [:x, :y]\nend");
+        assert!(py.contains("x: object = None"), "{py}");
+        assert!(py.contains("y: object = None"), "{py}");
+    }
+
+    #[test]
+    fn compiles_struct_literal_same_module() {
+        let py = compile(
+            "defmodule App.User do\n  defstruct name: nil, age: 0\n  def new(n) do\n    %App.User{name: n, age: 1}\n  end\nend",
+        );
+        assert!(py.contains("return User(name=n, age=1)"), "{py}");
+    }
+
+    #[test]
+    fn compiles_struct_literal_cross_module_with_alias() {
+        let py = compile(
+            "defmodule App.Api do\n  alias App.User\n  def new(n) do\n    %User{name: n}\n  end\nend",
+        );
+        assert!(py.contains("import app.user"), "{py}");
+        assert!(py.contains("return app.user.User(name=n)"), "{py}");
+    }
+
+    #[test]
+    fn compiles_struct_pattern() {
+        let py = compile(
+            "defmodule App.User do\n  defstruct name: nil, age: 0\n  def name_of(u) do\n    case u do\n      %App.User{name: n} -> n\n    end\n  end\nend",
+        );
+        assert!(py.contains("case User(name=n):"), "{py}");
+    }
+
+    #[test]
+    fn compiles_struct_update() {
+        let py = compile(
+            "defmodule App.User do\n  defstruct name: nil, age: 0\n  def older(u) do\n    %App.User{u | age: u.age + 1}\n  end\nend",
+        );
+        assert!(py.contains("dataclasses.replace(u, age=u.age + 1)"), "{py}");
+    }
+
+    #[test]
+    fn compiles_map_update() {
+        let py = compile(
+            "defmodule M do\n  def f(m) do\n    %{m | count: 2}\n  end\nend",
+        );
+        assert!(py.contains("return {**m, \"count\": 2}"), "{py}");
+    }
+
+    #[test]
+    fn compiles_module_attributes_and_reads() {
+        let py = compile(
+            "defmodule M do\n  @sep \"-\"\n  @limits %{max: 10}\n  def join(a, b) do\n    a <> @sep <> b\n  end\nend",
+        );
+        assert!(py.contains("sep = \"-\""), "{py}");
+        assert!(py.contains("limits = {\"max\": 10}"), "{py}");
+        assert!(py.contains("return a + (sep + b)"), "{py}");
+    }
+
+    #[test]
+    fn attribute_decorator_chain() {
+        let py = compile(
+            "defmodule M do\n  @registry :collections.OrderedDict()\n  @decorate @registry.setdefault\n  def handler(x) do\n    x\n  end\nend",
+        );
+        assert!(py.contains("registry = collections.OrderedDict()"), "{py}");
+        assert!(py.contains("@registry.setdefault"), "{py}");
+    }
+
+    #[test]
+    fn rejects_duplicate_attribute() {
+        let err = super::tests_helpers::compile_err(
+            "defmodule M do\n  @sep \"-\"\n  @sep \"+\"\nend",
+        );
+        assert!(err.contains("GEP-0004-R010"), "{err}");
+    }
+
+    #[test]
+    fn rejects_undefined_attribute_read() {
+        let err = super::tests_helpers::compile_err(
+            "defmodule M do\n  def f() do\n    @missing\n  end\nend",
+        );
+        assert!(err.contains("GEP-0004-R011"), "{err}");
+    }
+
+    #[test]
+    fn rejects_second_defstruct() {
+        let err = super::tests_helpers::compile_err(
+            "defmodule M do\n  defstruct [:a]\n  defstruct [:b]\nend",
+        );
+        assert!(err.contains("GEP-0004-R001"), "{err}");
     }
 }

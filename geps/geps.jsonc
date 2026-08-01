@@ -9,5 +9,6 @@
     "0001-language-and-cli.md",
     "0002-macro-system.md",
     "0003-python-interop.md",
+    "0004-structs-and-module-attributes.md",
   ],
 }

@@ -236,7 +236,9 @@ impl Parser {
                     let args = self.parse_command_args()?;
                     return Ok(Term::call(&attr, args, span));
                 }
-                return Ok(Term::call(&attr, vec![], span));
+                // an attribute read may continue with postfix access:
+                // `@app.route("/")` (GEP-0004-R011)
+                return self.parse_postfix(Term::call(&attr, vec![], span));
             }
             _ => {}
         }
@@ -321,7 +323,54 @@ impl Parser {
                 let items = self.parse_bracket_items(&Tok::Op("}"))?;
                 Ok(Term::Tuple(items))
             }
+            Tok::Op("%") => {
+                // struct literal / update: %Mod{...} (GEP-0004-R004/R006)
+                let alias = match self.parse_primary(false)? {
+                    t @ Term::Alias(_) => t,
+                    other => {
+                        return Err(self.err_at(
+                            span,
+                            format!("expected a module name after '%', found {other:?}"),
+                        ))
+                    }
+                };
+                self.expect_tok(&Tok::Op("{"))?;
+                self.skip_newlines();
+                // update form: %Mod{expr | field: v}
+                if !matches!(self.peek(), Tok::KwKey(_)) && *self.peek() != Tok::Op("}") {
+                    let base = self.parse_expr(P_WHEN, false)?;
+                    self.skip_newlines();
+                    self.expect_tok(&Tok::Op("|"))?;
+                    self.skip_newlines();
+                    let pairs = self.parse_struct_pairs()?;
+                    return Ok(Term::call(
+                        "%struct_update%",
+                        vec![alias, base, Term::List(pairs)],
+                        span,
+                    ));
+                }
+                let pairs = self.parse_struct_pairs()?;
+                Ok(Term::call("%struct%", vec![alias, Term::List(pairs)], span))
+            }
             Tok::Op("%{") => {
+                // update form: %{expr | key: v} (GEP-0004-R008)
+                self.skip_newlines();
+                if !matches!(self.peek(), Tok::KwKey(_)) && *self.peek() != Tok::Op("}") {
+                    let save = self.idx;
+                    let base = self.parse_expr(P_WHEN, false)?;
+                    self.skip_newlines();
+                    if *self.peek() == Tok::Op("|") {
+                        self.bump();
+                        self.skip_newlines();
+                        let pairs = self.parse_struct_pairs()?;
+                        return Ok(Term::call(
+                            "%map_update%",
+                            vec![base, Term::List(pairs)],
+                            span,
+                        ));
+                    }
+                    self.idx = save;
+                }
                 let mut entries = Vec::new();
                 self.skip_newlines();
                 while *self.peek() != Tok::Op("}") {
@@ -374,6 +423,37 @@ impl Parser {
             }
         }
         Ok(out)
+    }
+
+    /// `field: value` pairs up to a closing `}` (struct/map update forms).
+    fn parse_struct_pairs(&mut self) -> Result<Vec<Term>> {
+        let mut pairs = Vec::new();
+        while *self.peek() != Tok::Op("}") {
+            self.skip_newlines();
+            match self.peek().clone() {
+                Tok::KwKey(k) => {
+                    self.bump();
+                    self.skip_newlines();
+                    let v = self.parse_expr(P_WHEN, false)?;
+                    pairs.push(Term::Pair(k, Box::new(v)));
+                }
+                other => {
+                    return Err(self.err(format!(
+                        "expected a `field: value` pair, found {other:?}"
+                    )))
+                }
+            }
+            self.skip_newlines();
+            if *self.peek() == Tok::Op(",") {
+                self.bump();
+                self.skip_newlines();
+            } else {
+                break;
+            }
+        }
+        self.skip_newlines();
+        self.expect_tok(&Tok::Op("}"))?;
+        Ok(pairs)
     }
 
     fn parse_bracket_items(&mut self, close: &Tok) -> Result<Vec<Term>> {
@@ -429,6 +509,22 @@ impl Parser {
                 Tok::Op(".") => {
                     let span = self.span();
                     match self.peek_at(1).clone() {
+                        // Python class names are uppercase: `:collections.OrderedDict()`
+                        Tok::UpIdent(name) if !matches!(base, Term::Alias(_)) => {
+                            self.bump();
+                            self.bump();
+                            let is_call = *self.peek() == Tok::Op("(");
+                            let args = if is_call { self.parse_paren_args()? } else { vec![] };
+                            base = Term::Call(Box::new(Call {
+                                callee: Callee::Dot {
+                                    base: Box::new(base),
+                                    name,
+                                    is_call,
+                                },
+                                args,
+                                span,
+                            }));
+                        }
                         Tok::Ident(name) => {
                             self.bump();
                             self.bump();

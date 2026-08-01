@@ -45,6 +45,9 @@ Design decisions are recorded as **Gandora Enhancement Proposals** in
   ([中文](geps/local/zh/0002-macro-system.md))
 - [GEP-0003](geps/0003-python-interop.md) — Python interop
   ([中文](geps/local/zh/0003-python-interop.md))
+- [GEP-0004](geps/0004-structs-and-module-attributes.md) — structs (frozen
+  dataclasses) and module attributes
+  ([中文](geps/local/zh/0004-structs-and-module-attributes.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -88,8 +91,12 @@ multi-clause pattern dispatch and `when` guards, `defmacro` with
 atoms, strings with `#{}` interpolation, lists, tuples, maps, keyword lists,
 ranges, the `|>` pipe, `if`/`unless`/`case`/`cond`/`with`, anonymous
 functions and captures (`&Mod.fun/1`, `&(&1 + 1)`), destructuring `=`,
-`alias`/`import`/`require`, and the interop forms of GEP-0003 (`:module`
-calls, `pyimport`, postfix `expr.name(...)`, `@decorate`).
+`alias`/`import`/`require`, the interop forms of GEP-0003 (`:module`
+calls, `pyimport`, postfix `expr.name(...)`, `@decorate`), and the
+GEP-0004 data declarations: `defstruct` (a frozen `@dataclass` with
+`%Mod{...}` literals, patterns, and `%Mod{s | f: v}` updates) plus module
+attributes (`@app :flask.Flask("__main__")` compiles to a module-level
+binding, so `@decorate @app.route("/")` works like hand-written Python).
 
 Anything outside the surface produces a diagnostic naming the construct
 (GEP-0001-R007) rather than a silent mistranslation. See
@@ -124,6 +131,6 @@ cargo test             # unit + end-to-end tests
 ## Status
 
 v0: the language, compiler, macro system, interop, and CLI described by
-GEP-0001..0003 are implemented and tested. Deferred (tracked for future
-GEPs): structs, protocols, comprehensions, `try/rescue`, binaries, sigils,
+GEP-0001..0004 are implemented and tested. Deferred (tracked for future
+GEPs): protocols, comprehensions, `try/rescue`, binaries, sigils,
 a formatter, and an LSP.

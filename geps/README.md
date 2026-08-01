@@ -16,3 +16,4 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0001](0001-language-and-cli.md) | The Gandora Language and the gan CLI | Standards Track | Accepted | 1 | [zh](local/zh/0001-language-and-cli.md) |
 | [0002](0002-macro-system.md) | The Macro System | Standards Track | Accepted | 1 | [zh](local/zh/0002-macro-system.md) |
 | [0003](0003-python-interop.md) | Python Interop | Standards Track | Accepted | 1 | [zh](local/zh/0003-python-interop.md) |
+| [0004](0004-structs-and-module-attributes.md) | Structs and Module Attributes | Standards Track | Accepted | 1 | [zh](local/zh/0004-structs-and-module-attributes.md) |

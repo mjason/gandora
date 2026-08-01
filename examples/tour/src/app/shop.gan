@@ -1,0 +1,31 @@
+defmodule App.Shop do
+  @moduledoc "Structs + module attributes + a Flask-style decorator registry."
+
+  defstruct name: nil, price: 0, tags: []
+
+  @routes %{}
+
+  def route(path) do
+    fn f ->
+      @routes.update(%{path => f})
+      f
+    end
+  end
+
+  @decorate route("/sale")
+  def sale(item) do
+    %App.Shop{item | price: item.price // 2, tags: item.tags ++ [:sale]}
+  end
+
+  def main() do
+    item = %App.Shop{name: "keyboard", price: 100}
+    case item do
+      %App.Shop{price: p} when p > 50 -> IO.puts("expensive: #{p}")
+      _ -> IO.puts("cheap")
+    end
+    handler = @routes.get("/sale")
+    discounted = handler.(item)
+    IO.puts("#{discounted.name} now #{discounted.price}, tags #{inspect(discounted.tags)}")
+    IO.puts("registered routes: #{inspect(:builtins.list(@routes.keys()))}")
+  end
+end
