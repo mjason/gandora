@@ -1,7 +1,7 @@
 ---
 gep: 7
 title: 文档
-description: 带有本地化变体的Markdown @doc、隐藏文档、编译为原生Python doctests的doctests，以及gan doc / gan test命令。
+description: Gandora 文档模型 — Elixir风格的@doc（文本、元数据、隐藏），一个专用于doctests的@example通道，以及纯散文翻译。
 author: MJ
 status: Accepted
 type: Standards Track
@@ -10,14 +10,14 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 3
+revision: 5
 requires: [1]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0007-documentation.md
-source-revision: 3
+source-revision: 5
 translation-status: Current
 ---
 
@@ -27,92 +27,96 @@ translation-status: Current
 
 ## 摘要
 
-`@doc` 和 `@moduledoc` 是 Markdown 格式，与 Elixir 中一样。关键字形式添加了本地化变体（`@doc default: "...", zh_CN: "..."`），遵循 Osiris 模型，其中默认文本是运行时回退，而区域设置是工具元数据。`@doc false` 将函数从文档中隐藏。使用 `gan>` 提示符编写的示例会话会编译为生成的文档字符串内的原生 Python doctests，因此 `gan test`（以及任何标准 Python doctest 运行器）将执行它们。`gan doc` 以请求的区域设置打印模块或函数的文档。
+文档有三个通道，每个通道有一个属性家族，且无重叠。`@doc`/`@moduledoc` 遵循 Elixir 的规则：Markdown 字符串作为文本，关键字列表作为元数据（`since:`、`deprecated:` 等），`false` 隐藏内容，重复的行会累积——编译器原样存储文本，且从不解析其内部。`@example` 是专用于示例的通道：可重复的代码块，其中以 `gan>` 开头的行会被编译为原生 Python doctests，附加到生成的文档字符串中，由 `gan test` 运行，并在每个语言环境中渲染。`@doc_trans`/`@moduledoc_trans` 用于添加仅包含散文的翻译。每个示例只保留一份副本；任何地方都不使用文本提取启发式方法。
 
-## 动机
+## Motivation
 
-Elixir 将文档视为一等、可测试的制品（hexdocs 的 writing-documentation 指南）；Osiris 添加了语言环境映射，以便一个代码库可以用审阅者的语言呈现文档。Gandora 应提供两者，而无需发明运行时机制——其编译到 Python 的特性提供了一个捷径：Python 标准库中已经有一个 doctest 运行器，因此编译后的示例就变成了普通的 Python doctest。
+早期修订曾尝试将示例保留在文档正文中（Elixir 风格），同时对该正文进行本地化，这迫使编译器解析散文——先通过区域设置关键词，再通过标题惯例，然后通过结构提取和包含指令。审查拒绝了将解析散文作为一种范式：文档文本应当是不透明的数据。赋予示例自己的属性消除了所有启发式方法：文档正文从不被检查，翻译是纯散文，示例通道是编译器唯一理解的部分。
 
 ## 范围
 
-`@doc`/`@moduledoc` 值形式、Markdown 语义、区域设置查找、文档测试语法和编译，以及 `gan doc` 和 `gan test` 命令。HTML 渲染、`@spec`/`@typedoc`、`since:` 元数据以及文档覆盖率工具特性被推迟。
+三个通道：文档字符串组装、文档测试编译，以及 `gan doc` / `gan test` 命令。HTML 渲染、`@spec`/`@typedoc` 和文档覆盖率工具被推迟处理。
 
 ## 术语
 
-- **Doc map**：由单个 `@doc`/`@moduledoc` 附加的一组带语言标签的文本。
-- **Default text**：`default:` 条目（当给定裸字符串时，即整个值）。
-- **Doctest line**：在文档文本中以提示符 `gan> ` 开头的一行，后跟一行预期输出。
+- **文档单元（Doc unit）**：一个模块或函数的文档：默认文本、翻译、元数据、隐藏标志、示例块。
+- **文档测试行（Doctest line）**：内容以 `gan> ` 开头的一行，包含一个 Gandora 表达式；接下来的非空行是其预期输出。
+- **示例块（Example block）**：提供给 `@example` 属性的字符串。
 
 ## 规范
 
-### 值形式与 Markdown
+### @doc — 文本、元数据、隐藏（Elixir 风格）
 
-**GEP-0007-R001:** `@doc` 和 `@moduledoc` 接受一个字符串（默认文本）或 `false`。文档文本是 Markdown；编译器 MUST 原样保存，MUST NOT 重排或重新格式化。
+**GEP-0007-R001：** `@doc` 和 `@moduledoc` 接受，每个属性行：一个 Markdown 字符串（文本）、一个关键字列表（元数据）或 `false`（隐藏）。一个定义前的多行按任意顺序累积为一个文档单元。第二个文本字符串或重复的元数据键将导致编译错误。文本是不透明的：编译器逐字存储，MUST NOT 解析、重排或转换其内容。
 
-**GEP-0007-R001A:** 本地化变体通过 `@doc_trans`（紧随其翻译的 `@doc` 之后）与 `@moduledoc_trans`（紧随 `@moduledoc` 之后）附加，携带一个或多个 `<locale>: "text"` 对，键以 `_` 拼写 BCP 47 标签中的 `-`（`zh_CN` ≡ `zh-CN`）。该属性 MAY 重复出现以添加更多语言；重复的 locale、`default:` 键、或缺少前置文档属性的 `*_trans` 均为编译错误。
+**GEP-0007-R002：** 元数据值 MUST 是字面量（字符串、布尔值、整数、浮点数、原子）。`since` 和 `deprecated` 键是众所周知的，并额外在生成的文档字符串中显示为末尾的 `Since: <v>` / `Deprecated: <v>` 行；所有其他元数据仅面向工具。
 
-**GEP-0007-R001B:** `@example "..."`（可重复，置于其记录的 `def` 之前，可与 `@doc` 搭配或单独使用）声明一个共享的、语言无关的示例块。示例块附加在生成 docstring 的默认散文之后，其 `gan>` 行会被编译（R006），并由 `gan doc` 在所有语言中展示。翻译只含散文：`@doc_trans` / `@moduledoc_trans` 内出现 `gan>` 行是编译错误，并指引作者使用 `@example`——示例只写一次、只测一次。
+**GEP-0007-R003：** `@doc false` 抑制文档字符串并隐藏该定义；`gan doc` MUST 说明目标为隐藏，而不是不打印任何内容。
 
-**GEP-0007-R002:** 默认文本（在 doctest 编译后，R006）成为生成的 Python 文档字符串。本地化文本是从源代码（或包的发行源代码）读取的工具元数据；它们 MUST NOT 出现在生成的代码中。
+### @example — 编译器理解的唯一通道
 
-**GEP-0007-R003:** `@doc false` 抑制文档字符串并将函数标记为隐藏；`gan doc` MUST 说明这一点，而不是什么都不打印。如果存在其他区域但缺少 `default:` 条目，则是一个编译错误。
+**GEP-0007-R004：** `@example "..."` 将一个示例块附加到下一个定义；该属性 MAY 重复，且 MAY 在有或没有 `@doc` 的情况下使用。块保持源顺序。在块内，doctest 行会被编译（R008）；所有其他行逐字通过，因此一个块可以携带自己的标题和说明。
 
-### 区域查找与 gan doc
+**GEP-0007-R005：** 生成的文档字符串按以下方式组装：文档文本逐字，然后每个编译后的示例块，然后众所周知的元数据尾部（R002），各部分之间用一个空行分隔。`@doc`/`@moduledoc` 文本内的 doctest 行不会被编译或测试——示例属于 `@example`，`gan check` MUST 在文档文本包含 `gan> ` 行时发出警告。
 
-**GEP-0007-R004:** `gan doc <Module>[.<function>] [--locale <tag>]` 使用 RFC 4647 查找打印请求区域的文档文本：精确标签匹配（不区分大小写），然后逐步缩短前缀，最后为默认文本。不带 `--locale` 时打印默认文本。
+### 翻译 — 仅适用于文本
 
-**GEP-0007-R005:** `gan doc` 从项目源和已安装的包标记（GEP-0006-R006）解析模块，静态读取，并且从不导入 Python。
+**GEP-0007-R006：** `@doc_trans` 和 `@moduledoc_trans` 承载一个或多个 `<locale>: "markdown"` 对；区域键使用 `_` 代替 `-` 拼写 BCP 47 标签（`zh_CN` ≡ `zh-CN`）。该属性 MAY 重复，重复的区域键将导致编译错误。翻译是工具元数据，从源代码（或已发布包的源代码）中读取，且 MUST NOT 出现在生成的代码中。
 
-### 文档测试
+**GEP-0007-R007：** 翻译内的 doctest 行是编译错误，指示作者使用 `@example`。因此翻译永远不能携带示例的第二个未经测试的副本。
 
-**GEP-0007-R006:** 在文档文本中，一个 doctest 行 `gan> <expr>` 包含一个 Gandora 表达式；接下来的非提示行是期望输出。编译器 MUST 将表达式编译为 Python，并将这对内容作为标准 Python doctest 发出到生成的文档字符串中（`>>> <compiled expr>` 后跟期望行，缩进保留）。非 doctest 行原样通过。
+### 渲染与测试
 
-**GEP-0007-R007:** 期望输出由 Python 的 doctest 运行器比较，因此它是结果的 `repr`——与 `inspect/1` 打印的内容相同（`{:ok, 1}` 显示为 `('ok', 1)`）。Doctest 表达式 MUST 是单行，并且在 v0 中 MUST NOT 使用宏；编译失败的 doctest 表达式是一个编译错误，携带函数的位置。
+**GEP-0007-R008：** Doctest 编译：`gan> ` 后的表达式被编译为 Python 并作为 `>>> <compiled>` 发出，保留缩进；其预期行逐字通过。预期输出通过 Python 的 doctest 运行器进行比较，因此是结果的 `repr`——即 `inspect/1` 打印的内容。Doctest 表达式 MUST 是单行的，且 MUST NOT 在 v0 中使用宏；编译失败是携带定义位置的编译错误。
 
-**GEP-0007-R008:** `gan test` 将项目编译到构建缓存中，并使用项目解释器（GEP-0001-R021 选择，`-P`，缓存位于 `PYTHONPATH`）通过 Python 的标准 doctest 运行器运行每个生成的非纯宏模块。它报告每个模块的结果，全部通过时退出 0，否则退出 1。由于发出的 doctest 是标准的，`python -m doctest` 和 pytest 的 `--doctest-modules` MUST 在没有 `gan` 的情况下在生成的文件上工作。
+**GEP-0007-R009：** `gan doc <Module>[.<function>] [--locale <tag>]` 渲染：先显示元数据（`[deprecated]` 突出显示），然后是基于 RFC 4647 查找（精确、缩短前缀、然后默认）选择的区域文本，然后每个示例块及其原文的 `gan>` 提示。它从项目源代码和已安装的包标记（GEP-0006-R006）中静态解析模块，从不导入 Python。
 
-## 理由
+**GEP-0007-R010：** `gan test` 将项目编译到构建缓存中，并通过 Python 的标准 doctest 运行器运行每个生成的非宏模块，使用 GEP-0001-R021 解释器、`-P` 以及缓存上的 `PYTHONPATH` 按点分隔模块名导入。它报告每个模块的结果，仅当全部通过时退出 0。发出的 doctest 是标准的：`python -m doctest` 和 pytest 的 `--doctest-modules` MUST 在无需 `gan` 的情况下对生成的文件正常工作。
 
-将 `gan>` 示例编译为 Python doctest 可保持无运行时属性（文档字符串即产物），并复用成熟的测试运行器而非自行构建。预期输出即 repr 的规则忠实于 GEP-0001-R009 的数据映射：文档精确展示 Python 消费者将看到的值。
+## Rationale
 
-将区域设置作为工具元数据借鉴了 Osiris 的做法：产物中保留一个运行时回退，通过工具从源码提供更丰富的语言视图，从而保证生成的 Python 保持精简且确定性。
+三个通道各自承担互不重叠的职责，使得所有早期故障模式在结构上变得不可能：文本是不透明的（无解析范式），示例仅在专为它们构建的通道中存在一次，且翻译只是纯数据。代价是与 Elixir 的一项偏离——示例从文档文本移入 `@example`——评审认为这比解析 prose 更经济；R005 警告会捕获因 Elixir 习惯而留在文档文本中的 `gan>` 行。
+
+将 `gan>` 编译为原生 Python doctests 保持了无运行时属性，并复用了成熟运行器；预期输出作为 repr 符合 GEP-0001-R009 的数据映射。
 
 ## 向后兼容性
 
-增量式。现有的裸字符串文档是 `default:` 情况。文本中在行首包含 `gan> ` 先前会原样传递；现在它会被编译——这是一个破坏性边界，仅对于意外使用了该提示符的文档。
+修订版 5 取代了修订版 1–4：移除了 `@doc_meta`/`@moduledoc_meta` 和 `<!-- examples -->` 指令；文档文本中的文档测试不再编译（改为警告）；`@example` 是唯一的文档测试载体。`@doc` 字符串/关键字/假值形式以及 `@doc_trans` 保持不变。
 
 ## 安全性与确定性
 
-文档测试编译即为普通表达式编译；编译时不会执行任何操作。`gan test` 执行用户自己生成的代码，与 `gan run` 完全相同。
+Doctest 编译与普通表达式编译相同；编译期间不会执行任何操作。`gan test` 执行用户自行生成的代码，与 `gan run` 完全相同。
 
-## 工具与AI使用
+## 工具与 AI 使用
 
-Agent 应使用 Markdown `@doc` 为公开函数编写文档，对非显而易见的行为包含 `gan>` 示例，在编辑后运行 `gan test`，并使用 `gan doc Mod.fun --locale <tag>` 阅读本地化文档，而非猜测。
+智能体应编写 Markdown 的 `@doc` 说明文字，将每个可运行示例放入 `@example` 中，使用 `@doc since:`/`deprecated:` 附加元数据，保持翻译仅含说明文字，并在编辑后运行 `gan test`。
 
 ## 被拒绝的替代方案
 
-### 一个 Gandora 端的 doctest 运行器
+### 将文档测试内联在文档文本中（修订版 1–4）
 
-重新实现了 Python 内置的功能，在每个环境中都需要一个运行器，并且与 pytest 用户在 CI 中已经运行的测试不同。
+Elixir 自身的布局，但在处理本地化文本时，要么迫使翻译中出现重复的示例（导致腐烂），要么需要编译器解析散文（提取启发式、包含指令）。评审拒绝将散文解析作为范式；专用通道不需要任何此类处理。
 
-### 在文档字符串中嵌入所有语言环境
+### 在 @doc 内部使用区域设置关键字
 
-用大多数消费者无法阅读的文本膨胀每个工件，并使输出依赖翻译编辑；工具改为从源代码读取语言环境。
+将主要文本隐藏在 `default:` 标签之后，并使每个翻译后的标题都成为一个冗长的属性。
 
-### 与 iex> 兼容的提示符
+### 将所有区域设置嵌入文档字符串
 
-重用 `iex>` 会提示 Elixir 语义（检查格式、字符列表），这是 Gandora 故意不提供的；`gan>` 标记了边界。
+使每个工件都充斥着大多数消费者无法阅读的文本；工具改为从源代码中读取区域设置。
 
 ## 开放问题
 
-本次修订中无。
+此版本无开放问题。
 
-## 符合性
+## Conformance
 
-测试 MUST 覆盖：裸字符串、关键字形式和 `false` 值；区域设置查找（包括前缀回退和默认值）；R003 缺失默认诊断；保持缩进对表达式（管道、互操作调用）进行doctest编译；通过 `gan test` 检测到的失败doctest；以及直接运行 `python -m doctest` 对生成的模块进行测试。
+测试必须覆盖：字符串/关键字/假值`@doc`行的累积（无论顺序如何），以及重复文本和重复键的诊断；元数据尾部；文档字符串组装顺序（文本、示例、尾部）；带有和不带有`@doc`的`@example`；文档文本中`gan>`的R005警告；R007翻译诊断；保留缩进的doctest编译；`gan doc --locale`中的区域设置回退和示例渲染；由`gan test`检测到的失败的doctest；以及直接由`python -m doctest`运行的生成模块。
 
 ## 变更历史
 
-- 修订版 3，2026-08-01：新增共享 @example 块（R001B）；翻译只含散文，示例不会脱离测试而腐烂。
-- 修订版 2，2026-08-01：以独立的 @doc_trans / @moduledoc_trans 属性取代 @doc 的 locale 关键字形式（R001A）。
+- 修订版 5，2026-08-01：最终模型——不透明文档文本，专用 @example 通道，仅散文翻译；移除了修订版 4 中的提取和指令机制。
+- 修订版 4，2026-08-01：带包含指令的结构化示例提取（已取代）。
+- 修订版 3，2026-08-01：共享 @example 块（在修订版 5 中恢复）。
+- 修订版 2，2026-08-01：将翻译拆分为 @doc_trans。
 - 修订版 1，2026-08-01：初始版本。
