@@ -1268,6 +1268,52 @@ impl Codegen {
                 pre.extend(lines);
                 Ok(self.tmp(t).to_string())
             }
+            ("~w", 1) => {
+                // word list (GEP-0005-R004)
+                let Term::Str(parts) = &args[0] else {
+                    return Err(self.err(call.span, "~w requires a sigil body"));
+                };
+                if let Some(text) = args[0].as_plain_str() {
+                    let words: Vec<String> =
+                        text.split_whitespace().map(|w| py_str_lit(w)).collect();
+                    Ok(format!("[{}]", words.join(", ")))
+                } else {
+                    let s = self.emit_string(&parts.clone(), pre)?;
+                    Ok(format!("{s}.split()"))
+                }
+            }
+            ("~s", 1) => {
+                let Term::Str(parts) = &args[0] else {
+                    return Err(self.err(call.span, "~s requires a sigil body"));
+                };
+                self.emit_string(&parts.clone(), pre)
+            }
+            ("~r", 1) => {
+                // compiled Python regex (GEP-0005-R006)
+                let Term::Str(parts) = &args[0] else {
+                    return Err(self.err(call.span, "~r requires a sigil body"));
+                };
+                self.py_imports.insert("re".into());
+                let s = self.emit_string(&parts.clone(), pre)?;
+                Ok(format!("re.compile({s})"))
+            }
+            ("~python", 1) => {
+                // verbatim embedded Python expression (GEP-0005-R007)
+                let body = args[0].as_plain_str().ok_or_else(|| {
+                    self.err(call.span, "~python bodies are raw and cannot interpolate")
+                })?;
+                let body = body.trim();
+                if body.is_empty() {
+                    return Err(self.err(call.span, "~python requires a Python expression"));
+                }
+                Ok(format!("({body})"))
+            }
+            (sigil, 1) if sigil.starts_with('~') => Err(self.err(
+                call.span,
+                format!(
+                    "unknown sigil {sigil} (supported: ~w, ~s, ~r, ~python) (GEP-0005-R009)"
+                ),
+            )),
             ("%struct%", 2) => {
                 let Term::Alias(segs) = &args[0] else {
                     return Err(self.err(call.span, "struct literals need a module name"));
@@ -2255,5 +2301,51 @@ mod gep0004_tests {
             "defmodule M do\n  defstruct [:a]\n  defstruct [:b]\nend",
         );
         assert!(err.contains("GEP-0004-R001"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod gep0005_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn compiles_word_sigil() {
+        let py = compile("defmodule M do\n  def f(), do: ~w(alpha beta gamma)\nend");
+        assert!(py.contains("return [\"alpha\", \"beta\", \"gamma\"]"), "{py}");
+    }
+
+    #[test]
+    fn compiles_interpolated_word_sigil() {
+        let py = compile("defmodule M do\n  def f(x), do: ~w(a #{x} c)\nend");
+        assert!(py.contains("return f\"a {x} c\".split()"), "{py}");
+    }
+
+    #[test]
+    fn compiles_regex_sigil() {
+        let py = compile("defmodule M do\n  def f(s) do\n    ~r/\\d+/.findall(s)\n  end\nend");
+        assert!(py.contains("import re"), "{py}");
+        assert!(py.contains("re.compile(\"\\\\d+\").findall(s)"), "{py}");
+    }
+
+    #[test]
+    fn compiles_py_sigil_expression() {
+        let py = compile(
+            "defmodule M do\n  def squares(n) do\n    ~python(sum(i * i for i in range(n)))\n  end\nend",
+        );
+        assert!(py.contains("return (sum(i * i for i in range(n)))"), "{py}");
+    }
+
+    #[test]
+    fn py_sigil_composes_with_pipes() {
+        let py = compile(
+            "defmodule M do\n  def f(xs) do\n    xs |> :builtins.sorted() |> ~python(list)()\n  end\nend",
+        );
+        assert!(py.contains("return (list)(builtins.sorted(xs))"), "{py}");
+    }
+
+    #[test]
+    fn rejects_unknown_sigil() {
+        let err = compile_err("defmodule M do\n  def f(), do: ~z(nope)\nend");
+        assert!(err.contains("GEP-0005-R009"), "{err}");
     }
 }

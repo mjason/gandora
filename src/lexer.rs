@@ -7,6 +7,8 @@ pub enum Tok {
     Int(i64),
     Float(f64),
     Str(Vec<LexStrPart>),
+    /// `~name(body)` — lowercase names interpolate, uppercase are raw
+    Sigil(String, Vec<LexStrPart>),
     Atom(String),
     /// lowercase identifier, possibly ending in `?` or `!`
     Ident(String),
@@ -139,6 +141,9 @@ impl<'a> Lexer<'a> {
         }
         if c == '"' {
             return Ok((self.lex_string()?, span));
+        }
+        if c == '~' {
+            return Ok((self.lex_sigil()?, span));
         }
         if c == ':' {
             // atom, or `::` (unsupported), or lone `:` is an error
@@ -365,6 +370,126 @@ impl<'a> Lexer<'a> {
         }
         Ok(Tok::Str(parts))
     }
+
+    /// `~name<delim>body<delim>` (GEP-0005-R001/R002).
+    fn lex_sigil(&mut self) -> Result<Tok> {
+        self.bump(); // '~'
+        let mut name = String::new();
+        while let Some(c) = self.peek() {
+            if c.is_alphabetic() {
+                name.push(c);
+                self.bump();
+            } else {
+                break;
+            }
+        }
+        if name.is_empty() {
+            return Err(self.err("expected a sigil name after '~'"));
+        }
+        // uppercase sigils are raw; `~python` is the embedded-language sigil
+        // and is raw as in Osiris (GEP-0005-R002/R007)
+        let raw = name.chars().next().is_some_and(|c| c.is_uppercase()) || name == "python";
+        let open = self
+            .peek()
+            .ok_or_else(|| self.err("expected a sigil delimiter"))?;
+        let (close, nests) = match open {
+            '(' => (')', true),
+            '[' => (']', true),
+            '{' => ('}', true),
+            '/' => ('/', false),
+            '|' => ('|', false),
+            '"' => ('"', false),
+            other => {
+                return Err(self.err(format!(
+                    "'{other}' is not a sigil delimiter (use ( [ {{ / | \")"
+                )))
+            }
+        };
+        self.bump();
+        let triple = close == '"' && self.matches("\"\"");
+        if triple {
+            self.bump();
+            self.bump();
+        }
+        let mut depth = 1usize;
+        let mut parts: Vec<LexStrPart> = Vec::new();
+        let mut text = String::new();
+        loop {
+            let c = self
+                .peek()
+                .ok_or_else(|| self.err("unterminated sigil"))?;
+            if triple {
+                if c == '"' && self.matches("\"\"\"") {
+                    self.bump();
+                    self.bump();
+                    self.bump();
+                    break;
+                }
+            } else if c == '\\' {
+                // only the closing delimiter (and a backslash before it)
+                // may be escaped; everything else passes through (R002)
+                let next = self.peek_at(1);
+                if next == Some(close) || (next == Some('\\') && self.peek_at(2) == Some(close)) {
+                    self.bump();
+                    text.push(self.bump().unwrap());
+                    continue;
+                }
+                text.push(c);
+                self.bump();
+                continue;
+            } else if nests && c == open {
+                depth += 1;
+                text.push(c);
+                self.bump();
+                continue;
+            } else if c == close {
+                depth -= 1;
+                if depth == 0 {
+                    self.bump();
+                    break;
+                }
+                text.push(c);
+                self.bump();
+                continue;
+            }
+            if !raw && c == '#' && self.peek_at(1) == Some('{') {
+                if !text.is_empty() {
+                    parts.push(LexStrPart::Text(std::mem::take(&mut text)));
+                }
+                self.bump();
+                self.bump();
+                let mut idepth = 1usize;
+                let mut inner = String::new();
+                loop {
+                    let ic = self
+                        .peek()
+                        .ok_or_else(|| self.err("unterminated interpolation"))?;
+                    if ic == '{' {
+                        idepth += 1;
+                    } else if ic == '}' {
+                        idepth -= 1;
+                        if idepth == 0 {
+                            self.bump();
+                            break;
+                        }
+                    }
+                    inner.push(self.bump().unwrap());
+                }
+                let toks = Lexer::new(self.file, &inner).tokenize()?;
+                parts.push(LexStrPart::Interp(toks));
+                continue;
+            }
+            text.push(c);
+            self.bump();
+        }
+        if !text.is_empty() || parts.is_empty() {
+            parts.push(LexStrPart::Text(text));
+        }
+        if matches!(self.peek(), Some(m) if m.is_alphabetic()) {
+            return Err(self.err("sigil modifiers are not supported (GEP-0005-R003)"));
+        }
+        Ok(Tok::Sigil(name, parts))
+    }
 }
 
 fn is_ident_start(c: char) -> bool {
@@ -470,5 +595,85 @@ mod tests {
                 Tok::Eof
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod sigil_tests {
+    use super::*;
+
+    fn toks(src: &str) -> Vec<Tok> {
+        Lexer::new("<test>", src)
+            .tokenize()
+            .unwrap()
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect()
+    }
+
+    #[test]
+    fn lexes_word_sigil() {
+        match &toks("~w(one two three)")[0] {
+            Tok::Sigil(name, parts) => {
+                assert_eq!(name, "w");
+                assert_eq!(parts, &vec![LexStrPart::Text("one two three".into())]);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn lexes_regex_sigil_with_backslashes() {
+        match &toks(r"~r/\d+/")[0] {
+            Tok::Sigil(name, parts) => {
+                assert_eq!(name, "r");
+                assert_eq!(parts, &vec![LexStrPart::Text(r"\d+".into())]);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn raw_sigil_ignores_interpolation() {
+        match &toks("~python(sum(i for i in #{x}))")[0] {
+            Tok::Sigil(name, parts) => {
+                assert_eq!(name, "python");
+                assert_eq!(
+                    parts,
+                    &vec![LexStrPart::Text("sum(i for i in #{x})".into())]
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn brackets_nest_and_delims_escape() {
+        match &toks(r"~s(a (b) c)")[0] {
+            Tok::Sigil(_, parts) => {
+                assert_eq!(parts, &vec![LexStrPart::Text("a (b) c".into())]);
+            }
+            other => panic!("{other:?}"),
+        }
+        match &toks(r"~s/a\/b/")[0] {
+            Tok::Sigil(_, parts) => {
+                assert_eq!(parts, &vec![LexStrPart::Text("a/b".into())]);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn interpolating_sigil_splits_parts() {
+        match &toks("~w(a #{x} b)")[0] {
+            Tok::Sigil(_, parts) => assert_eq!(parts.len(), 3),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_modifiers() {
+        let err = Lexer::new("<test>", "~r/x/i").tokenize().unwrap_err();
+        assert!(err.message.contains("GEP-0005-R003"), "{}", err.message);
     }
 }

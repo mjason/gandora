@@ -48,6 +48,8 @@ Design decisions are recorded as **Gandora Enhancement Proposals** in
 - [GEP-0004](geps/0004-structs-and-module-attributes.md) — structs (frozen
   dataclasses) and module attributes
   ([中文](geps/local/zh/0004-structs-and-module-attributes.md))
+- [GEP-0005](geps/0005-sigils.md) — sigils (`~w`, `~s`, `~r`, and the raw
+  embedded-Python `~python`) ([中文](geps/local/zh/0005-sigils.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -97,6 +99,10 @@ GEP-0004 data declarations: `defstruct` (a frozen `@dataclass` with
 `%Mod{...}` literals, patterns, and `%Mod{s | f: v}` updates) plus module
 attributes (`@app :flask.Flask("__main__")` compiles to a module-level
 binding, so `@decorate @app.route("/")` works like hand-written Python).
+GEP-0005 adds sigils: `~w(a b c)` word lists, `~s(...)` strings,
+`~r/\d+/` compiled Python regexes, and `~python(sum(i*i for i in range(n)))`
+— a raw sigil that splices one verbatim Python expression into the
+output, Gandora's rendering of Osiris's embedded-language sigils.
 
 Anything outside the surface produces a diagnostic naming the construct
 (GEP-0001-R007) rather than a silent mistranslation. See
@@ -131,6 +137,6 @@ cargo test             # unit + end-to-end tests
 ## Status
 
 v0: the language, compiler, macro system, interop, and CLI described by
-GEP-0001..0004 are implemented and tested. Deferred (tracked for future
-GEPs): protocols, comprehensions, `try/rescue`, binaries, sigils,
+GEP-0001..0005 are implemented and tested. Deferred (tracked for future
+GEPs): protocols, comprehensions, `try/rescue`, binaries,
 a formatter, and an LSP.

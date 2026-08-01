@@ -139,3 +139,17 @@ fn structs_and_module_attributes_run() {
     assert!(stdout.contains("keyboard now 50, tags ['sale']"), "{stdout}");
     assert!(stdout.contains("registered routes: ['/sale']"), "{stdout}");
 }
+
+#[test]
+fn sigils_run() {
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let out = gan().current_dir(&tour).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let dist = tour.join("dist");
+    let stdout = run_generated(&dist, &dist.join("sigils.py"));
+    assert!(stdout.contains("['gandora', 'elixir', 'python']"), "{stdout}");
+    assert!(stdout.contains("no need to escape \"quotes\" here"), "{stdout}");
+    assert!(stdout.contains("['hello', '世界', 'world']"), "{stdout}");
+    assert!(stdout.contains("sum of squares: 285"), "{stdout}");
+    assert!(stdout.contains("[2, 4, 6]"), "{stdout}");
+}

@@ -11,14 +11,14 @@ areas:
   - Configuration
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [0]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0001-language-and-cli.md
-source-revision: 1
+source-revision: 2
 translation-status: Current
 ---
 
@@ -83,7 +83,7 @@ Python 拥有最大的库生态系统；Elixir 拥有最令人愉悦的函数式
 - `alias`、`import` 和 `require`，支持 `as:`、`only:` 和 `except:` 选项，遵循 Elixir 语义；
 - 远程原子调用和 `expr.name`/`expr.name(args)` 后缀访问（GEP-0003）。
 
-**GEP-0001-R007：** 对于 v0 表层之外的构造，MUST 产生一个诊断信息，指明不支持的构造；编译器 MUST NOT 静默地错误翻译其未实现的 Elixir 语法。显著的 v0 排除项：协议、行为、`defstruct`、`receive` 及所有进程原语、`try/rescue`、sigil、二进制/位串（`<<>>`）和推导式（`for`）。
+**GEP-0001-R007：** 对于 v0 表层之外的构造，MUST 产生一个诊断信息，指明不支持的构造；编译器 MUST NOT 静默地错误翻译其未实现的 Elixir 语法。显著的 v0 排除项：协议、行为、`receive` 及所有进程原语、`try/rescue`、二进制/位串（`<<>>`）和推导式（`for`）。结构体由 GEP-0004 规定，sigil 由 GEP-0005 规定。
 
 **GEP-0001-R008：** 注释使用 `#` 到行尾。源文件 MUST 为 UTF-8，标识符 MUST 遵循 Elixir 规则：函数和变量为 `snake_case`（允许 Unicode 字母），可选以 `?` 或 `!` 结尾；模块为点分隔的驼峰式段。
 
@@ -200,4 +200,5 @@ v0 无；被排除的构造（R007）被有意推迟到未来的 GEP 中，而�
 
 ## 变更历史
 
+- 修订版 2，2026-08-01：更新 R007 排除清单——结构体与 sigil 现分别由 GEP-0004 和 GEP-0005 规定。
 - 修订版 1，2026-08-01：初始版本。引导接受记录由仓库的初始设计提交记录，而非外部决议 URL。

@@ -157,6 +157,25 @@ fn print_term(term: &Term, level: usize, out: &mut String) {
 fn print_call(call: &Call, level: usize, out: &mut String) {
     match &call.callee {
         Callee::Name(name) => {
+            if let Some(sigil) = name.strip_prefix('~') {
+                out.push('~');
+                out.push_str(sigil);
+                out.push('(');
+                if let Some(Term::Str(parts)) = call.args.first() {
+                    for p in parts {
+                        match p {
+                            StrPart::Text(t) => out.push_str(t),
+                            StrPart::Interp(e) => {
+                                out.push_str("#{");
+                                print_term(e, level, out);
+                                out.push('}');
+                            }
+                        }
+                    }
+                }
+                out.push(')');
+                return;
+            }
             if name == "%struct%" || name == "%struct_update%" || name == "%map_update%" {
                 let mut idx = 0;
                 out.push('%');

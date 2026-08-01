@@ -266,6 +266,10 @@ impl Parser {
             Tok::Kw("false") => Ok(Term::Bool(false)),
             Tok::Kw("nil") => Ok(Term::Nil),
             Tok::Str(parts) => Ok(Term::Str(self.convert_str_parts(parts)?)),
+            Tok::Sigil(name, parts) => {
+                let body = Term::Str(self.convert_str_parts(parts)?);
+                Ok(Term::call(&format!("~{name}"), vec![body], span))
+            }
             Tok::Atom(a) => Ok(Term::Atom(a)),
             Tok::KwKey(k) => {
                 // a keyword pair in argument / list position: `k: value`
@@ -598,6 +602,7 @@ impl Parser {
             Tok::Int(_)
                 | Tok::Float(_)
                 | Tok::Str(_)
+                | Tok::Sigil(_, _)
                 | Tok::Atom(_)
                 | Tok::Ident(_)
                 | Tok::UpIdent(_)

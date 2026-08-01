@@ -11,7 +11,7 @@ areas:
   - Configuration
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [0]
 replaces: []
 superseded-by: null
@@ -132,9 +132,9 @@ MUST be recorded in a GEP.
 **GEP-0001-R007:** A construct outside the v0 surface MUST produce a
 diagnostic naming the unsupported construct; the compiler MUST NOT silently
 mistranslate Elixir syntax it does not implement. Notable v0 exclusions:
-protocols, behaviours, structs (`defstruct`), `receive` and every process
-primitive, `try/rescue`, sigils, binaries/bitstrings (`<<>>`), and
-comprehensions (`for`).
+protocols, behaviours, `receive` and every process primitive,
+`try/rescue`, binaries/bitstrings (`<<>>`), and comprehensions (`for`).
+Structs are specified by GEP-0004 and sigils by GEP-0005.
 
 **GEP-0001-R008:** Comments use `#` to end of line. Source MUST be UTF-8 and
 identifiers MUST follow Elixir rules: functions and variables are
@@ -337,6 +337,8 @@ identifiers.
 
 ## Change History
 
+- Revision 2, 2026-08-01: R007 exclusion list updated — structs and sigils
+  are now specified by GEP-0004 and GEP-0005.
 - Revision 1, 2026-08-01: Initial version. Bootstrap acceptance recorded by
   the repository's initial design commit rather than an external resolution
   URL.

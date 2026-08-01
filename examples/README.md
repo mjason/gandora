@@ -20,6 +20,7 @@ Module-to-path mapping (GEP-0001-R013):
 | `src/app/mathy.gan` | `App.Mathy` |
 | `src/app/macros.gan` | `App.Macros` |
 | `src/app/shop.gan` | `App.Shop` — structs, module attributes, and a decorator registry (GEP-0004) |
+| `src/sigils.gan` | `Sigils` — `~w`/`~s`/`~r` and embedded-Python `~python` (GEP-0005) |
 
 `gan build` writes the generated Python into `dist/`; `gan expand
 src/app/cli.gan` shows the module after macro expansion.
