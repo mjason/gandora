@@ -1,27 +1,25 @@
 defmodule Tour.Webapi do
   @moduledoc """
-  FastAPI end to end: the app lives in a module attribute, routes attach
-  with @decorate, and the generated module serves with plain uvicorn:
+  The FastAPI chapter, rewritten in the Elixir style: routes declared
+  with the Tour.WebDsl macros instead of raw @decorate lines. Serving is
+  unchanged — the app is still the module attribute `app`:
 
       uv run uvicorn tour.webapi:app --app-dir dist
 
   `gan run src/tour/webapi.gan` self-tests the app with TestClient.
   """
 
-  @app :fastapi.FastAPI(title: "Gandora Tour API")
+  use Tour.WebDsl, title: "Gandora Tour API"
 
-  @decorate @app.get("/")
-  def root() do
+  get :root, "/", [] do
     %{message: "hello from gandora", framework: "fastapi"}
   end
 
-  @decorate @app.get("/slug/{text}")
-  def slug(text) do
+  get :slug, "/slug/{text}", [text] do
     %{input: text, slug: text.lower().replace(" ", "-")}
   end
 
-  @decorate @app.get("/fact/{n}")
-  def fact_route(n) do
+  get :fact_route, "/fact/{n}", [n] do
     %{n: n, fact: fact(:builtins.int(n))}
   end
 

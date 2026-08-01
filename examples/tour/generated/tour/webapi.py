@@ -1,6 +1,7 @@
 """
-  FastAPI end to end: the app lives in a module attribute, routes attach
-  with @decorate, and the generated module serves with plain uvicorn:
+  The FastAPI chapter, rewritten in the Elixir style: routes declared
+  with the Tour.WebDsl macros instead of raw @decorate lines. Serving is
+  unchanged — the app is still the module attribute `app`:
 
       uv run uvicorn tour.webapi:app --app-dir dist
 
@@ -16,6 +17,10 @@ class GanMatchError(Exception):
     pass
 
 app = fastapi.FastAPI(title="Gandora Tour API")
+
+
+def asgi():
+    return app
 
 
 @app.get("/")

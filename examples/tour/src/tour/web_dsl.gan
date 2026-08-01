@@ -1,0 +1,38 @@
+defmodule Tour.WebDsl do
+  @moduledoc """
+  A Phoenix-flavored wrapper over FastAPI, built entirely with GEP-0008
+  metaprogramming — no compiler support, just macros:
+
+      use Tour.WebDsl, title: "My API"
+
+      get :root, "/", [] do
+        %{hello: "world"}
+      end
+
+  `use` injects the FastAPI app into a module attribute; each route
+  macro computes the handler name, splices its path params, and attaches
+  the decorator. The generated module is still a plain ASGI target.
+  """
+
+  defmacro __using__(opts) do
+    quote do
+      @app :fastapi.FastAPI(unquote(opts))
+
+      def asgi(), do: @app
+    end
+  end
+
+  defmacro get(name, path, params, body) do
+    quote do
+      @decorate @app.get(unquote(path))
+      def unquote(name)(unquote_splicing(params)), unquote(body)
+    end
+  end
+
+  defmacro post(name, path, params, body) do
+    quote do
+      @decorate @app.post(unquote(path))
+      def unquote(name)(unquote_splicing(params)), unquote(body)
+    end
+  end
+end
