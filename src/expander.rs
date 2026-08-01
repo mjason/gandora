@@ -165,6 +165,22 @@ impl Expander {
                         return self.expand_term(&expanded, depth + 1);
                     }
                 }
+                // qualified macro calls: `App.Macros.some_macro(...)` after require
+                if let Callee::Dot {
+                    base,
+                    name,
+                    is_call: true,
+                } = &call.callee
+                {
+                    if matches!(base.as_ref(), Term::Alias(_)) {
+                        let key = (name.clone(), call.args.len());
+                        if self.macros.contains_key(&key) {
+                            let def = self.macros[&key].clone();
+                            let expanded = self.invoke_macro(&def, name, call)?;
+                            return self.expand_term(&expanded, depth + 1);
+                        }
+                    }
+                }
                 let mut new_call = call.as_ref().clone();
                 if let Callee::Dot { base, .. } = &mut new_call.callee {
                     **base = self.expand_term(base, depth)?;

@@ -84,6 +84,7 @@ pub struct Codegen {
     aliases: BTreeMap<String, Vec<String>>,
     helpers: BTreeSet<&'static str>,
     local_funs: BTreeSet<(String, usize)>,
+    private_funs: BTreeSet<(String, usize)>,
     tmp_counter: usize,
     tmp_names: Vec<String>,
     fn_counter: usize,
@@ -100,6 +101,7 @@ impl Codegen {
             aliases: BTreeMap::new(),
             helpers: BTreeSet::new(),
             local_funs: BTreeSet::new(),
+            private_funs: BTreeSet::new(),
             tmp_counter: 0,
             tmp_names: Vec::new(),
             fn_counter: 0,
@@ -216,6 +218,9 @@ impl Codegen {
                     let (fname, params, guard, fbody) = self.parse_def(call)?;
                     let key = format!("{fname}/{}", params.len());
                     self.local_funs.insert((fname.clone(), params.len()));
+                    if name == "defp" {
+                        self.private_funs.insert((fname.clone(), params.len()));
+                    }
                     let idx = if let Some(&i) = order.get(&key) {
                         if pending_doc.is_some() || !pending_decorators.is_empty() {
                             return Err(self.err(
@@ -457,7 +462,7 @@ impl Codegen {
             self.helpers.insert("match_error");
             let n = &f.name;
             body_lines.push(format!(
-                "raise GanMatchError(f\"no clause of {n}/{arity} matched \" + repr(_gan_args))"
+                "raise GanMatchError(\"no clause of {n}/{arity} matched \" + repr(_gan_args))"
             ));
             push_indented(&mut lines, &body_lines);
         }
@@ -659,7 +664,12 @@ impl Codegen {
                 }
                 guards.push(ge);
             }
-            if p == "_" && guards.is_empty() {
+            // a plain capture (or _) with no guard matches anything
+            let is_capture = p == "_"
+                || (!matches!(p.as_str(), "True" | "False" | "None")
+                    && p.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+                    && p.chars().all(|c| c.is_alphanumeric() || c == '_'));
+            if is_capture && guards.is_empty() {
                 any_wild = true;
             }
             let case_line = if guards.is_empty() {
@@ -1115,6 +1125,17 @@ impl Codegen {
                 pre.extend(lines);
                 Ok(self.tmp(t).to_string())
             }
+            ("__block__", _) => {
+                let stmts = Term::Call(Box::new(call.clone())).as_block();
+                if stmts.len() == 1 {
+                    return self.emit_expr(&stmts[0], pre);
+                }
+                let t = self.fresh_tmp("tmp");
+                let mut lines = Vec::new();
+                self.emit_stmt(&Term::Call(Box::new(call.clone())), Dest::Assign(t), &mut lines)?;
+                pre.extend(lines);
+                Ok(self.tmp(t).to_string())
+            }
             ("if", _) | ("unless", _) | ("case", _) | ("cond", _) | ("with", _) => {
                 let t = self.fresh_tmp("tmp");
                 let mut lines = Vec::new();
@@ -1226,7 +1247,13 @@ impl Codegen {
                         format!("'{name}' is not part of the v0 surface (GEP-0001-R007)"),
                     ));
                 }
-                let f = map_ident(name);
+                let mut f = map_ident(name);
+                if self
+                    .private_funs
+                    .contains(&(name.to_string(), args.len()))
+                {
+                    f.insert(0, '_');
+                }
                 let rendered = self.emit_args(args, pre)?;
                 Ok(format!("{f}({rendered})"))
             }

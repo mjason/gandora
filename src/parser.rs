@@ -151,6 +151,18 @@ impl Parser {
     fn parse_expr(&mut self, min_prec: u8, command: bool) -> Result<Term> {
         let mut lhs = self.parse_unary(command)?;
         loop {
+            // a line ending followed by `|>` continues the expression
+            if *self.peek() == Tok::Newline {
+                let mut j = self.idx;
+                while j < self.toks.len() && self.toks[j].0 == Tok::Newline {
+                    j += 1;
+                }
+                if j < self.toks.len() && self.toks[j].0 == Tok::Op("|>") {
+                    self.idx = j;
+                } else {
+                    break;
+                }
+            }
             let (op, prec, right): (String, u8, bool) = match self.peek() {
                 Tok::Op(op) => match infix_prec(op) {
                     Some((p, r)) => ((*op).to_string(), p, r),
