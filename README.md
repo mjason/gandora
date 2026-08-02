@@ -69,9 +69,20 @@ The practical guide is the [language manual](docs/syntax.md)
   ([中文](geps/local/zh/0010-standard-library.md))
 - [GEP-0011](geps/0011-multi-arity-functions.md) — multi-arity name groups
   and `\\` default parameters ([中文](geps/local/zh/0011-multi-arity-functions.md))
-- [GEP-0012](geps/0012-compiler-as-a-library.md) — [gandora-core](https://pypi.org/project/gandora-core/):
+- [GEP-0012](geps/0012-compiler-as-a-library.md) — gandora-core:
   the compiler as a Python extension, quoted terms as native data — tooling
   is written in Gandora itself ([中文](geps/local/zh/0012-compiler-as-a-library.md))
+- [GEP-0013](geps/0013-the-gan-task-runner.md) — the `gan` task runner
+  (mix/cargo role), a Gandora program in [tools/gan](tools/gan); the Rust
+  binary is the stage-0 compiler `ganc`
+  ([中文](geps/local/zh/0013-the-gan-task-runner.md))
+- [GEP-0014](geps/0014-control-flow-completion.md) — `try/rescue/after`,
+  `loop/recur/break`, and the `in` operator
+  ([中文](geps/local/zh/0014-control-flow-completion.md))
+- [GEP-0015](geps/0015-the-language-server.md) — `gan-lsp`, the language
+  server written in Gandora ([tools/lsp](tools/lsp)), plus the VS Code
+  client ([editors/vscode](editors/vscode))
+  ([中文](geps/local/zh/0015-the-language-server.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -174,8 +185,10 @@ inserts explicit truthiness checks where needed.
 
 ## Repository layout
 
-- `crates/core` — the compiler library; `crates/gan` — the CLI;
-  `crates/core-py` — the `gandora_core` Python extension (GEP-0012)
+- `crates/core` — the compiler library; `crates/gan` — the stage-0 CLI
+  `ganc`; `crates/core-py` — the `gandora_core` Python extension
+- `tools/gan` — the task runner; `tools/lsp` — the language server
+  (both written in Gandora); `editors/vscode` — the VS Code client
 - `docs/` — the language manual (+ `docs/local/zh/` translations)
 - `geps/` — Gandora Enhancement Proposals (+ `geps/local/zh/` translations)
 - `examples/tour` — a runnable multi-module example
