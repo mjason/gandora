@@ -1,0 +1,77 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # gandora-lang: the native gan compiler (maturin bin wheel + sdist)
+  build-lang:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist-lang
+          manylinux: auto
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist-lang
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-lang
+          path: dist-lang
+
+  # gandora-std: the standard library, compiled by the gan we just built
+  build-std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - run: cargo build --release
+      - name: compile and doctest the stdlib with gan itself
+        run: |
+          cd std
+          ../target/release/gan build
+          ../target/release/gan test
+      - run: cd std && uv build --out-dir ../dist-std
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-std
+          path: dist-std
+
+  # Trusted Publishing (OIDC): no tokens anywhere.
+  # PyPI side: two pending publishers (gandora-lang, gandora-std), both
+  # owner=mjason repo=gandora workflow=release.yml environment=pypi.
+  publish-lang:
+    needs: [build-lang]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-lang
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-std:
+    needs: [build-std]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-std
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
