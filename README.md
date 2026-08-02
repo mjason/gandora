@@ -65,7 +65,7 @@ The practical guide is the [language manual](docs/syntax.md)
   `<%= %>` splices ([中文](geps/local/zh/0009-embedded-languages-and-templates.md))
 - [GEP-0010](geps/0010-standard-library.md) — the standard library
   ([std/](std/)): `Enum`, `String`,
-  `Map`, `List`, `Keyword` as an ordinary package
+  `Map`, `List`, `Keyword` as an ordinary PyPI package
   ([中文](geps/local/zh/0010-standard-library.md))
 - [GEP-0011](geps/0011-multi-arity-functions.md) — multi-arity name groups
   and `\\` default parameters ([中文](geps/local/zh/0011-multi-arity-functions.md))
@@ -83,13 +83,14 @@ configured by `.env`) and human-reviewed per GEP-0000-R030.
 ## Quick start
 
 ```console
-cargo build --release
-export PATH="$PWD/target/release:$PATH"
+uv tool install gandora-lang     # the gan compiler, from PyPI
 
-gan init my-app
+gan init my-app                  # adds gandora-std to dependencies
 cd my-app
 gan run src/main.gan
 ```
+
+(Or build from source: `cargo build --release`.)
 
 `gan init` creates a `uv`-compatible project: `pyproject.toml` owns Python
 metadata and dependencies, `gandora.jsonc` owns the compiler configuration,
@@ -190,7 +191,6 @@ CLI, hygienic macros with the full metaprogramming surface
 `@on_definition`), structs, sigils and embedded languages with
 `<%= %>` splices, wheel-based package publication, bilingual docs with
 native doctests, multi-arity functions with `\\` defaults, and the
-standard library ([std/](std/), `uv add
-"git+https://github.com/mjason/gandora#subdirectory=std"`). Deferred:
+standard library ([std/](std/), `uv add gandora-std`). Deferred:
 protocols, comprehensions, `try/rescue`, binaries, a formatter, an
 LSP.

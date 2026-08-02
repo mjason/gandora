@@ -2,6 +2,10 @@
 
 ## v0.1.0 — 2026-08-02
 
+On PyPI: [gandora-lang](https://pypi.org/project/gandora-lang/) (the
+compiler) and [gandora-std](https://pypi.org/project/gandora-std/)
+(the standard library), published via Trusted Publishing from CI.
+
 The founding release: a complete, tested v0 of the Gandora language.
 
 - **Language** (GEP-0001): Elixir surface — modules, multi-clause

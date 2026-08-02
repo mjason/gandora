@@ -132,8 +132,10 @@ fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
     write_if_absent(&path.join("gandora.jsonc"), INIT_CONFIG)?;
     write_if_absent(&path.join(".gitignore"), INIT_GITIGNORE)?;
     write_if_absent(&path.join(".python-version"), "3.12\n")?;
+    // the stdlib ships on PyPI in lockstep with the compiler (GEP-0010-R001)
     let pyproject = format!(
-        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.12\"\ndependencies = []\n"
+        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.12\"\ndependencies = [\"gandora-std>={}\"]\n",
+        env!("CARGO_PKG_VERSION")
     );
     write_if_absent(&path.join("pyproject.toml"), &pyproject)?;
     std::fs::create_dir_all(path.join("src")).map_err(io_err(&path))?;
