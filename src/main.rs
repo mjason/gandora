@@ -562,8 +562,15 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
         }
         _ => (target.clone(), None),
     };
+    // compiler built-ins (IO, Kernel-style functions) carry embedded docs
+    if let Some(info) = builtin_doc(&target) {
+        print_doc(&target, Some(info), locale.as_deref());
+        return Ok(());
+    }
     if module_name.is_empty() {
-        return Err(usage_err("doc target must include a module name"));
+        return Err(usage_err(
+            "doc target must include a module name (or name a built-in like `gan doc length`)",
+        ));
     }
     let config = config_for_cwd()?;
     // locate the module source: project first, then installed packages
@@ -650,10 +657,15 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
         Some(f) => (format!("{module_name}.{f}"), fun_doc),
         None => (module_name.clone(), module_doc),
     };
+    print_doc(&label, info, locale.as_deref());
+    Ok(())
+}
+
+fn print_doc(label: &str, info: Option<codegen::DocInfo>, locale: Option<&str>) {
     match info {
         Some(info) if info.hidden => println!("{label} is hidden (@doc false)"),
         Some(info) => {
-            let prose = lookup_locale(&info, locale.as_deref());
+            let prose = lookup_locale(&info, locale);
             if prose.is_none() && info.meta.is_empty() && info.examples.is_empty() {
                 println!("{label} has no documentation");
             } else {
@@ -684,7 +696,120 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
         }
         None => println!("{label} has no documentation"),
     }
-    Ok(())
+}
+
+/// Embedded bilingual docs for compiler built-ins (GEP-0007): the IO
+/// pseudo-module and the Kernel-style functions of GEP-0001-R006.
+fn builtin_doc(target: &str) -> Option<codegen::DocInfo> {
+    let make = |en: &str, zh: &str, example: Option<&str>| {
+        let mut info = codegen::DocInfo::default();
+        info.entries.push(("default".into(), en.to_string()));
+        info.entries.push(("zh-CN".into(), zh.to_string()));
+        if let Some(ex) = example {
+            info.examples.push(ex.to_string());
+        }
+        info
+    };
+    Some(match target {
+        "IO" => make(
+            "Built-in console I/O. `IO.puts/1` compiles to `print(...)`; \
+             `IO.inspect/1` prints the repr and returns the value.",
+            "内建控制台 I/O。`IO.puts/1` 编译为 `print(...)`；`IO.inspect/1` \
+             打印 repr 并返回原值。",
+            None,
+        ),
+        "IO.puts" => make(
+            "Writes a line to stdout. Compiles to Python `print(value)` — \
+             no wrapper, no runtime.",
+            "向标准输出写一行。编译为 Python 的 `print(value)`——无包装、无运行时。",
+            Some("    gan> IO.puts(\"hello\")\n    hello"),
+        ),
+        "IO.inspect" => make(
+            "Prints the `repr` of a value and returns the value, for \
+             pipeline-friendly debugging. Compiles to an inlined helper.",
+            "打印值的 `repr` 并返回原值，便于管道调试。编译为内联辅助函数。",
+            None,
+        ),
+        "length" => make(
+            "The number of elements in a list. Compiles to Python `len(list)`.",
+            "列表的元素个数。编译为 Python 的 `len(list)`。",
+            Some("    gan> length([1, 2, 3])\n    3"),
+        ),
+        "hd" => make(
+            "The head of a non-empty list; compiles to `list[0]`.",
+            "非空列表的头部；编译为 `list[0]`。",
+            None,
+        ),
+        "tl" => make(
+            "The tail of a non-empty list; compiles to `list[1:]`.",
+            "非空列表的尾部；编译为 `list[1:]`。",
+            None,
+        ),
+        "elem" => make(
+            "`elem(tuple, i)` reads a tuple element; compiles to `tuple[i]`.",
+            "`elem(tuple, i)` 读取元组元素；编译为 `tuple[i]`。",
+            None,
+        ),
+        "inspect" => make(
+            "The `repr` of a value as a string — what doctest expected \
+             output shows (GEP-0007-R008).",
+            "值的 `repr` 字符串——即 doctest 期望输出所展示的内容（GEP-0007-R008）。",
+            Some("    gan> inspect({:ok, 1})\n    \"('ok', 1)\""),
+        ),
+        "to_string" => make(
+            "Converts a value to a string; compiles to Python `str(value)`.",
+            "将值转换为字符串；编译为 Python 的 `str(value)`。",
+            None,
+        ),
+        "div" => make(
+            "Integer division truncated toward zero (Elixir semantics), \
+             unlike Python's floor `//`.",
+            "向零截断的整数除法（Elixir 语义），不同于 Python 向下取整的 `//`。",
+            Some("    gan> div(-7, 2)\n    -3"),
+        ),
+        "rem" => make(
+            "Remainder of truncated division (Elixir semantics): the sign \
+             follows the dividend, unlike Python's `%`.",
+            "截断除法的余数（Elixir 语义）：符号跟随被除数，不同于 Python 的 `%`。",
+            Some("    gan> rem(-7, 2)\n    -1"),
+        ),
+        "raise" => make(
+            "Raises a `RuntimeError` with the given message.",
+            "抛出携带给定消息的 `RuntimeError`。",
+            None,
+        ),
+        "map_size" | "tuple_size" => make(
+            "The number of entries; compiles to Python `len(value)`.",
+            "条目数量；编译为 Python 的 `len(value)`。",
+            None,
+        ),
+        "abs" | "max" | "min" | "round" => make(
+            "Compiles directly to the Python builtin of the same name.",
+            "直接编译为同名的 Python 内建函数。",
+            None,
+        ),
+        "trunc" => make(
+            "Truncates a number to an integer; compiles to `int(value)`.",
+            "将数字截断为整数；编译为 `int(value)`。",
+            None,
+        ),
+        t if t.starts_with("is_")
+            && matches!(
+                t,
+                "is_nil" | "is_list" | "is_tuple" | "is_map" | "is_binary" | "is_atom"
+                    | "is_integer" | "is_float" | "is_function" | "is_boolean"
+            ) =>
+        {
+            make(
+                "Type predicate over the GEP-0001-R009 data mapping; compiles \
+                 to an `isinstance` (or `is None` / `callable`) check.",
+                "基于 GEP-0001-R009 数据映射的类型判断；编译为 `isinstance`\
+                 （或 `is None` / `callable`）检查。",
+                None,
+            )
+        }
+        _ => return None,
+    })
 }
 
 fn ensure_trailing_newline(s: &str) -> String {

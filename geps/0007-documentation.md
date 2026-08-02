@@ -10,7 +10,7 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 5
+revision: 6
 requires: [1]
 replaces: []
 superseded-by: null
@@ -205,6 +205,9 @@ preserved indentation; locale fallback and example rendering in
 generated module run by `python -m doctest` directly.
 
 ## Change History
+
+- Revision 6, 2026-08-02: R009 — built-ins carry embedded bilingual
+  docs in gan doc.
 
 - Revision 5, 2026-08-01: Final model — opaque doc text, dedicated
   @example channel, prose-only translations; removed the extraction

@@ -10,14 +10,14 @@ areas:
   - Tooling
 created: 2026-08-01
 updated: 2026-08-01
-revision: 5
+revision: 6
 requires: [1]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0007-documentation.md
-source-revision: 5
+source-revision: 6
 translation-status: Current
 ---
 
@@ -115,6 +115,7 @@ Elixir 自身的布局，但在处理本地化文本时，要么迫使翻译中�
 
 ## 变更历史
 
+- 修订版 6，2026-08-02：R009——内建函数在 gan doc 中携带内嵌双语文档。
 - 修订版 5，2026-08-01：最终模型——不透明文档文本，专用 @example 通道，仅散文翻译；移除了修订版 4 中的提取和指令机制。
 - 修订版 4，2026-08-01：带包含指令的结构化示例提取（已取代）。
 - 修订版 3，2026-08-01：共享 @example 块（在修订版 5 中恢复）。

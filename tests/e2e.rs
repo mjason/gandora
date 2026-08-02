@@ -401,3 +401,16 @@ fn doctests_and_localized_docs() {
     assert_eq!(out.status.code(), Some(1), "{}", String::from_utf8_lossy(&out.stdout));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn builtin_docs_are_embedded_and_bilingual() {
+    let out = gan().args(["doc", "IO.puts"]).output().unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("print(value)"), "{stdout}");
+    assert!(stdout.contains("gan> IO.puts"), "{stdout}");
+    let out = gan().args(["doc", "rem", "--locale", "zh"]).output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("截断除法"), "{stdout}");
+    assert!(stdout.contains("rem(-7, 2)"), "{stdout}");
+}

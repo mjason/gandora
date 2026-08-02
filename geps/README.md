@@ -19,6 +19,6 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0004](0004-structs-and-module-attributes.md) | Structs and Module Attributes | Standards Track | Accepted | 1 | [zh](local/zh/0004-structs-and-module-attributes.md) |
 | [0005](0005-sigils.md) | Sigils | Standards Track | Accepted | 2 | [zh](local/zh/0005-sigils.md) |
 | [0006](0006-package-publication.md) | Package Publication | Standards Track | Accepted | 1 | [zh](local/zh/0006-package-publication.md) |
-| [0007](0007-documentation.md) | Documentation | Standards Track | Accepted | 5 | [zh](local/zh/0007-documentation.md) |
+| [0007](0007-documentation.md) | Documentation | Standards Track | Accepted | 6 | [zh](local/zh/0007-documentation.md) |
 | [0008](0008-metaprogramming-completion.md) | Metaprogramming Completion | Standards Track | Accepted | 1 | [zh](local/zh/0008-metaprogramming-completion.md) |
 | [0009](0009-embedded-languages-and-templates.md) | Embedded Languages and Templates | Standards Track | Accepted | 1 | [zh](local/zh/0009-embedded-languages-and-templates.md) |
