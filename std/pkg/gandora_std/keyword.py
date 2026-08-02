@@ -55,3 +55,28 @@ def has_key_p(kw, key):
                 return k == key
         raise GanMatchError("no clause of _gan_fn3/1 matched " + repr(_gan_args))
     return gandora_std.enum.any_p(kw, _gan_fn3)
+
+
+def delete(kw, key):
+    """Removes every entry for `key`."""
+    def _gan_fn4(*_gan_args):
+        match _gan_args:
+            case ((k, _) as _gan_t4,) if isinstance(_gan_t4, tuple):
+                return k == key
+        raise GanMatchError("no clause of _gan_fn4/1 matched " + repr(_gan_args))
+    return gandora_std.enum.reject(kw, _gan_fn4)
+
+
+def merge(kw1, kw2):
+    """Merges `kw2` into `kw1`; `kw2` wins, its entries appended.
+
+
+      >>> merge([("a", 1), ("b", 2)], [("b", 9), ("c", 3)])
+      [('a', 1), ('b', 9), ('c', 3)]
+"""
+    def _gan_fn5(*_gan_args):
+        match _gan_args:
+            case ((k, _) as _gan_t5,) if isinstance(_gan_t5, tuple):
+                return has_key_p(kw2, k)
+        raise GanMatchError("no clause of _gan_fn5/1 matched " + repr(_gan_args))
+    return gandora_std.enum.reject(kw1, _gan_fn5) + kw2

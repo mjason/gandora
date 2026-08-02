@@ -1,6 +1,12 @@
 """Data-first string functions over Python str (GEP-0010)."""
 
 import builtins
+import re
+import gandora_std.enum
+
+
+def _gan_truthy(value):
+    return value is not None and value is not False
 
 
 def upcase(s):
@@ -91,3 +97,51 @@ def to_integer(s):
 def to_float(s):
     """Parses a float; raises Python ValueError on bad input."""
     return builtins.float(s)
+
+
+def at(s, index):
+    """The character at `index` (negative counts from the end), or nil."""
+    if (index < builtins.len(s)) and (index >= -(builtins.len(s))):
+        return ((s)[(index)])
+    else:
+        return None
+
+
+def reverse(s):
+    """The string reversed."""
+    return ((s)[::-1])
+
+
+def duplicate(s, n):
+    """The string repeated `n` times."""
+    return ((s) * (n))
+
+
+def trim_leading(s):
+    """Removes leading whitespace."""
+    return s.lstrip()
+
+
+def trim_trailing(s):
+    """Removes trailing whitespace."""
+    return s.rstrip()
+
+
+def codepoints(s):
+    """The characters as a list of one-character strings.
+
+
+      >>> gandora_std.enum.take(codepoints("héllo"), 2)
+      ['h', 'é']
+"""
+    return builtins.list(s)
+
+
+def match_p(s, regex):
+    """Whether the compiled regex (`~r/.../`) matches anywhere in the string.
+
+
+      >>> match_p("gandora-2026", re.compile("\\d+"))
+      True
+"""
+    return not (_gan_truthy((regex.search(s) is None)))

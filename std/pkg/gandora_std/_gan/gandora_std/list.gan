@@ -49,4 +49,24 @@ defmodule List do
   @doc_trans zh_CN: "删除 `index` 处的元素；越界时列表原样返回。"
   def delete_at(xs, index),
     do: ~python(<%= xs %>[:<%= index %>] + <%= xs %>[<%= index %>:][1:])
+  @doc "The list as a tuple."
+  @doc_trans zh_CN: "转换为元组的列表。"
+  def to_tuple(xs), do: :builtins.tuple(xs)
+
+  @doc "Whether the list starts with `prefix`."
+  @doc_trans zh_CN: "是否以 `prefix` 开头。"
+  def starts_with?(xs, prefix), do: ~python(<%= xs %>[:len(<%= prefix %>)] == <%= prefix %>)
+
+  @doc "Replaces the element at `index` (negative counts from the end)."
+  @doc_trans zh_CN: "替换 `index` 处的元素（负数从尾部数起）。"
+  def replace_at(xs, index, value),
+    do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:][1:])
+
+  @doc "Updates the element at `index` by `f`."
+  @doc_trans zh_CN: "以 `f` 更新 `index` 处的元素。"
+  @example """
+      gan> List.update_at([1, 2, 3], 1, fn v -> v * 10 end)
+      [1, 20, 3]
+  """
+  def update_at(xs, index, f), do: replace_at(xs, index, f.(Enum.at(xs, index)))
 end

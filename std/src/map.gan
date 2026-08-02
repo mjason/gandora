@@ -55,4 +55,33 @@ defmodule Map do
       put(m, key, default)
     end
   end
+  @doc "The value for `key`; raises Python KeyError when absent."
+  @doc_trans zh_CN: "键 `key` 的值；不存在时抛 Python KeyError。"
+  def fetch!(m, key), do: ~python(<%= m %>[<%= key %>])
+
+  @doc "Sets `key` only when absent."
+  @doc_trans zh_CN: "仅当 `key` 不存在时设置。"
+  def put_new(m, key, value) do
+    if has_key?(m, key) do
+      m
+    else
+      put(m, key, value)
+    end
+  end
+
+  @doc "The submap with only `keys` (missing keys ignored)."
+  @doc_trans zh_CN: "仅含 `keys` 的子映射（缺失的键忽略）。"
+  def take(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k in <%= keys %>})
+
+  @doc "The map without `keys`."
+  @doc_trans zh_CN: "移除 `keys` 后的映射。"
+  def drop(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k not in <%= keys %>})
+
+  @doc "Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy."
+  @doc_trans zh_CN: "保留使 `f`（接收 `{键, 值}` 元组）为真值的条目。"
+  @example """
+      gan> Map.filter(%{"a" => 1, "b" => 5}, fn pair -> elem(pair, 1) > 2 end)
+      {'b': 5}
+  """
+  def filter(m, f), do: ~python({k: v for k, v in <%= m %>.items() if <%= f %>((k, v))})
 end

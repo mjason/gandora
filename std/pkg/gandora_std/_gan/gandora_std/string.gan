@@ -73,4 +73,45 @@ defmodule String do
   @doc "Parses a float; raises Python ValueError on bad input."
   @doc_trans zh_CN: "解析浮点数；非法输入抛 Python ValueError。"
   def to_float(s), do: :builtins.float(s)
+  @doc "The character at `index` (negative counts from the end), or nil."
+  @doc_trans zh_CN: "位于 `index` 的字符（负数从尾部数起），越界为 nil。"
+  def at(s, index) do
+    if index < :builtins.len(s) and index >= -:builtins.len(s) do
+      ~python(<%= s %>[<%= index %>])
+    else
+      nil
+    end
+  end
+
+  @doc "The string reversed."
+  @doc_trans zh_CN: "反转后的字符串。"
+  def reverse(s), do: ~python(<%= s %>[::-1])
+
+  @doc "The string repeated `n` times."
+  @doc_trans zh_CN: "重复 `n` 次的字符串。"
+  def duplicate(s, n), do: ~python(<%= s %> * <%= n %>)
+
+  @doc "Removes leading whitespace."
+  @doc_trans zh_CN: "去除首部空白。"
+  def trim_leading(s), do: s.lstrip()
+
+  @doc "Removes trailing whitespace."
+  @doc_trans zh_CN: "去除尾部空白。"
+  def trim_trailing(s), do: s.rstrip()
+
+  @doc "The characters as a list of one-character strings."
+  @doc_trans zh_CN: "以单字符字符串列表表示的全部字符。"
+  @example """
+      gan> String.codepoints("héllo") |> Enum.take(2)
+      ['h', 'é']
+  """
+  def codepoints(s), do: :builtins.list(s)
+
+  @doc "Whether the compiled regex (`~r/.../`) matches anywhere in the string."
+  @doc_trans zh_CN: "编译后的正则（`~r/.../`）是否在字符串中命中。"
+  @example """
+      gan> String.match?("gandora-2026", ~r/\\d+/)
+      True
+  """
+  def match?(s, regex), do: not is_nil(regex.search(s))
 end

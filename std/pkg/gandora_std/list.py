@@ -1,5 +1,6 @@
 """List-shape helpers; element-wise work lives in Enum (GEP-0010)."""
 
+import builtins
 import gandora_std.enum
 
 
@@ -55,3 +56,28 @@ def insert_at(xs, index, value):
 def delete_at(xs, index):
     """Removes the element at `index`; out-of-range leaves the list unchanged."""
     return ((xs)[:(index)] + (xs)[(index):][1:])
+
+
+def to_tuple(xs):
+    """The list as a tuple."""
+    return builtins.tuple(xs)
+
+
+def starts_with_p(xs, prefix):
+    """Whether the list starts with `prefix`."""
+    return ((xs)[:len((prefix))] == (prefix))
+
+
+def replace_at(xs, index, value):
+    """Replaces the element at `index` (negative counts from the end)."""
+    return ((xs)[:(index)] + [(value)] + (xs)[(index):][1:])
+
+
+def update_at(xs, index, f):
+    """Updates the element at `index` by `f`.
+
+
+      >>> update_at([1, 2, 3], 1, lambda v: v * 10)
+      [1, 20, 3]
+"""
+    return replace_at(xs, index, f(gandora_std.enum.at(xs, index)))

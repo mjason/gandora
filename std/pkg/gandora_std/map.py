@@ -68,3 +68,36 @@ def update(m, key, default, f):
         return put(m, key, f(get(m, key)))
     else:
         return put(m, key, default)
+
+
+def fetch_bang(m, key):
+    """The value for `key`; raises Python KeyError when absent."""
+    return ((m)[(key)])
+
+
+def put_new(m, key, value):
+    """Sets `key` only when absent."""
+    if _gan_truthy(has_key_p(m, key)):
+        return m
+    else:
+        return put(m, key, value)
+
+
+def take(m, keys):
+    """The submap with only `keys` (missing keys ignored)."""
+    return ({k: v for k, v in (m).items() if k in (keys)})
+
+
+def drop(m, keys):
+    """The map without `keys`."""
+    return ({k: v for k, v in (m).items() if k not in (keys)})
+
+
+def filter(m, f):
+    """Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy.
+
+
+      >>> filter({"a": 1, "b": 5}, lambda pair: pair[1] > 2)
+      {'b': 5}
+"""
+    return ({k: v for k, v in (m).items() if (f)((k, v))})
