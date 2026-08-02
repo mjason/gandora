@@ -27,7 +27,7 @@ defmodule Tour.Webapi do
   defp fact(n), do: n * fact(n - 1)
 
   def main() do
-    client = $"fastapi.testclient".TestClient(@app)
+    client = $fastapi.testclient.TestClient(@app)
     resp = client.get("/")
     IO.puts("GET /                 -> #{resp.status_code} #{resp.json()}")
     resp = client.get("/slug/Hello Gandora World")

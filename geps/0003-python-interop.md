@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 2
+revision: 3
 requires: [1]
 replaces: []
 superseded-by: null
@@ -68,6 +68,19 @@ module uses the quoted form: `$"os.path".join(a, b)` compiles to
 object and is a first-class value: it can be bound, passed, stored in
 collections, and used wherever Python accepts a module —
 `m = $math; m.sqrt(4.0)`, `rescue e in $builtins.ValueError`.
+
+**GEP-0003-R010:** A multi-segment reference `$a.b.c...` resolves
+without quoting: the leading run of lowercase segments — stopping
+before the final segment — is the module path, imported whole
+(`import a.b`), and the remaining segments are attribute access.
+`$collections.abc.Sequence` imports `collections.abc`;
+`$importlib.metadata.version(x)` imports `importlib.metadata`;
+`$os.path.join(a, b)` imports `os.path`; `$math.pi` imports `math`.
+Dotted imports are always safe, so the rule is deterministic and
+independent of whether a parent package re-exports its submodules.
+The quoted form `$"a.b"` remains as the explicit override for the one
+ambiguous residue: a bare reference whose final lowercase segment is
+itself a submodule needing an explicit import.
 
 **GEP-0003-R009:** Atoms are pure data (GEP-0001-R010) and never name
 modules. An atom followed by `.` and an identifier is a compile error
@@ -176,6 +189,10 @@ decorator stacking order, and the absence of compile-time imports (compiling
 a file referencing a nonexistent module succeeds).
 
 ## Change History
+
+- Revision 3, 2026-08-02: Added R010 — dotted `$` chains resolve by
+  the lowercase-prefix import rule; quoting becomes a rare explicit
+  override.
 
 - Revision 2, 2026-08-02: Interop moved from atom calls to the `$`
   sigil (R001/R002 rewritten, R009 added): `:` is now pure data, and

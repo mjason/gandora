@@ -12,7 +12,7 @@ defmodule Keyword do
   @param_trans kw, zh_CN: "关键字列表。"
   @param key, "The key to read; first match wins."
   @param_trans key, zh_CN: "要读取的键，取首个匹配。"
-  @spec get(list(), atom()) :: any()
+  @spec get(keyword(), atom()) :: any()
   def get(kw, key), do: ~python(next((v for k, v in <%= kw %> if k == <%= key %>), None))
 
   @doc "Replaces `key` with `value`, prepending it (Elixir Keyword.put)."
@@ -23,7 +23,7 @@ defmodule Keyword do
   @param_trans key, zh_CN: "要写入的键。"
   @param value, "The value to store."
   @param_trans value, zh_CN: "要存储的值。"
-  @spec put(list(), atom(), any()) :: list()
+  @spec put(keyword(), atom(), any()) :: keyword()
   def put(kw, key, value) do
     [{key, value}] ++ Enum.reject(kw, fn {k, _} -> k == key end)
   end
@@ -32,14 +32,14 @@ defmodule Keyword do
   @doc_trans zh_CN: "按序的全部键（含重复）。"
   @param kw, "The keyword list."
   @param_trans kw, zh_CN: "关键字列表。"
-  @spec keys(list()) :: list(atom())
+  @spec keys(keyword()) :: list(atom())
   def keys(kw), do: Enum.map(kw, fn {k, _} -> k end)
 
   @doc "The values, in order."
   @doc_trans zh_CN: "按序的全部值。"
   @param kw, "The keyword list."
   @param_trans kw, zh_CN: "关键字列表。"
-  @spec values(list()) :: list()
+  @spec values(keyword()) :: list()
   def values(kw), do: Enum.map(kw, fn {_, v} -> v end)
 
   @doc "Whether `key` is present."
@@ -48,7 +48,7 @@ defmodule Keyword do
   @param_trans kw, zh_CN: "关键字列表。"
   @param key, "The key to test."
   @param_trans key, zh_CN: "要检测的键。"
-  @spec has_key?(list(), atom()) :: boolean()
+  @spec has_key?(keyword(), atom()) :: boolean()
   def has_key?(kw, key), do: Enum.any?(kw, fn {k, _} -> k == key end)
   @doc "Removes every entry for `key`."
   @doc_trans zh_CN: "移除键为 `key` 的全部条目。"
@@ -56,7 +56,7 @@ defmodule Keyword do
   @param_trans kw, zh_CN: "关键字列表。"
   @param key, "Every entry with this key is removed."
   @param_trans key, zh_CN: "删除所有该键的条目。"
-  @spec delete(list(), atom()) :: list()
+  @spec delete(keyword(), atom()) :: keyword()
   def delete(kw, key), do: Enum.reject(kw, fn {k, _} -> k == key end)
 
   @doc "Merges `kw2` into `kw1`; `kw2` wins, its entries appended."
@@ -69,7 +69,7 @@ defmodule Keyword do
   @param_trans kw1, zh_CN: "基础列表。"
   @param kw2, "Its entries win on conflicts."
   @param_trans kw2, zh_CN: "冲突时以其条目为准。"
-  @spec merge(list(), list()) :: list()
+  @spec merge(keyword(), keyword()) :: keyword()
   def merge(kw1, kw2) do
     Enum.reject(kw1, fn {k, _} -> has_key?(kw2, k) end) ++ kw2
   end

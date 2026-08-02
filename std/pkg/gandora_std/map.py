@@ -2,6 +2,7 @@
 
 import builtins
 import collections.abc
+import typing
 
 
 def _gan_truthy(value):
@@ -10,8 +11,12 @@ def _gan_truthy(value):
 class GanMatchError(Exception):
     pass
 
+_T_d = typing.TypeVar("_T_d")
+_T_k = typing.TypeVar("_T_k")
+_T_v = typing.TypeVar("_T_v")
 
-def get(*_gan_args) -> object:
+
+def get(*_gan_args) -> _T_v | _T_d:
     """The value for `key`, or `default` (nil unless given) when absent.
 
 ## Parameters
@@ -31,7 +36,7 @@ def get(*_gan_args) -> object:
     raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
 
 
-def put(m: dict, key: object, value: object) -> dict:
+def put(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
     """A new map with `key` set to `value`.
 
 ## Parameters
@@ -46,7 +51,7 @@ def put(m: dict, key: object, value: object) -> dict:
     return ({**(m), (key): (value)})
 
 
-def delete(m: dict, key: object) -> dict:
+def delete(m: dict[_T_k, _T_v], key: _T_k) -> dict[_T_k, _T_v]:
     """A new map without `key`.
 
 ## Parameters
@@ -57,7 +62,7 @@ def delete(m: dict, key: object) -> dict:
     return ({k: v for k, v in (m).items() if k != (key)})
 
 
-def keys(m: dict) -> list:
+def keys(m: dict[_T_k, _T_v]) -> list[_T_k]:
     """The keys as a list.
 
 ## Parameters
@@ -67,7 +72,7 @@ def keys(m: dict) -> list:
     return builtins.list(m.keys())
 
 
-def values(m: dict) -> list:
+def values(m: dict[_T_k, _T_v]) -> list[_T_v]:
     """The values as a list.
 
 ## Parameters
@@ -77,7 +82,7 @@ def values(m: dict) -> list:
     return builtins.list(m.values())
 
 
-def merge(m1: dict, m2: dict) -> dict:
+def merge(m1: dict[_T_k, _T_v], m2: dict[_T_k, _T_v]) -> dict[_T_k, _T_v]:
     """Merges `m2` into `m1`; `m2` wins on conflicts.
 
 ## Parameters
@@ -88,7 +93,7 @@ def merge(m1: dict, m2: dict) -> dict:
     return ({**(m1), **(m2)})
 
 
-def has_key_p(m: dict, key: object) -> bool:
+def has_key_p(m: dict[_T_k, _T_v], key: _T_k) -> bool:
     """Whether `key` is present.
 
 ## Parameters
@@ -99,7 +104,7 @@ def has_key_p(m: dict, key: object) -> bool:
     return ((key) in (m))
 
 
-def to_list(m: dict) -> list[tuple[object, object]]:
+def to_list(m: dict[_T_k, _T_v]) -> list[tuple[_T_k, _T_v]]:
     """The entries as a list of `{key, value}` tuples.
 
 ## Parameters
@@ -114,7 +119,7 @@ def new() -> dict:
     return {}
 
 
-def update(m: dict, key: object, default: object, f: collections.abc.Callable) -> dict:
+def update(m: dict[_T_k, _T_v], key: _T_k, default: _T_v, f: collections.abc.Callable) -> dict[_T_k, _T_v]:
     """Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4).
 
 ## Parameters
@@ -133,7 +138,7 @@ def update(m: dict, key: object, default: object, f: collections.abc.Callable) -
         return put(m, key, default)
 
 
-def fetch_bang(m: dict, key: object) -> object:
+def fetch_bang(m: dict[_T_k, _T_v], key: _T_k) -> _T_v:
     """The value for `key`; raises Python KeyError when absent.
 
 ## Parameters
@@ -144,7 +149,7 @@ def fetch_bang(m: dict, key: object) -> object:
     return ((m)[(key)])
 
 
-def put_new(m: dict, key: object, value: object) -> dict:
+def put_new(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
     """Sets `key` only when absent.
 
 ## Parameters
@@ -159,7 +164,7 @@ def put_new(m: dict, key: object, value: object) -> dict:
         return put(m, key, value)
 
 
-def take(m: dict, keys: list) -> dict:
+def take(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
     """The submap with only `keys` (missing keys ignored).
 
 ## Parameters
@@ -170,7 +175,7 @@ def take(m: dict, keys: list) -> dict:
     return ({k: v for k, v in (m).items() if k in (keys)})
 
 
-def drop(m: dict, keys: list) -> dict:
+def drop(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
     """The map without `keys`.
 
 ## Parameters
@@ -181,7 +186,7 @@ def drop(m: dict, keys: list) -> dict:
     return ({k: v for k, v in (m).items() if k not in (keys)})
 
 
-def filter(m: dict, f: collections.abc.Callable) -> dict:
+def filter(m: dict[_T_k, _T_v], f: collections.abc.Callable) -> dict[_T_k, _T_v]:
     """Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy.
 
 ## Parameters

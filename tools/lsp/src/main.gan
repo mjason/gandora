@@ -11,32 +11,32 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.6.2",
-    text_document_sync_kind: $"lsprotocol.types".TextDocumentSyncKind.Full)
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.7.0",
+    text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
 
   # ---- lifecycle + diagnostics (GEP-0015-R002/R003) ------------------------
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DID_OPEN)
   def did_open(params) do
     publish(params.text_document.uri, params.text_document.text)
   end
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_CHANGE)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DID_CHANGE)
   def did_change(params) do
     text = Enum.at($builtins.list(params.content_changes), -1).text
     publish(params.text_document.uri, text)
   end
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_CLOSE)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DID_CLOSE)
   def did_close(params) do
     send_diagnostics(params.text_document.uri, [])
   end
 
   defp send_diagnostics(uri, items) do
     @server.text_document_publish_diagnostics(
-      $"lsprotocol.types".PublishDiagnosticsParams(uri: uri, diagnostics: items)
+      $lsprotocol.types.PublishDiagnosticsParams(uri: uri, diagnostics: items)
     )
   end
 
@@ -62,8 +62,8 @@ defmodule Main do
     send_diagnostics(uri, lsp)
   end
 
-  defp severity("error"), do: $"lsprotocol.types".DiagnosticSeverity.Error
-  defp severity(_), do: $"lsprotocol.types".DiagnosticSeverity.Warning
+  defp severity("error"), do: $lsprotocol.types.DiagnosticSeverity.Error
+  defp severity(_), do: $lsprotocol.types.DiagnosticSeverity.Warning
 
   # ---- shared cursor resolution --------------------------------------------
 
@@ -138,7 +138,7 @@ defmodule Main do
     "when" => "A guard on a clause head or case pattern (GEP-0001)."
   }
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_HOVER)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_HOVER)
   def hover(params) do
     {doc, line} = doc_and_line(params)
     hit = word_at(line, params.position.character)
@@ -186,7 +186,7 @@ defmodule Main do
   defp pyref_hover(token) do
     mod = Enum.at(token.split("."), 0)
     spec = try do
-      $"importlib.util".find_spec(mod)
+      $importlib.util.find_spec(mod)
     rescue
       _e -> nil
     end
@@ -200,7 +200,7 @@ defmodule Main do
   defp markdown_hover(md) do
     types.Hover(
       contents: types.MarkupContent(
-        kind: $"lsprotocol.types".MarkupKind.Markdown,
+        kind: $lsprotocol.types.MarkupKind.Markdown,
         value: md
       )
     )
@@ -266,7 +266,7 @@ defmodule Main do
 
   # ---- go to definition (GEP-0015-R006) ------------------------------------
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DEFINITION)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DEFINITION)
   def definition(params) do
     {doc, line} = doc_and_line(params)
     hit = word_at(line, params.position.character)
@@ -320,7 +320,7 @@ defmodule Main do
 
   # ---- document symbols (GEP-0015-R008) ------------------------------------
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DOCUMENT_SYMBOL)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
   def document_symbol(params) do
     doc = @server.workspace.get_text_document(params.text_document.uri)
     mod = module_of(doc.source)
@@ -351,7 +351,7 @@ defmodule Main do
       zero = types.Position(line: 0, character: 0)
       [types.DocumentSymbol(
         name: mod,
-        kind: $"lsprotocol.types".SymbolKind.Module,
+        kind: $lsprotocol.types.SymbolKind.Module,
         range: types.Range(zero, zero),
         selection_range: types.Range(zero, zero),
         children: children
@@ -359,15 +359,15 @@ defmodule Main do
     end
   end
 
-  defp symbol_kind("defmacro"), do: $"lsprotocol.types".SymbolKind.Constructor
-  defp symbol_kind("defp"), do: $"lsprotocol.types".SymbolKind.Method
-  defp symbol_kind(_), do: $"lsprotocol.types".SymbolKind.Function
+  defp symbol_kind("defmacro"), do: $lsprotocol.types.SymbolKind.Constructor
+  defp symbol_kind("defp"), do: $lsprotocol.types.SymbolKind.Method
+  defp symbol_kind(_), do: $lsprotocol.types.SymbolKind.Function
 
   # ---- completion: `Module.` members (GEP-0015-R008) -----------------------
 
   @decorate @server.feature(
-    $"lsprotocol.types".TEXT_DOCUMENT_COMPLETION,
-    $"lsprotocol.types".CompletionOptions(trigger_characters: ["."])
+    $lsprotocol.types.TEXT_DOCUMENT_COMPLETION,
+    $lsprotocol.types.CompletionOptions(trigger_characters: ["."])
   )
   def completion(params) do
     {doc, line} = doc_and_line(params)
@@ -392,11 +392,11 @@ defmodule Main do
     end
   end
 
-  defp py_completion_kind("function"), do: $"lsprotocol.types".CompletionItemKind.Function
-  defp py_completion_kind("class"), do: $"lsprotocol.types".CompletionItemKind.Class
-  defp py_completion_kind("module"), do: $"lsprotocol.types".CompletionItemKind.Module
-  defp py_completion_kind("instance"), do: $"lsprotocol.types".CompletionItemKind.Value
-  defp py_completion_kind(_), do: $"lsprotocol.types".CompletionItemKind.Field
+  defp py_completion_kind("function"), do: $lsprotocol.types.CompletionItemKind.Function
+  defp py_completion_kind("class"), do: $lsprotocol.types.CompletionItemKind.Class
+  defp py_completion_kind("module"), do: $lsprotocol.types.CompletionItemKind.Module
+  defp py_completion_kind("instance"), do: $lsprotocol.types.CompletionItemKind.Value
+  defp py_completion_kind(_), do: $lsprotocol.types.CompletionItemKind.Field
 
   defp gandora_completion(prefix) do
     m = ~r/([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)\.([a-z_][A-Za-z0-9_]*)?$/.search(prefix)
@@ -427,7 +427,7 @@ defmodule Main do
       |> Enum.map(fn s ->
         types.CompletionItem(
           label: Map.get(s, "name"),
-          kind: $"lsprotocol.types".CompletionItemKind.Function,
+          kind: $lsprotocol.types.CompletionItemKind.Function,
           detail: Map.get(s, "head"),
           documentation: Map.get(s, "doc")
         )
@@ -437,7 +437,7 @@ defmodule Main do
 
   # ---- formatting through the GEP-0016 engine (GEP-0015-R007) --------------
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_FORMATTING)
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_FORMATTING)
   def formatting(params) do
     doc = @server.workspace.get_text_document(params.text_document.uri)
     result = Fmt.format_text(doc.source)
@@ -462,8 +462,8 @@ defmodule Main do
   # ---- signature help (GEP-0015-R008) --------------------------------------
 
   @decorate @server.feature(
-    $"lsprotocol.types".TEXT_DOCUMENT_SIGNATURE_HELP,
-    $"lsprotocol.types".SignatureHelpOptions(trigger_characters: ["(", ","])
+    $lsprotocol.types.TEXT_DOCUMENT_SIGNATURE_HELP,
+    $lsprotocol.types.SignatureHelpOptions(trigger_characters: ["(", ","])
   )
   def signature_help(params) do
     {doc, line} = doc_and_line(params)

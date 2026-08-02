@@ -6,6 +6,7 @@ import collections.abc
 import functools
 import itertools
 import math
+import typing
 import gandora_std.string
 
 
@@ -19,8 +20,11 @@ def _gan_div(a, b):
 def _gan_rem(a, b):
     return a - _gan_div(a, b) * b
 
+_T_a = typing.TypeVar("_T_a")
+_T_b = typing.TypeVar("_T_b")
 
-def map(xs: list, f: collections.abc.Callable) -> list:
+
+def map(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_b]:
     """Applies `f` to every element.
 
 ## Parameters
@@ -34,7 +38,7 @@ def map(xs: list, f: collections.abc.Callable) -> list:
     return builtins.list(builtins.map(f, xs))
 
 
-def filter(xs: list, f: collections.abc.Callable) -> list:
+def filter(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
     """Keeps elements for which `f` is truthy.
 
 ## Parameters
@@ -48,7 +52,7 @@ def filter(xs: list, f: collections.abc.Callable) -> list:
     return ([x for x in (xs) if (f)(x)])
 
 
-def reject(xs: list, f: collections.abc.Callable) -> list:
+def reject(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
     """Drops elements for which `f` is truthy.
 
 ## Parameters
@@ -59,7 +63,7 @@ def reject(xs: list, f: collections.abc.Callable) -> list:
     return ([x for x in (xs) if not (f)(x)])
 
 
-def reduce(xs: list, acc: object, f: collections.abc.Callable) -> object:
+def reduce(xs: list[_T_a], acc: _T_b, f: collections.abc.Callable) -> _T_b:
     """Folds left with Elixir argument order: `f` receives (element, acc).
 
 ## Parameters
@@ -104,7 +108,7 @@ def sort(xs: list) -> list:
     return builtins.sorted(xs)
 
 
-def sort_by(xs: list, f: collections.abc.Callable) -> list:
+def sort_by(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
     """Sorts by the key computed by `f` (Python `key=`, not a comparator).
 
 ## Parameters
@@ -118,7 +122,7 @@ def sort_by(xs: list, f: collections.abc.Callable) -> list:
     return builtins.sorted(xs, key=f)
 
 
-def reverse(xs: list) -> list:
+def reverse(xs: list[_T_a]) -> list[_T_a]:
     """Elements in reverse order.
 
 ## Parameters
@@ -142,7 +146,7 @@ def join(xs: list, sep: str) -> str:
     return sep.join(([str(x) for x in (xs)]))
 
 
-def at(xs: list, index: int) -> object:
+def at(xs: list[_T_a], index: int) -> _T_a | None:
     """The element at `index` (negative counts from the end), or nil.
 
 ## Parameters
@@ -156,7 +160,7 @@ def at(xs: list, index: int) -> object:
         return None
 
 
-def take(xs: list, n: int) -> list:
+def take(xs: list[_T_a], n: int) -> list[_T_a]:
     """The first `n` elements.
 
 ## Parameters
@@ -167,7 +171,7 @@ def take(xs: list, n: int) -> list:
     return ((xs)[:(n)])
 
 
-def drop(xs: list, n: int) -> list:
+def drop(xs: list[_T_a], n: int) -> list[_T_a]:
     """The elements after the first `n`.
 
 ## Parameters
@@ -178,7 +182,7 @@ def drop(xs: list, n: int) -> list:
     return ((xs)[(n):])
 
 
-def zip(xs: list, ys: list) -> list[tuple[object, object]]:
+def zip(xs: list[_T_a], ys: list[_T_b]) -> list[tuple[_T_a, _T_b]]:
     """Pairs up two lists into `{a, b}` tuples, stopping at the shorter.
 
 ## Parameters
@@ -189,7 +193,7 @@ def zip(xs: list, ys: list) -> list[tuple[object, object]]:
     return builtins.list(builtins.zip(xs, ys))
 
 
-def with_index(xs: list) -> list[tuple[object, int]]:
+def with_index(xs: list[_T_a]) -> list[tuple[_T_a, int]]:
     """Each element paired with its index: `{element, index}`.
 
 ## Parameters
@@ -202,7 +206,7 @@ def with_index(xs: list) -> list[tuple[object, int]]:
     return ([(x, i) for i, x in enumerate((xs))])
 
 
-def member_p(xs: list, x: object) -> bool:
+def member_p(xs: list[_T_a], x: _T_a) -> bool:
     """Whether `x` is an element.
 
 ## Parameters
@@ -213,7 +217,7 @@ def member_p(xs: list, x: object) -> bool:
     return ((x) in (xs))
 
 
-def all_p(xs: list, f: collections.abc.Callable) -> bool:
+def all_p(xs: list[_T_a], f: collections.abc.Callable) -> bool:
     """Whether `f` is truthy for every element.
 
 ## Parameters
@@ -224,7 +228,7 @@ def all_p(xs: list, f: collections.abc.Callable) -> bool:
     return (all((f)(x) for x in (xs)))
 
 
-def any_p(xs: list, f: collections.abc.Callable) -> bool:
+def any_p(xs: list[_T_a], f: collections.abc.Callable) -> bool:
     """Whether `f` is truthy for any element.
 
 ## Parameters
@@ -245,7 +249,7 @@ def empty_p(xs: list) -> bool:
     return builtins.len(xs) == 0
 
 
-def uniq(xs: list) -> list:
+def uniq(xs: list[_T_a]) -> list[_T_a]:
     """Removes duplicates, keeping first occurrences in order.
 
 ## Parameters
@@ -255,7 +259,7 @@ def uniq(xs: list) -> list:
     return (list(dict.fromkeys((xs))))
 
 
-def flat_map(xs: list, f: collections.abc.Callable) -> list:
+def flat_map(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_b]:
     """Maps `f` (which returns a list) and concatenates the results.
 
 ## Parameters
@@ -269,7 +273,7 @@ def flat_map(xs: list, f: collections.abc.Callable) -> list:
     return ([y for x in (xs) for y in (f)(x)])
 
 
-def each(xs: list, f: collections.abc.Callable) -> str:
+def each(xs: list[_T_a], f: collections.abc.Callable) -> str:
     """Runs `f` on each element for its side effects; returns :ok.
 
 ## Parameters
@@ -301,7 +305,7 @@ def max(xs: list) -> object:
     return builtins.max(xs)
 
 
-def find(xs: list, f: collections.abc.Callable) -> object:
+def find(xs: list[_T_a], f: collections.abc.Callable) -> _T_a | None:
     """The first element for which `f` is truthy, or nil.
 
 ## Parameters
@@ -326,7 +330,7 @@ def find_index(xs: list, f: collections.abc.Callable) -> int | None:
     return (next((i for i, x in enumerate((xs)) if (f)(x)), None))
 
 
-def frequencies(xs: list) -> dict[object, int]:
+def frequencies(xs: list[_T_a]) -> dict[_T_a, int]:
     """A map from each distinct element to its occurrence count.
 
 ## Parameters
@@ -339,7 +343,7 @@ def frequencies(xs: list) -> dict[object, int]:
     return builtins.dict(collections.Counter(xs))
 
 
-def group_by(xs: list, f: collections.abc.Callable) -> dict:
+def group_by(xs: list[_T_a], f: collections.abc.Callable) -> dict[_T_b, list[_T_a]]:
     """Groups elements by the key computed by `f`, preserving order.
 
 ## Parameters
@@ -353,7 +357,7 @@ def group_by(xs: list, f: collections.abc.Callable) -> dict:
     return ({k: [x for x in (xs) if (f)(x) == k] for k in dict.fromkeys((f)(x) for x in (xs))})
 
 
-def max_by(xs: list, f: collections.abc.Callable) -> object:
+def max_by(xs: list[_T_a], f: collections.abc.Callable) -> _T_a:
     """The element maximizing the key computed by `f`; raises on empty.
 
 ## Parameters
@@ -364,7 +368,7 @@ def max_by(xs: list, f: collections.abc.Callable) -> object:
     return builtins.max(xs, key=f)
 
 
-def min_by(xs: list, f: collections.abc.Callable) -> object:
+def min_by(xs: list[_T_a], f: collections.abc.Callable) -> _T_a:
     """The element minimizing the key computed by `f`; raises on empty.
 
 ## Parameters
@@ -385,7 +389,7 @@ def product(xs: list) -> int | float:
     return math.prod(xs)
 
 
-def take_while(xs: list, f: collections.abc.Callable) -> list:
+def take_while(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
     """Leading elements while `f` stays truthy.
 
 ## Parameters
@@ -396,7 +400,7 @@ def take_while(xs: list, f: collections.abc.Callable) -> list:
     return builtins.list(itertools.takewhile(f, xs))
 
 
-def drop_while(xs: list, f: collections.abc.Callable) -> list:
+def drop_while(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
     """Drops leading elements while `f` stays truthy, keeps the rest.
 
 ## Parameters
@@ -407,7 +411,7 @@ def drop_while(xs: list, f: collections.abc.Callable) -> list:
     return builtins.list(itertools.dropwhile(f, xs))
 
 
-def chunk_every(xs: list, n: int) -> list[list]:
+def chunk_every(xs: list[_T_a], n: int) -> list[list[_T_a]]:
     """Splits into chunks of `n` elements; the last chunk may be shorter.
 
 ## Parameters
@@ -421,7 +425,7 @@ def chunk_every(xs: list, n: int) -> list[list]:
     return ([(xs)[i:i + (n)] for i in range(0, len((xs)), (n))])
 
 
-def concat(xss: list[list]) -> list:
+def concat(xss: list[list[_T_a]]) -> list[_T_a]:
     """Concatenates a list of lists (one level).
 
 ## Parameters
@@ -431,7 +435,7 @@ def concat(xss: list[list]) -> list:
     return ([y for x in (xss) for y in x])
 
 
-def intersperse(xs: list, sep: object) -> list:
+def intersperse(xs: list[_T_a], sep: _T_a) -> list[_T_a]:
     """Puts `sep` between every two elements.
 
 ## Parameters
@@ -445,7 +449,7 @@ def intersperse(xs: list, sep: object) -> list:
     return ([v for x in (xs) for v in (x, (sep))][:-1])
 
 
-def slice(xs: list, start: int, count: int) -> list:
+def slice(xs: list[_T_a], start: int, count: int) -> list[_T_a]:
     """`count` elements starting at `start` (negative start counts from the end).
 
 ## Parameters
@@ -457,7 +461,7 @@ def slice(xs: list, start: int, count: int) -> list:
     return ((xs)[(start):] [:(count)])
 
 
-def dedup(xs: list) -> list:
+def dedup(xs: list[_T_a]) -> list[_T_a]:
     """Collapses consecutive duplicate elements.
 
 ## Parameters

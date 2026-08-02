@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-02
 updated: 2026-08-02
-revision: 2
+revision: 3
 requires: [1, 3, 7]
 replaces: []
 superseded-by: null
@@ -68,7 +68,9 @@ recognized in expressions but valid only inside `@spec`; elsewhere
 they are compile errors naming this GEP. A spec whose arity matches
 no clause of the following definition is a compile error.
 
-**GEP-0017-R002:** Type expressions and their Python mapping:
+**GEP-0017-R002:** Type expressions and their Python mapping.
+
+Scalars:
 
 | Gandora type | Python hint |
 | --- | --- |
@@ -79,17 +81,41 @@ no clause of the following definition is a compile error.
 | `string()` | `str` |
 | `atom()` | `str` |
 | `nil` | `None` |
-| `any()` | `object` |
+| `any()` / `term()` | `object` |
+
+Concrete containers:
+
+| Gandora type | Python hint |
+| --- | --- |
 | `list()` / `list(t)` | `list` / `list[t]` |
 | `map()` / `map(k, v)` | `dict` / `dict[k, v]` |
 | `tuple()` / `tuple(a, b, ...)` | `tuple` / `tuple[a, b, ...]` |
+| `keyword()` | `list[tuple[str, object]]` |
+
+Abstract containers — first-class, no host reference needed; prefer
+them in parameter positions (they are covariant where the concrete
+containers are invariant):
+
+| Gandora type | Python hint |
+| --- | --- |
+| `iterable()` / `iterable(t)` | `collections.abc.Iterable[t]` |
+| `sequence()` / `sequence(t)` | `collections.abc.Sequence[t]` |
+| `mapping()` / `mapping(k, v)` | `collections.abc.Mapping[k, v]` |
 | `fun()` | `collections.abc.Callable` |
+
+Compositions and the boundary:
+
+| Gandora type | Python hint |
+| --- | --- |
 | `a \| b` | `a \| b` |
 | `$mod.Type` | `mod.Type` (module import recorded) |
 | `$mod.Type(t, ...)` | `mod.Type[t, ...]` — parametrized host types |
 | `Mod.t()` | the struct class generated for `Mod` (GEP-0004) |
 
-Any other expression is a compile error naming this rule.
+`$mod.Type` is for host-*specific* types (`$np.ndarray`,
+`$re.Pattern`, `$decimal.Decimal`); the standard abstractions above
+are built in precisely so idiomatic specs never need a quoted module
+reference. Any other expression is a compile error naming this rule.
 
 **GEP-0017-R003:** Compilation annotates the generated Python
 function: a single plain-parameter clause receives parameter hints in
@@ -98,6 +124,16 @@ order plus the return hint; any group that dispatches through
 receives the return annotation on the dispatcher. Emission is
 deterministic and adds no imports beyond those the hints name. Specs
 MUST NOT produce runtime checks, wrappers, or module attributes.
+
+**GEP-0017-R005:** A bare lowercase name of at most two characters in
+a type position is a **type variable**: `@spec map(list(a), fun()) ::
+list(b)`. Every variable compiles to one module-level
+`typing.TypeVar` declaration (`_T_a = typing.TypeVar("_T_a")`),
+emitted deterministically, and repeated uses unify. A longer bare
+name is a compile error suggesting the `name()` spelling — the guard
+against a forgotten-parentheses typo silently becoming a variable.
+Elixir's `when a: var` clause is accepted future syntax, not yet
+required.
 
 **GEP-0017-R004:** Specs join the documentation channel: `gan doc`
 prints them above the prose, `gandora_core.doc` returns them as
@@ -148,6 +184,13 @@ LSP surfacing; and a pyright run over annotated output accepting a
 well-typed module.
 
 ## Change History
+
+- Revision 3, 2026-08-02: The abstract containers (`iterable`,
+  `sequence`, `mapping`) and `keyword()`/`term()` became built-in
+  types; type variables added (R005, compiled to `typing.TypeVar`);
+  R002 reorganized with the guidance that `$mod.Type` is for
+  host-specific types only, and `$mod.sub.Type` chains resolve by the
+  GEP-0003-R010 rule with no quoting needed.
 
 - Revision 2, 2026-08-02: R002 — parametrized host types
   `$mod.Type(t, ...)` map to subscripted hints, e.g.

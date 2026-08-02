@@ -2,10 +2,13 @@
 
 import builtins
 import collections.abc
+import typing
 import gandora_std.enum
 
+_T_a = typing.TypeVar("_T_a")
 
-def first(xs: list) -> object:
+
+def first(xs: list[_T_a]) -> _T_a | None:
     """The first element, or nil for an empty list.
 
 ## Parameters
@@ -15,7 +18,7 @@ def first(xs: list) -> object:
     return gandora_std.enum.at(xs, 0)
 
 
-def last(xs: list) -> object:
+def last(xs: list[_T_a]) -> _T_a | None:
     """The last element, or nil for an empty list.
 
 ## Parameters
@@ -58,7 +61,7 @@ def wrap(value: object) -> list:
         return [value]
 
 
-def duplicate(value: object, n: int) -> list:
+def duplicate(value: _T_a, n: int) -> list[_T_a]:
     """A list of `n` copies of `value`.
 
 ## Parameters
@@ -69,7 +72,7 @@ def duplicate(value: object, n: int) -> list:
     return ([(value)] * (n))
 
 
-def insert_at(xs: list, index: int, value: object) -> list:
+def insert_at(xs: list[_T_a], index: int, value: _T_a) -> list[_T_a]:
     """Inserts `value` at `index` (negative counts from the end, as in Elixir).
 
 ## Parameters
@@ -81,7 +84,7 @@ def insert_at(xs: list, index: int, value: object) -> list:
     return ((xs)[:(index)] + [(value)] + (xs)[(index):])
 
 
-def delete_at(xs: list, index: int) -> list:
+def delete_at(xs: list[_T_a], index: int) -> list[_T_a]:
     """Removes the element at `index`; out-of-range leaves the list unchanged.
 
 ## Parameters
@@ -102,7 +105,7 @@ def to_tuple(xs: list) -> tuple:
     return builtins.tuple(xs)
 
 
-def starts_with_p(xs: list, prefix: list) -> bool:
+def starts_with_p(xs: list[_T_a], prefix: list[_T_a]) -> bool:
     """Whether the list starts with `prefix`.
 
 ## Parameters
@@ -113,7 +116,7 @@ def starts_with_p(xs: list, prefix: list) -> bool:
     return ((xs)[:len((prefix))] == (prefix))
 
 
-def replace_at(xs: list, index: int, value: object) -> list:
+def replace_at(xs: list[_T_a], index: int, value: _T_a) -> list[_T_a]:
     """Replaces the element at `index` (negative counts from the end).
 
 ## Parameters
@@ -125,7 +128,7 @@ def replace_at(xs: list, index: int, value: object) -> list:
     return ((xs)[:(index)] + [(value)] + (xs)[(index):][1:])
 
 
-def update_at(xs: list, index: int, f: collections.abc.Callable) -> list:
+def update_at(xs: list[_T_a], index: int, f: collections.abc.Callable) -> list[_T_a]:
     """Updates the element at `index` by `f`.
 
 ## Parameters

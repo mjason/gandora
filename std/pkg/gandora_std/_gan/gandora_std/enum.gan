@@ -12,7 +12,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param f, "Applied to each element; the results form the new list."
   @param_trans f, zh_CN: "作用于每个元素，其结果构成新列表。"
-  @spec map(list(), fun()) :: list()
+  @spec map(list(a), fun()) :: list(b)
   def map(xs, f), do: $builtins.list($builtins.map(f, xs))
 
   @doc "Keeps elements for which `f` is truthy."
@@ -25,7 +25,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param f, "Keeps the elements it returns truthy for."
   @param_trans f, zh_CN: "保留使其返回真值的元素。"
-  @spec filter(list(), fun()) :: list()
+  @spec filter(list(a), fun()) :: list(a)
   def filter(xs, f), do: ~python([x for x in <%= xs %> if <%= f %>(x)])
 
   @doc "Drops elements for which `f` is truthy."
@@ -34,7 +34,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param f, "Drops the elements it returns truthy for."
   @param_trans f, zh_CN: "丢弃使其返回真值的元素。"
-  @spec reject(list(), fun()) :: list()
+  @spec reject(list(a), fun()) :: list(a)
   def reject(xs, f), do: ~python([x for x in <%= xs %> if not <%= f %>(x)])
 
   @doc "Folds left with Elixir argument order: `f` receives (element, acc)."
@@ -49,7 +49,7 @@ defmodule Enum do
   @param_trans acc, zh_CN: "初始累加值。"
   @param f, "Receives an element and the accumulator, returns the next accumulator."
   @param_trans f, zh_CN: "接收元素与累加值，返回新的累加值。"
-  @spec reduce(list(), any(), fun()) :: any()
+  @spec reduce(list(a), b, fun()) :: b
   def reduce(xs, acc, f) do
     $functools.reduce(fn a, x -> f.(x, a) end, xs, acc)
   end
@@ -85,14 +85,14 @@ defmodule Enum do
   @param_trans xs, zh_CN: "要排序的列表。"
   @param f, "Maps each element to its sort key."
   @param_trans f, zh_CN: "将元素映射为排序键。"
-  @spec sort_by(list(), fun()) :: list()
+  @spec sort_by(list(a), fun()) :: list(a)
   def sort_by(xs, f), do: $builtins.sorted(xs, key: f)
 
   @doc "Elements in reverse order."
   @doc_trans zh_CN: "逆序排列的元素。"
   @param xs, "The list to reverse."
   @param_trans xs, zh_CN: "要反转的列表。"
-  @spec reverse(list()) :: list()
+  @spec reverse(list(a)) :: list(a)
   def reverse(xs), do: ~python(list(reversed(<%= xs %>)))
 
   @doc "Joins elements (converted by `to_string`) with `sep`."
@@ -114,7 +114,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "要取值的列表。"
   @param index, "Zero-based; negative counts from the end."
   @param_trans index, zh_CN: "从 0 开始；负数自末尾计。"
-  @spec at(list(), integer()) :: any()
+  @spec at(list(a), integer()) :: a | nil
   def at(xs, index) do
     if index < $builtins.len(xs) and index >= -$builtins.len(xs) do
       ~python(<%= xs %>[<%= index %>])
@@ -129,7 +129,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param n, "How many leading elements to keep."
   @param_trans n, zh_CN: "保留的前缀长度。"
-  @spec take(list(), integer()) :: list()
+  @spec take(list(a), integer()) :: list(a)
   def take(xs, n), do: ~python(<%= xs %>[:<%= n %>])
 
   @doc "The elements after the first `n`."
@@ -138,7 +138,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param n, "How many leading elements to skip."
   @param_trans n, zh_CN: "跳过的前缀长度。"
-  @spec drop(list(), integer()) :: list()
+  @spec drop(list(a), integer()) :: list(a)
   def drop(xs, n), do: ~python(<%= xs %>[<%= n %>:])
 
   @doc "Pairs up two lists into `{a, b}` tuples, stopping at the shorter."
@@ -147,7 +147,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "第一个列表。"
   @param ys, "The second list."
   @param_trans ys, zh_CN: "第二个列表。"
-  @spec zip(list(), list()) :: list(tuple(any(), any()))
+  @spec zip(list(a), list(b)) :: list(tuple(a, b))
   def zip(xs, ys), do: $builtins.list($builtins.zip(xs, ys))
 
   @doc "Each element paired with its index: `{element, index}`."
@@ -158,7 +158,7 @@ defmodule Enum do
   """
   @param xs, "The list to enumerate."
   @param_trans xs, zh_CN: "要编号的列表。"
-  @spec with_index(list()) :: list(tuple(any(), integer()))
+  @spec with_index(list(a)) :: list(tuple(a, integer()))
   def with_index(xs), do: ~python([(x, i) for i, x in enumerate(<%= xs %>)])
 
   @doc "Whether `x` is an element."
@@ -167,7 +167,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "被查找的列表。"
   @param x, "The value to look for."
   @param_trans x, zh_CN: "要查找的值。"
-  @spec member?(list(), any()) :: boolean()
+  @spec member?(list(a), a) :: boolean()
   def member?(xs, x), do: ~python(<%= x %> in <%= xs %>)
 
   @doc "Whether `f` is truthy for every element."
@@ -176,7 +176,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "被检验的列表。"
   @param f, "The predicate every element must satisfy."
   @param_trans f, zh_CN: "每个元素都需满足的谓词。"
-  @spec all?(list(), fun()) :: boolean()
+  @spec all?(list(a), fun()) :: boolean()
   def all?(xs, f), do: ~python(all(<%= f %>(x) for x in <%= xs %>))
 
   @doc "Whether `f` is truthy for any element."
@@ -185,7 +185,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "被检验的列表。"
   @param f, "The predicate at least one element must satisfy."
   @param_trans f, zh_CN: "至少一个元素需满足的谓词。"
-  @spec any?(list(), fun()) :: boolean()
+  @spec any?(list(a), fun()) :: boolean()
   def any?(xs, f), do: ~python(any(<%= f %>(x) for x in <%= xs %>))
 
   @doc "Whether the collection has no elements."
@@ -199,7 +199,7 @@ defmodule Enum do
   @doc_trans zh_CN: "去重，按序保留首次出现者。"
   @param xs, "The list to deduplicate, keeping first occurrences."
   @param_trans xs, zh_CN: "要去重的列表，保留首次出现。"
-  @spec uniq(list()) :: list()
+  @spec uniq(list(a)) :: list(a)
   def uniq(xs), do: ~python(list(dict.fromkeys(<%= xs %>)))
 
   @doc "Maps `f` (which returns a list) and concatenates the results."
@@ -212,7 +212,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param f, "Returns a list per element; all are concatenated."
   @param_trans f, zh_CN: "对每个元素返回一个列表，随后拼接。"
-  @spec flat_map(list(), fun()) :: list()
+  @spec flat_map(list(a), fun()) :: list(b)
   def flat_map(xs, f), do: ~python([y for x in <%= xs %> for y in <%= f %>(x)])
 
   @doc "Runs `f` on each element for its side effects; returns :ok."
@@ -221,7 +221,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "要遍历的列表。"
   @param f, "Called on each element for its side effect."
   @param_trans f, zh_CN: "对每个元素调用以产生副作用。"
-  @spec each(list(), fun()) :: atom()
+  @spec each(list(a), fun()) :: atom()
   def each(xs, f) do
     ~python([<%= f %>(x) for x in <%= xs %>])
     :ok
@@ -250,7 +250,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "被查找的列表。"
   @param f, "The predicate; the first truthy match is returned."
   @param_trans f, zh_CN: "谓词；返回第一个使其为真的元素。"
-  @spec find(list(), fun()) :: any()
+  @spec find(list(a), fun()) :: a | nil
   def find(xs, f), do: ~python(next((x for x in <%= xs %> if <%= f %>(x)), None))
 
   @doc "The index of the first element for which `f` is truthy, or nil."
@@ -271,7 +271,7 @@ defmodule Enum do
   """
   @param xs, "The elements to tally."
   @param_trans xs, zh_CN: "要统计频次的元素。"
-  @spec frequencies(list()) :: map(any(), integer())
+  @spec frequencies(list(a)) :: map(a, integer())
   def frequencies(xs), do: $builtins.dict($collections.Counter(xs))
 
   @doc "Groups elements by the key computed by `f`, preserving order."
@@ -284,7 +284,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "要分组的元素。"
   @param f, "Maps an element to its group key."
   @param_trans f, zh_CN: "将元素映射为分组键。"
-  @spec group_by(list(), fun()) :: map()
+  @spec group_by(list(a), fun()) :: map(b, list(a))
   def group_by(xs, f),
     do: ~python({k: [x for x in <%= xs %> if <%= f %>(x) == k] for k in dict.fromkeys(<%= f %>(x) for x in <%= xs %>)})
 
@@ -294,7 +294,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "非空列表。"
   @param f, "Maps an element to its comparison key."
   @param_trans f, zh_CN: "将元素映射为比较键。"
-  @spec max_by(list(), fun()) :: any()
+  @spec max_by(list(a), fun()) :: a
   def max_by(xs, f), do: $builtins.max(xs, key: f)
 
   @doc "The element minimizing the key computed by `f`; raises on empty."
@@ -303,7 +303,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "非空列表。"
   @param f, "Maps an element to its comparison key."
   @param_trans f, zh_CN: "将元素映射为比较键。"
-  @spec min_by(list(), fun()) :: any()
+  @spec min_by(list(a), fun()) :: a
   def min_by(xs, f), do: $builtins.min(xs, key: f)
 
   @doc "The product of the elements (1 for an empty collection)."
@@ -319,7 +319,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param f, "Elements are taken while it returns truthy."
   @param_trans f, zh_CN: "持续取元素直到其返回假值。"
-  @spec take_while(list(), fun()) :: list()
+  @spec take_while(list(a), fun()) :: list(a)
   def take_while(xs, f), do: $builtins.list($itertools.takewhile(f, xs))
 
   @doc "Drops leading elements while `f` stays truthy, keeps the rest."
@@ -328,7 +328,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param f, "Elements are dropped while it returns truthy."
   @param_trans f, zh_CN: "持续丢弃元素直到其返回假值。"
-  @spec drop_while(list(), fun()) :: list()
+  @spec drop_while(list(a), fun()) :: list(a)
   def drop_while(xs, f), do: $builtins.list($itertools.dropwhile(f, xs))
 
   @doc "Splits into chunks of `n` elements; the last chunk may be shorter."
@@ -341,7 +341,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "要切分的列表。"
   @param n, "The chunk size; the last chunk may be shorter."
   @param_trans n, zh_CN: "每块大小；末块可更短。"
-  @spec chunk_every(list(), integer()) :: list(list())
+  @spec chunk_every(list(a), integer()) :: list(list(a))
   def chunk_every(xs, n),
     do: ~python([<%= xs %>[i:i + <%= n %>] for i in range(0, len(<%= xs %>), <%= n %>)])
 
@@ -349,7 +349,7 @@ defmodule Enum do
   @doc_trans zh_CN: "拼接列表的列表（单层）。"
   @param xss, "A list of lists to flatten one level."
   @param_trans xss, zh_CN: "要展平一层的列表的列表。"
-  @spec concat(list(list())) :: list()
+  @spec concat(list(list(a))) :: list(a)
   def concat(xss), do: ~python([y for x in <%= xss %> for y in x])
 
   @doc "Puts `sep` between every two elements."
@@ -362,7 +362,7 @@ defmodule Enum do
   @param_trans xs, zh_CN: "来源列表。"
   @param sep, "Inserted between every two elements."
   @param_trans sep, zh_CN: "插入相邻元素之间的值。"
-  @spec intersperse(list(), any()) :: list()
+  @spec intersperse(list(a), a) :: list(a)
   def intersperse(xs, sep), do: ~python([v for x in <%= xs %> for v in (x, <%= sep %>)][:-1])
 
   @doc "`count` elements starting at `start` (negative start counts from the end)."
@@ -373,7 +373,7 @@ defmodule Enum do
   @param_trans start, zh_CN: "起始下标（从 0 起）。"
   @param count, "Maximum number of elements."
   @param_trans count, zh_CN: "最多取出的元素个数。"
-  @spec slice(list(), integer(), integer()) :: list()
+  @spec slice(list(a), integer(), integer()) :: list(a)
   def slice(xs, start, count), do: ~python(<%= xs %>[<%= start %>:] [:<%= count %>])
 
   @doc "Collapses consecutive duplicate elements."
@@ -384,7 +384,7 @@ defmodule Enum do
   """
   @param xs, "The list whose adjacent duplicates collapse."
   @param_trans xs, zh_CN: "相邻重复元素折叠的列表。"
-  @spec dedup(list()) :: list()
+  @spec dedup(list(a)) :: list(a)
   def dedup(xs),
     do: ~python([x for i, x in enumerate(<%= xs %>) if i == 0 or x != <%= xs %>[i - 1]])
 end

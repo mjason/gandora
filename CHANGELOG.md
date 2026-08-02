@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.7.0 — 2026-08-02
+
+**The type language, tidied (GEP-0017 rev 3, GEP-0003 rev 3).**
+
+- **Type variables**: `@spec map(list(a), fun()) :: list(b)` — short
+  lowercase names are generics, compiled to module-level
+  `typing.TypeVar`s (3.11-compatible). Longer bare names error with a
+  `did you mean name()?` hint.
+- **Abstract containers built in**: `iterable(t)`, `sequence(t)`,
+  `mapping(k, v)`, plus `keyword()` and `term()` — no more
+  `$"collections.abc"` in idiomatic specs; prefer them in parameter
+  positions (covariant).
+- **Dotted `$` chains need no quoting**: the lowercase prefix is the
+  module path, imported whole — `$importlib.metadata.version(x)`,
+  `$collections.abc.Sequence`, `$os.path.join(a, b)` all just work;
+  `$"..."` remains only as an explicit override.
+- **std is generic**: 60+ signatures now carry type variables
+  (`Enum.reduce(list(a), b, fun()) :: b`,
+  `Map.get(map(k, v), k, d) :: v | d` — the default's type joins the
+  return). Comparable-bounded positions (`sort`, `min`, `max`) stay
+  grounded until bounded variables land. The typed surface still
+  passes pyright with 0 errors.
+
 ## v0.6.2 — 2026-08-02
 
 - **Parametrized host types in specs** (GEP-0017 rev 2):

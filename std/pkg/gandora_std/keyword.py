@@ -7,7 +7,7 @@ class GanMatchError(Exception):
     pass
 
 
-def get(kw: list, key: str) -> object:
+def get(kw: list[tuple[str, object]], key: str) -> object:
     """The first value for `key`, or nil.
 
 ## Parameters
@@ -21,7 +21,7 @@ def get(kw: list, key: str) -> object:
     return (next((v for k, v in (kw) if k == (key)), None))
 
 
-def put(kw: list, key: str, value: object) -> list:
+def put(kw: list[tuple[str, object]], key: str, value: object) -> list[tuple[str, object]]:
     """Replaces `key` with `value`, prepending it (Elixir Keyword.put).
 
 ## Parameters
@@ -38,7 +38,7 @@ def put(kw: list, key: str, value: object) -> list:
     return [(key, value)] + gandora_std.enum.reject(kw, _gan_fn0)
 
 
-def keys(kw: list) -> list[str]:
+def keys(kw: list[tuple[str, object]]) -> list[str]:
     """The keys, in order, duplicates included.
 
 ## Parameters
@@ -53,7 +53,7 @@ def keys(kw: list) -> list[str]:
     return gandora_std.enum.map(kw, _gan_fn1)
 
 
-def values(kw: list) -> list:
+def values(kw: list[tuple[str, object]]) -> list:
     """The values, in order.
 
 ## Parameters
@@ -68,7 +68,7 @@ def values(kw: list) -> list:
     return gandora_std.enum.map(kw, _gan_fn2)
 
 
-def has_key_p(kw: list, key: str) -> bool:
+def has_key_p(kw: list[tuple[str, object]], key: str) -> bool:
     """Whether `key` is present.
 
 ## Parameters
@@ -84,7 +84,7 @@ def has_key_p(kw: list, key: str) -> bool:
     return gandora_std.enum.any_p(kw, _gan_fn3)
 
 
-def delete(kw: list, key: str) -> list:
+def delete(kw: list[tuple[str, object]], key: str) -> list[tuple[str, object]]:
     """Removes every entry for `key`.
 
 ## Parameters
@@ -100,7 +100,7 @@ def delete(kw: list, key: str) -> list:
     return gandora_std.enum.reject(kw, _gan_fn4)
 
 
-def merge(kw1: list, kw2: list) -> list:
+def merge(kw1: list[tuple[str, object]], kw2: list[tuple[str, object]]) -> list[tuple[str, object]]:
     """Merges `kw2` into `kw1`; `kw2` wins, its entries appended.
 
 ## Parameters

@@ -283,6 +283,7 @@ struct FnDef {
 
 pub struct Codegen {
     file: String,
+    typevars: BTreeSet<String>,
     module_segs: Vec<String>,
     py_imports: BTreeSet<String>,
     gan_imports: BTreeSet<String>,
@@ -331,6 +332,7 @@ impl Codegen {
             installed_modules: BTreeMap::new(),
             struct_fields: None,
             warnings: Vec::new(),
+            typevars: BTreeSet::new(),
             compile_time_only: false,
             loop_stack: Vec::new(),
             tmp_counter: 0,
@@ -783,6 +785,12 @@ impl Codegen {
             out.push('\n');
             out.push_str(&helper_code);
         }
+        if !self.typevars.is_empty() {
+            out.push('\n');
+            for tv in &self.typevars {
+                out.push_str(&format!("{tv} = typing.TypeVar(\"{tv}\")\n"));
+            }
+        }
         if let Some(sc) = struct_code {
             out.push('\n');
             out.push_str(&sc);
@@ -946,6 +954,18 @@ impl Codegen {
     fn spec_hint(&mut self, t: &Term) -> Result<String> {
         match t {
             Term::Nil => Ok("None".to_string()),
+            // a short lowercase name is a type variable (GEP-0017-R005):
+            // compiled to a module-level typing.TypeVar
+            Term::Var(n, _) if n.len() <= 2 => {
+                self.py_imports.insert("typing".into());
+                let tv = format!("_T_{n}");
+                self.typevars.insert(tv.clone());
+                Ok(tv)
+            }
+            Term::Var(n, _) => Err(self.err(
+                Span::default(),
+                format!("'{n}' is not a type — did you mean {n}()? (GEP-0017-R002)"),
+            )),
             Term::Call(c) => match &c.callee {
                 // a named argument `name :: type` contributes its type
                 // (GEP-0018-R006)
@@ -962,7 +982,7 @@ impl Codegen {
                     ("boolean", 0) => Ok("bool".into()),
                     ("string", 0) => Ok("str".into()),
                     ("atom", 0) => Ok("str".into()),
-                    ("any", 0) => Ok("object".into()),
+                    ("any", 0) | ("term", 0) => Ok("object".into()),
                     ("list", 0) => Ok("list".into()),
                     ("list", 1) => Ok(format!("list[{}]", self.spec_hint(&c.args[0])?)),
                     ("map", 0) => Ok("dict".into()),
@@ -984,12 +1004,54 @@ impl Codegen {
                         self.py_imports.insert("collections.abc".into());
                         Ok("collections.abc.Callable".into())
                     }
+                    ("keyword", 0) => Ok("list[tuple[str, object]]".into()),
+                    ("iterable", 0) | ("sequence", 0) | ("mapping", 0) => {
+                        self.py_imports.insert("collections.abc".into());
+                        let class = match n.as_str() {
+                            "iterable" => "Iterable",
+                            "sequence" => "Sequence",
+                            _ => "Mapping",
+                        };
+                        Ok(format!("collections.abc.{class}"))
+                    }
+                    ("iterable", 1) | ("sequence", 1) => {
+                        self.py_imports.insert("collections.abc".into());
+                        let class = if n == "iterable" { "Iterable" } else { "Sequence" };
+                        Ok(format!(
+                            "collections.abc.{class}[{}]",
+                            self.spec_hint(&c.args[0])?
+                        ))
+                    }
+                    ("mapping", 2) => {
+                        self.py_imports.insert("collections.abc".into());
+                        Ok(format!(
+                            "collections.abc.Mapping[{}, {}]",
+                            self.spec_hint(&c.args[0])?,
+                            self.spec_hint(&c.args[1])?
+                        ))
+                    }
                     _ => Err(self.err(
                         c.span,
                         format!("'{n}' is not a type (GEP-0017-R002)"),
                     )),
                 },
                 Callee::Dot { base, name, .. } => match base.as_ref() {
+                    chain_base if pyref_chain(chain_base).is_some() => {
+                        let mut segs = pyref_chain(chain_base).unwrap();
+                        segs.push(name.clone());
+                        self.py_imports.insert(pyref_import_path(&segs));
+                        let path = segs.join(".");
+                        if c.args.is_empty() {
+                            Ok(path)
+                        } else {
+                            let parts: Vec<String> = c
+                                .args
+                                .iter()
+                                .map(|a| self.spec_hint(a))
+                                .collect::<Result<_>>()?;
+                            Ok(format!("{path}[{}]", parts.join(", ")))
+                        }
+                    }
                     // $mod.Type — the host's own types at the boundary;
                     // $mod.Type(t, ...) parametrizes: mod.Type[t, ...]
                     Term::PyRef(m) => {
@@ -2031,6 +2093,22 @@ impl Codegen {
                 is_call,
             } => {
                 match base.as_ref() {
+                    // $mod.sub.Type.member chains: the lowercase prefix is the
+                    // module path, imported whole (GEP-0003-R010)
+                    chain_base if pyref_chain(chain_base).is_some() => {
+                        let mut segs = pyref_chain(chain_base).unwrap();
+                        segs.push(name.clone());
+                        self.py_imports.insert(pyref_import_path(&segs));
+                        let mut path: Vec<String> = segs[..segs.len() - 1].to_vec();
+                        path.push(map_ident(name));
+                        let path = path.join(".");
+                        if *is_call {
+                            let args = self.emit_args(&call.args, pre)?;
+                            Ok(format!("{path}({args})"))
+                        } else {
+                            Ok(path)
+                        }
+                    }
                     // $module.fun(...) — remote reference (GEP-0003-R001/R002)
                     Term::PyRef(module) => {
                         self.py_imports.insert(module.clone());
@@ -3102,6 +3180,44 @@ pub fn params_section(info: &DocInfo, locale: &str, heading: &str) -> Option<Str
     Some(lines.join("\n"))
 }
 
+
+/// Fold a `$mod.seg.seg...` attribute chain rooted at a PyRef.
+/// Returns (segments) when the whole chain is plain attribute access.
+fn pyref_chain(term: &Term) -> Option<Vec<String>> {
+    match term {
+        Term::PyRef(m) => Some(vec![m.clone()]),
+        Term::Call(c) => match &c.callee {
+            Callee::Dot {
+                base,
+                name,
+                is_call: false,
+            } if c.args.is_empty() => {
+                let mut segs = pyref_chain(base)?;
+                segs.push(name.clone());
+                Some(segs)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The import path for a folded chain (GEP-0003-R010): the leading run of
+/// lowercase segments, stopping before the final segment — dotted
+/// submodules import whole, members resolve as attributes.
+fn pyref_import_path(segs: &[String]) -> String {
+    let mut end = 1;
+    while end < segs.len() - 1
+        && segs[end]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_lowercase() || c == '_')
+    {
+        end += 1;
+    }
+    segs[..end].join(".")
+}
+
 fn push_indented(out: &mut Vec<String>, lines: &[String]) {
     for l in lines {
         if l.is_empty() {
@@ -3199,6 +3315,46 @@ mod tests {
             "defmodule M do\n  @param_trans a, zh_CN: \"x\"\n  def f(a), do: a\nend",
         );
         assert!(err3.contains("GEP-0018-R003"), "{err3}");
+    }
+
+    #[test]
+    fn type_variables_compile_to_typevars() {
+        // GEP-0017-R005
+        let py = compile(
+            "defmodule M do\n  @spec pick(list(a), integer()) :: a | nil\n  def pick(xs, i), do: xs\nend",
+        );
+        assert!(py.contains("_T_a = typing.TypeVar(\"_T_a\")"), "{py}");
+        assert!(py.contains("def pick(xs: list[_T_a], i: int) -> _T_a | None:"), "{py}");
+        let err = compile_err(
+            "defmodule M do\n  @spec f(integer) :: integer()\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("did you mean integer()"), "{err}");
+    }
+
+    #[test]
+    fn abstract_container_types() {
+        // GEP-0017-R002 rev 3
+        let py = compile(
+            "defmodule M do\n  @spec total(sequence(number())) :: number()\n  def total(xs), do: xs\nend",
+        );
+        assert!(
+            py.contains("def total(xs: collections.abc.Sequence[int | float]) -> int | float:"),
+            "{py}"
+        );
+    }
+
+    #[test]
+    fn dotted_pyref_chains_import_the_module_path() {
+        // GEP-0003-R010
+        let py = compile(
+            "defmodule M do\n  def v(d), do: $importlib.metadata.version(d)\nend",
+        );
+        assert!(py.contains("import importlib.metadata"), "{py}");
+        assert!(py.contains("return importlib.metadata.version(d)"), "{py}");
+        let py2 = compile(
+            "defmodule M do\n  def c(x), do: $builtins.isinstance(x, $collections.abc.Sequence)\nend",
+        );
+        assert!(py2.contains("import collections.abc"), "{py2}");
     }
 
     #[test]

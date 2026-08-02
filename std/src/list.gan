@@ -6,14 +6,14 @@ defmodule List do
   @doc_trans zh_CN: "首元素，空列表为 nil。"
   @param xs, "The list."
   @param_trans xs, zh_CN: "列表。"
-  @spec first(list()) :: any()
+  @spec first(list(a)) :: a | nil
   def first(xs), do: Enum.at(xs, 0)
 
   @doc "The last element, or nil for an empty list."
   @doc_trans zh_CN: "末元素，空列表为 nil。"
   @param xs, "The list."
   @param_trans xs, zh_CN: "列表。"
-  @spec last(list()) :: any()
+  @spec last(list(a)) :: a | nil
   def last(xs), do: Enum.at(xs, -1)
 
   @doc "Flattens nested lists to any depth."
@@ -54,7 +54,7 @@ defmodule List do
   @param_trans value, zh_CN: "要重复的值。"
   @param n, "How many copies."
   @param_trans n, zh_CN: "份数。"
-  @spec duplicate(any(), integer()) :: list()
+  @spec duplicate(a, integer()) :: list(a)
   def duplicate(value, n), do: ~python([<%= value %>] * <%= n %>)
 
   @doc "Inserts `value` at `index` (negative counts from the end, as in Elixir)."
@@ -65,7 +65,7 @@ defmodule List do
   @param_trans index, zh_CN: "插入位置。"
   @param value, "The value to insert."
   @param_trans value, zh_CN: "要插入的值。"
-  @spec insert_at(list(), integer(), any()) :: list()
+  @spec insert_at(list(a), integer(), a) :: list(a)
   def insert_at(xs, index, value),
     do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:])
 
@@ -75,7 +75,7 @@ defmodule List do
   @param_trans xs, zh_CN: "列表。"
   @param index, "The position to remove."
   @param_trans index, zh_CN: "要删除的位置。"
-  @spec delete_at(list(), integer()) :: list()
+  @spec delete_at(list(a), integer()) :: list(a)
   def delete_at(xs, index),
     do: ~python(<%= xs %>[:<%= index %>] + <%= xs %>[<%= index %>:][1:])
   @doc "The list as a tuple."
@@ -91,7 +91,7 @@ defmodule List do
   @param_trans xs, zh_CN: "列表。"
   @param prefix, "The candidate prefix."
   @param_trans prefix, zh_CN: "候选前缀。"
-  @spec starts_with?(list(), list()) :: boolean()
+  @spec starts_with?(list(a), list(a)) :: boolean()
   def starts_with?(xs, prefix), do: ~python(<%= xs %>[:len(<%= prefix %>)] == <%= prefix %>)
 
   @doc "Replaces the element at `index` (negative counts from the end)."
@@ -102,7 +102,7 @@ defmodule List do
   @param_trans index, zh_CN: "要替换的位置。"
   @param value, "The new value."
   @param_trans value, zh_CN: "新值。"
-  @spec replace_at(list(), integer(), any()) :: list()
+  @spec replace_at(list(a), integer(), a) :: list(a)
   def replace_at(xs, index, value),
     do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:][1:])
 
@@ -118,6 +118,6 @@ defmodule List do
   @param_trans index, zh_CN: "要更新的位置。"
   @param f, "Applied to the current value."
   @param_trans f, zh_CN: "作用于当前值。"
-  @spec update_at(list(), integer(), fun()) :: list()
+  @spec update_at(list(a), integer(), fun()) :: list(a)
   def update_at(xs, index, f), do: replace_at(xs, index, f.(Enum.at(xs, index)))
 end
