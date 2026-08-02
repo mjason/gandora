@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.4.2",
+  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.5.0",
     text_document_sync_kind: $"lsprotocol.types".TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -146,9 +146,17 @@ defmodule Main do
       nil
     else
       {token, start} = hit
+      pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
+      py = PyIntel.target(doc.source, token, pyref)
       cond do
-        start > 0 and String.slice(line, start - 1, 1) == "$" ->
-          pyref_hover(token)
+        not is_nil(py) ->
+          {import_line, expr} = py
+          md = PyIntel.hover_markdown(root_path(), import_line, expr)
+          cond do
+            not is_nil(md) -> markdown_hover(md)
+            pyref -> pyref_hover(token)
+            true -> nil
+          end
         Map.has_key?(@construct_docs, token) ->
           markdown_hover("`#{token}`\n\n#{Map.get(@construct_docs, token)}")
         true ->
@@ -157,6 +165,10 @@ defmodule Main do
           render_hover(target, info)
       end
     end
+  end
+
+  defp root_path() do
+    @server.workspace.root_path
   end
 
   defp lookup_doc(target) do
@@ -236,32 +248,46 @@ defmodule Main do
       nil
     else
       {token, start} = hit
-      is_pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
-      target = if is_pyref do
-        nil
-      else
-        target_of(doc.source, token)
-      end
-      loc = if is_nil(target) do
-        nil
-      else
-        try do
-          core.definition(target, @server.workspace.root_path)
-        rescue
-          _e -> nil
+      pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
+      py = PyIntel.target(doc.source, token, pyref)
+      if not is_nil(py) do
+        {import_line, expr} = py
+        loc = PyIntel.goto(root_path(), import_line, expr)
+        if is_nil(loc) do
+          nil
+        else
+          pos = types.Position(
+            line: Map.get(loc, :line0),
+            character: Map.get(loc, :col0)
+          )
+          types.Location(
+            uri: "file://" <> Map.get(loc, :path),
+            range: types.Range(pos, pos)
+          )
         end
-      end
-      if is_nil(loc) do
-        nil
       else
-        pos = types.Position(
-          line: Enum.max([Map.get(loc, "line") - 1, 0]),
-          character: Enum.max([Map.get(loc, "col") - 1, 0])
-        )
-        types.Location(
-          uri: "file://" <> Map.get(loc, "path"),
-          range: types.Range(pos, pos)
-        )
+        target = target_of(doc.source, token)
+        loc = if is_nil(target) do
+          nil
+        else
+          try do
+            core.definition(target, root_path())
+          rescue
+            _e -> nil
+          end
+        end
+        if is_nil(loc) do
+          nil
+        else
+          pos = types.Position(
+            line: Enum.max([Map.get(loc, "line") - 1, 0]),
+            character: Enum.max([Map.get(loc, "col") - 1, 0])
+          )
+          types.Location(
+            uri: "file://" <> Map.get(loc, "path"),
+            range: types.Range(pos, pos)
+          )
+        end
       end
     end
   end
@@ -318,8 +344,35 @@ defmodule Main do
     $"lsprotocol.types".CompletionOptions(trigger_characters: ["."])
   )
   def completion(params) do
-    {_doc, line} = doc_and_line(params)
+    {doc, line} = doc_and_line(params)
     prefix = String.slice(line, 0, params.position.character)
+    pym = ~r/(\$?)([A-Za-z_][A-Za-z0-9_.]*)\.([A-Za-z0-9_]*)$/.search(prefix)
+    py = if is_nil(pym) do
+      nil
+    else
+      PyIntel.target(doc.source, pym.group(2) <> "." <> pym.group(3), pym.group(1) == "$")
+    end
+    if not is_nil(py) do
+      {import_line, expr} = py
+      PyIntel.complete(root_path(), import_line, expr)
+      |> Enum.map(fn c ->
+        types.CompletionItem(
+          label: Map.get(c, :name),
+          kind: py_completion_kind(Map.get(c, :kind))
+        )
+      end)
+    else
+      gandora_completion(prefix)
+    end
+  end
+
+  defp py_completion_kind("function"), do: $"lsprotocol.types".CompletionItemKind.Function
+  defp py_completion_kind("class"), do: $"lsprotocol.types".CompletionItemKind.Class
+  defp py_completion_kind("module"), do: $"lsprotocol.types".CompletionItemKind.Module
+  defp py_completion_kind("instance"), do: $"lsprotocol.types".CompletionItemKind.Value
+  defp py_completion_kind(_), do: $"lsprotocol.types".CompletionItemKind.Field
+
+  defp gandora_completion(prefix) do
     m = ~r/([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)\.([a-z_][A-Za-z0-9_]*)?$/.search(prefix)
     if is_nil(m) do
       []
@@ -378,6 +431,139 @@ defmodule Main do
         end
       _ -> []
     end
+  end
+
+  # ---- signature help (GEP-0015-R008) --------------------------------------
+
+  @decorate @server.feature(
+    $"lsprotocol.types".TEXT_DOCUMENT_SIGNATURE_HELP,
+    $"lsprotocol.types".SignatureHelpOptions(trigger_characters: ["(", ","])
+  )
+  def signature_help(params) do
+    {doc, line} = doc_and_line(params)
+    prefix = String.slice(line, 0, params.position.character)
+    call = open_call(prefix)
+    if is_nil(call) do
+      nil
+    else
+      {callee, active} = call
+      pyref = String.starts_with?(callee, "$")
+      token = callee.lstrip("$")
+      py = PyIntel.target(doc.source, token, pyref)
+      sigs = cond do
+        not is_nil(py) ->
+          {import_line, expr} = py
+          PyIntel.signatures(root_path(), import_line, expr)
+          |> Enum.map(fn s ->
+            build_signature(Map.get(s, :label), Map.get(s, :params), Map.get(s, :doc))
+          end)
+        true ->
+          target = target_of(doc.source, token)
+          info = lookup_doc(target)
+          gandora_signatures(info)
+      end
+      if Enum.empty?(sigs) do
+        nil
+      else
+        types.SignatureHelp(
+          signatures: sigs,
+          active_signature: 0,
+          active_parameter: active
+        )
+      end
+    end
+  end
+
+  # the innermost unclosed call before the cursor: {callee, arg_index}
+  defp open_call(prefix) do
+    found = loop {i, depth, commas} = {String.length(prefix) - 1, 0, 0} do
+      if i < 0 do
+        break(nil)
+      else
+        ch = String.slice(prefix, i, 1)
+        cond do
+          ch == ")" or ch == "]" or ch == "}" -> recur({i - 1, depth + 1, commas})
+          ch == "[" or ch == "{" -> recur({i - 1, Enum.max([depth - 1, 0]), commas})
+          ch == "," and depth == 0 -> recur({i - 1, depth, commas + 1})
+          ch == "(" and depth == 0 -> break({i, commas})
+          ch == "(" -> recur({i - 1, depth - 1, commas})
+          true -> recur({i - 1, depth, commas})
+        end
+      end
+    end
+    if is_nil(found) do
+      nil
+    else
+      {open_at, commas} = found
+      head = String.slice(prefix, 0, open_at)
+      m = ~r/(\$?[A-Za-z_][A-Za-z0-9_.!?]*)\s*$/.search(head)
+      if is_nil(m) do
+        nil
+      else
+        {m.group(1), commas}
+      end
+    end
+  end
+
+  defp build_signature(label, params, docline) do
+    types.SignatureInformation(
+      label: label,
+      documentation: docline,
+      parameters: Enum.map(params, fn p ->
+        types.ParameterInformation(label: p)
+      end)
+    )
+  end
+
+  defp gandora_signatures(info) do
+    if is_nil(info) do
+      []
+    else
+      prose = Map.get(info, "entries", %{}) |> Map.get("default")
+      docline = if is_nil(prose) do
+        nil
+      else
+        prose.strip().split("\n") |> Enum.at(0)
+      end
+      specs = Map.get(info, "specs", [])
+      heads = Map.get(info, "signatures", []) |> Enum.uniq()
+      label_doc = if Enum.empty?(specs) do
+        docline
+      else
+        specs |> Enum.join("\n")
+      end
+      Enum.map(heads, fn head ->
+        build_signature(head, head_params(head), label_doc)
+      end)
+    end
+  end
+
+  # parameter labels from a rendered head like "def mean(xs, precision \\ 2)"
+  defp head_params(head) do
+    m = ~r/\((.*)\)/.search(head)
+    if is_nil(m) do
+      []
+    else
+      inner = m.group(1)
+      split_top(inner)
+    end
+  end
+
+  defp split_top(inner) do
+    parts = loop {i, depth, cur, acc} = {0, 0, "", []} do
+      if i >= String.length(inner) do
+        break(acc ++ [cur])
+      else
+        ch = String.slice(inner, i, 1)
+        cond do
+          ch == "(" or ch == "[" or ch == "{" -> recur({i + 1, depth + 1, cur <> ch, acc})
+          ch == ")" or ch == "]" or ch == "}" -> recur({i + 1, depth - 1, cur <> ch, acc})
+          ch == "," and depth == 0 -> recur({i + 1, depth, "", acc ++ [cur]})
+          true -> recur({i + 1, depth, cur <> ch, acc})
+        end
+      end
+    end
+    parts |> Enum.map(fn p -> p.strip() end) |> Enum.reject(fn p -> p == "" end)
   end
 
   def main() do

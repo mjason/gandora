@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 4
+revision: 5
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -108,6 +108,19 @@ triggered on `.` after a module path completes its public functions
 and macros with signatures and doc summaries, via
 `gandora_core.symbols`.
 
+**GEP-0015-R009:** The Python side of the boundary is first-class:
+for `$module` references and `pyimport` aliases, hover shows the
+Python docstring, completion lists module members, definition jumps
+into the Python source, and signature help shows the full Python
+signature — resolved by jedi in the project's own environment,
+statically (the server never imports user modules to answer a query).
+
+**GEP-0015-R010:** `textDocument/signatureHelp` (triggered on `(` and
+`,`) serves the innermost open call: Gandora targets show every
+clause head as a signature with per-parameter labels, `@spec` lines
+(GEP-0017) as documentation, and the active parameter tracked by
+argument position; Python targets are served per R009.
+
 **GEP-0015-R004:** The repository ships a minimal VS Code client in
 `editors/vscode` that spawns `gan lsp` for `.gan` files; it contains
 no language logic.
@@ -157,6 +170,10 @@ the right span, a didChange that fixes it producing an empty list,
 didClose clearing, and shutdown/exit terminating with code 0.
 
 ## Change History
+
+- Revision 5, 2026-08-02: Added R009 (jedi-backed Python-side hover/
+  completion/definition/signatures) and R010 (signature help); hover
+  shows GEP-0017 specs.
 
 - Revision 4, 2026-08-02: Hover gained signatures, `$module` and
   construct cards (R005 expanded); added definition (R006),

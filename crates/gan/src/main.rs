@@ -610,6 +610,14 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
                     let info = pending.get_or_insert_with(codegen::DocInfo::default);
                     codegen::merge_doc_value(&file, c, info, "@doc")?;
                 }
+                "@spec" => {
+                    if let Some(v) = c.args.first() {
+                        pending
+                            .get_or_insert_with(codegen::DocInfo::default)
+                            .specs
+                            .push(format!("@spec {}", printer::print_expr(v)));
+                    }
+                }
                 "@doc_trans" => {
                     if let Some(info) = pending.as_mut() {
                         codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;
@@ -659,6 +667,9 @@ fn print_doc(label: &str, info: Option<codegen::DocInfo>, locale: Option<&str>) 
     match info {
         Some(info) if info.hidden => println!("{label} is hidden (@doc false)"),
         Some(info) => {
+            for spec in &info.specs {
+                println!("{spec}");
+            }
             let prose = lookup_locale(&info, locale);
             if prose.is_none() && info.meta.is_empty() && info.examples.is_empty() {
                 println!("{label} has no documentation");

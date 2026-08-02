@@ -281,6 +281,7 @@ fn doc(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
         let _ = meta.append(PyTuple::new_bound(py, [k, v]));
     }
     let _ = out.set_item("meta", meta);
+    let _ = out.set_item("specs", PyList::new_bound(py, &info.specs));
     let sigs: Vec<String> = match &fun {
         Some(f) => compiler::project::module_symbols(&config, &module_name)
             .unwrap_or_default()

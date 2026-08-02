@@ -665,6 +665,14 @@ pub fn find_doc(
                     let info = pending.get_or_insert_with(codegen::DocInfo::default);
                     codegen::merge_doc_value(&file, c, info, "@doc")?;
                 }
+                "@spec" => {
+                    if let Some(v) = c.args.first() {
+                        pending
+                            .get_or_insert_with(codegen::DocInfo::default)
+                            .specs
+                            .push(format!("@spec {}", crate::printer::print_expr(v)));
+                    }
+                }
                 "@doc_trans" => {
                     if let Some(info) = pending.as_mut() {
                         codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;

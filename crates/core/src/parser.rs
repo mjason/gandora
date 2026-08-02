@@ -58,6 +58,8 @@ fn infix_prec(op: &str) -> Option<(u8, bool)> {
     // (precedence, right_assoc)
     Some(match op {
         "=" => (P_MATCH, true),
+        "::" => (P_MATCH, true),
+        "|" => (P_MATCH, false),
         "when" => (P_WHEN, true),
         "\\\\" => (P_WHEN, false),
         "<-" => (P_ARROW_L, false),

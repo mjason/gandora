@@ -62,6 +62,8 @@ pub fn camel_to_snake(s: &str) -> String {
 /// A parsed `@doc`/`@moduledoc` value (GEP-0007-R001).
 #[derive(Debug, Clone, Default)]
 pub struct DocInfo {
+    /// rendered `@spec` lines for this definition (GEP-0017-R004)
+    pub specs: Vec<String>,
     /// locale tag -> markdown text; "default" is the fallback
     pub entries: Vec<(String, String)>,
     /// `@example` blocks: the only channel holding doctests
@@ -269,6 +271,7 @@ enum Dest {
 struct FnDef {
     name: String,
     private: bool,
+    spec: Option<Term>,
     doc: Option<DocInfo>,
     decorators: Vec<Term>,
     clauses: Vec<(Vec<Term>, Option<Term>, Term)>, // params, guard, body
@@ -387,6 +390,7 @@ impl Codegen {
 
         let mut moduledoc: Option<DocInfo> = None;
         let mut pending_doc: Option<DocInfo> = None;
+        let mut pending_spec: Option<Term> = None;
         let mut pending_decorators: Vec<Term> = Vec::new();
         let mut funs: Vec<FnDef> = Vec::new();
         let mut order: BTreeMap<String, usize> = BTreeMap::new();
@@ -441,6 +445,26 @@ impl Codegen {
                         )
                     })?;
                     merge_doc_trans(&self.file, call, info, "@moduledoc_trans")?;
+                }
+                "@spec" => {
+                    let value = call.args.first().ok_or_else(|| {
+                        self.err(call.span, "@spec requires `name(types) :: type` (GEP-0017-R001)")
+                    })?;
+                    let ok = matches!(value,
+                        Term::Call(c) if matches!(&c.callee, Callee::Name(n) if n == "::"));
+                    if !ok {
+                        return Err(self.err(
+                            call.span,
+                            "@spec requires `name(types) :: type` (GEP-0017-R001)",
+                        ));
+                    }
+                    if pending_spec.is_some() {
+                        return Err(self.err(
+                            call.span,
+                            "only one @spec may precede a definition (GEP-0017-R001)",
+                        ));
+                    }
+                    pending_spec = Some(value.clone());
                 }
                 "@decorate" => {
                     if let Some(e) = call.args.first() {
@@ -525,10 +549,13 @@ impl Codegen {
                         }
                     }
                     let idx = if let Some(&i) = order.get(&key) {
-                        if pending_doc.is_some() || !pending_decorators.is_empty() {
+                        if pending_doc.is_some()
+                            || pending_spec.is_some()
+                            || !pending_decorators.is_empty()
+                        {
                             return Err(self.err(
                                 call.span,
-                                "@doc/@decorate must precede the first clause of a function",
+                                "@doc/@spec/@decorate must precede the first clause of a function",
                             ));
                         }
                         i
@@ -536,6 +563,7 @@ impl Codegen {
                         funs.push(FnDef {
                             name: fname.clone(),
                             private: name == "defp",
+                            spec: pending_spec.take(),
                             doc: pending_doc.take(),
                             decorators: std::mem::take(&mut pending_decorators),
                             clauses: Vec::new(),
@@ -833,6 +861,99 @@ impl Codegen {
         Ok((name, params, guard, body))
     }
 
+
+    /// A GEP-0017-R002 type expression rendered as a Python hint.
+    fn spec_hint(&mut self, t: &Term) -> Result<String> {
+        match t {
+            Term::Nil => Ok("None".to_string()),
+            Term::Call(c) => match &c.callee {
+                Callee::Name(n) if n == "|" => {
+                    let a = self.spec_hint(&c.args[0])?;
+                    let b = self.spec_hint(&c.args[1])?;
+                    Ok(format!("{a} | {b}"))
+                }
+                Callee::Name(n) => match (n.as_str(), c.args.len()) {
+                    ("integer", 0) => Ok("int".into()),
+                    ("float", 0) => Ok("float".into()),
+                    ("number", 0) => Ok("int | float".into()),
+                    ("boolean", 0) => Ok("bool".into()),
+                    ("string", 0) => Ok("str".into()),
+                    ("atom", 0) => Ok("str".into()),
+                    ("any", 0) => Ok("object".into()),
+                    ("list", 0) => Ok("list".into()),
+                    ("list", 1) => Ok(format!("list[{}]", self.spec_hint(&c.args[0])?)),
+                    ("map", 0) => Ok("dict".into()),
+                    ("map", 2) => Ok(format!(
+                        "dict[{}, {}]",
+                        self.spec_hint(&c.args[0])?,
+                        self.spec_hint(&c.args[1])?
+                    )),
+                    ("tuple", 0) => Ok("tuple".into()),
+                    ("tuple", _) => {
+                        let parts: Vec<String> = c
+                            .args
+                            .iter()
+                            .map(|a| self.spec_hint(a))
+                            .collect::<Result<_>>()?;
+                        Ok(format!("tuple[{}]", parts.join(", ")))
+                    }
+                    ("fun", 0) => {
+                        self.py_imports.insert("collections.abc".into());
+                        Ok("collections.abc.Callable".into())
+                    }
+                    _ => Err(self.err(
+                        c.span,
+                        format!("'{n}' is not a type (GEP-0017-R002)"),
+                    )),
+                },
+                Callee::Dot { base, name, .. } => match base.as_ref() {
+                    // $mod.Type — the host's own types at the boundary
+                    Term::PyRef(m) => {
+                        self.py_imports.insert(m.clone());
+                        Ok(format!("{m}.{name}"))
+                    }
+                    // Mod.t() — the struct class generated for Mod (GEP-0004)
+                    Term::Alias(segs) if name == "t" => {
+                        let segs = segs.clone();
+                        Ok(self.struct_ref(&segs))
+                    }
+                    _ => Err(self.err(
+                        c.span,
+                        "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
+                    )),
+                },
+                _ => Err(self.err(
+                    c.span,
+                    "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
+                )),
+            },
+            other => Err(self.err(
+                other.span(),
+                "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
+            )),
+        }
+    }
+
+    /// Split a stored `@spec` term into (declared name, arg types, return).
+    fn spec_parts<'a>(&self, spec: &'a Term) -> Result<(String, Vec<&'a Term>, &'a Term)> {
+        let Term::Call(sc) = spec else { unreachable!() };
+        let head = &sc.args[0];
+        let ret = &sc.args[1];
+        match head {
+            Term::Call(hc) => match &hc.callee {
+                Callee::Name(n) => Ok((n.clone(), hc.args.iter().collect(), ret)),
+                _ => Err(self.err(
+                    sc.span,
+                    "@spec head must be `name(types)` (GEP-0017-R001)",
+                )),
+            },
+            _ => Err(self.err(
+                sc.span,
+                "@spec head must be `name(types)` (GEP-0017-R001)",
+            )),
+        }
+    }
+
     fn compile_fun(&mut self, f: &FnDef) -> Result<String> {
         let mut arities: Vec<usize> = f.clauses.iter().map(|(p, _, _)| p.len()).collect();
         arities.sort_unstable();
@@ -858,6 +979,38 @@ impl Codegen {
             }
             lines.push(format!("@{e}"));
         }
+        let spec_info = match &f.spec {
+            None => None,
+            Some(spec) => {
+                let (declared, arg_types, ret) = self.spec_parts(spec)?;
+                if declared != f.name {
+                    return Err(self.err(
+                        f.span,
+                        format!(
+                            "@spec names {declared} but the definition is {} (GEP-0017-R001)",
+                            f.name
+                        ),
+                    ));
+                }
+                if !arities.contains(&arg_types.len()) {
+                    return Err(self.err(
+                        f.span,
+                        format!(
+                            "@spec for {}/{} matches no clause (arities: {arity_label}) \
+                             (GEP-0017-R001)",
+                            f.name,
+                            arg_types.len()
+                        ),
+                    ));
+                }
+                let hints: Vec<String> = arg_types
+                    .iter()
+                    .map(|t| self.spec_hint(t))
+                    .collect::<Result<_>>()?;
+                let ret_hint = self.spec_hint(ret)?;
+                Some((hints, ret_hint))
+            }
+        };
         let simple = f.clauses.len() == 1
             && f.clauses[0].1.is_none()
             && f.clauses[0]
@@ -873,7 +1026,20 @@ impl Codegen {
                     _ => unreachable!(),
                 })
                 .collect();
-            lines.push(format!("def {py_name}({}):", names.join(", ")));
+            match &spec_info {
+                Some((hints, ret)) if hints.len() == names.len() => {
+                    let typed: Vec<String> = names
+                        .iter()
+                        .zip(hints)
+                        .map(|(n, h)| format!("{n}: {h}"))
+                        .collect();
+                    lines.push(format!("def {py_name}({}) -> {ret}:", typed.join(", ")));
+                }
+                Some((_, ret)) => {
+                    lines.push(format!("def {py_name}({}) -> {ret}:", names.join(", ")));
+                }
+                None => lines.push(format!("def {py_name}({}):", names.join(", "))),
+            }
             let mut body_lines = Vec::new();
             if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
                 body_lines.push(format!(
@@ -884,7 +1050,12 @@ impl Codegen {
             self.emit_stmt_block(body, Dest::Return, &mut body_lines)?;
             push_indented(&mut lines, &body_lines);
         } else {
-            lines.push(format!("def {py_name}(*_gan_args):"));
+            match &spec_info {
+                Some((_, ret)) => {
+                    lines.push(format!("def {py_name}(*_gan_args) -> {ret}:"))
+                }
+                None => lines.push(format!("def {py_name}(*_gan_args):")),
+            }
             let mut body_lines = Vec::new();
             if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
                 body_lines.push(format!(
@@ -1854,6 +2025,18 @@ impl Codegen {
     }
 
     fn emit_named_call(&mut self, name: &str, call: &Call, pre: &mut Vec<String>) -> Result<String> {
+        if name == "::" {
+            return Err(self.err(
+                call.span,
+                "'::' is only valid inside @spec (GEP-0017-R001)",
+            ));
+        }
+        if name == "|" && call.args.len() == 2 {
+            return Err(self.err(
+                call.span,
+                "'|' outside patterns is the @spec union operator (GEP-0017-R001)",
+            ));
+        }
         let args = &call.args;
         match (name, args.len()) {
             ("+", 2) | ("-", 2) | ("*", 2) => {
@@ -2315,6 +2498,7 @@ impl Codegen {
         let fname = format!("_gan_fn{}", self.fn_counter);
         self.fn_counter += 1;
         let fdef = FnDef {
+            spec: None,
             name: fname.clone(),
             private: false,
             doc: None,
@@ -2819,6 +3003,43 @@ mod tests {
         assert!(py.contains("def main():"), "{py}");
         assert!(py.contains("return print(\"Hello, world!\")"), "{py}");
         assert!(py.contains("if __name__ == \"__main__\":"), "{py}");
+    }
+
+    #[test]
+    fn specs_compile_to_annotations() {
+        // GEP-0017-R002/R003
+        let py = compile(
+            "defmodule M do\n  @spec add(integer(), number()) :: float()\n  def add(a, b), do: a + b\n\n  @spec pick(list(string()) | nil) :: string()\n  def pick([h | _]), do: h\n  def pick(nil), do: \"\"\nend",
+        );
+        assert!(py.contains("def add(a: int, b: int | float) -> float:"), "{py}");
+        assert!(py.contains("def pick(*_gan_args) -> str:"), "{py}");
+    }
+
+    #[test]
+    fn spec_interop_and_struct_types() {
+        let py = compile(
+            "defmodule M do\n  @spec load(string()) :: $decimal.Decimal | map()\n  def load(p), do: p\nend",
+        );
+        assert!(py.contains("def load(p: str) -> decimal.Decimal | dict:"), "{py}");
+        assert!(py.contains("import decimal"), "{py}");
+    }
+
+    #[test]
+    fn spec_arity_mismatch_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  @spec f(integer()) :: integer()\n  def f(a, b), do: a + b\nend",
+        );
+        assert!(err.contains("GEP-0017-R001"), "{err}");
+    }
+
+    #[test]
+    fn stray_spec_operators_are_errors() {
+        let err = compile_err(
+            "defmodule M do\n  def f(x) do\n    x :: integer()\n  end\nend",
+        );
+        assert!(err.contains("GEP-0017-R001"), "{err}");
+        let err2 = compile_err("defmodule M do\n  def f(x) do\n    x | 1\n  end\nend");
+        assert!(err2.contains("GEP-0017-R001"), "{err2}");
     }
 
     #[test]

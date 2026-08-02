@@ -101,6 +101,7 @@ def main():
             ("documentFormattingProvider", "R007"),
             ("documentSymbolProvider", "R008"),
             ("completionProvider", "R008"),
+            ("signatureHelpProvider", "R010"),
         ]:
             check(bool(caps.get(cap)), f"announces {cap} (GEP-0015-{rule})")
         s.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})

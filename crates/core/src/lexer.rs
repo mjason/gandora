@@ -182,7 +182,12 @@ impl<'a> Lexer<'a> {
             return Ok((self.lex_sigil()?, span));
         }
         if c == ':' {
-            // atom, or `::` (unsupported), or lone `:` is an error
+            // `::` is the spec operator (GEP-0017); then atom forms
+            if self.peek_at(1) == Some(':') {
+                self.bump();
+                self.bump();
+                return Ok((Tok::Op("::"), span));
+            }
             if self.peek_at(1) == Some('"') {
                 self.bump();
                 let tok = self.lex_string()?;

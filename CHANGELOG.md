@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.5.0 — 2026-08-02
+
+**Typespecs (GEP-0017).** `@spec mean(list(number()), integer()) ::
+float()` compiles to PEP 484 hints on the generated Python — typed
+APIs for Python callers, pyright/mypy work on compiled output
+unchanged, and `$mod.Type` annotates the interop boundary with the
+host's own types. Zero runtime; specs surface in `gan doc`,
+`gandora_core.doc`, and the LSP.
+
+**The LSP reaches Python (GEP-0015 rev 5).** For `$module` references
+and `pyimport` aliases: hover shows the Python docstring, completion
+lists module members, definition jumps into the Python source, and
+signature help shows full Python signatures — jedi-resolved in the
+project's own environment. New `textDocument/signatureHelp` also
+covers Gandora calls: clause heads with per-parameter labels, specs
+as documentation, active-parameter tracking.
+
 ## v0.4.2 — 2026-08-02
 
 **The language server grows up (GEP-0015 rev 4).** gan-lsp now serves:

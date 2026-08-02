@@ -26,17 +26,18 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.4.2"
+version = "0.5.0"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lsp"
-version = "0.4.2"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
     { name = "gandora-std" },
     { name = "gandora-tool" },
+    { name = "jedi" },
     { name = "pygls" },
 ]
 
@@ -45,17 +46,18 @@ requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
     { name = "gandora-std", directory = "../../std" },
     { name = "gandora-tool", directory = "../gan" },
+    { name = "jedi", specifier = ">=0.19" },
     { name = "pygls", specifier = ">=2" },
 ]
 
 [[package]]
 name = "gandora-std"
-version = "0.4.2"
+version = "0.5.0"
 source = { directory = "../../std" }
 
 [[package]]
 name = "gandora-tool"
-version = "0.4.2"
+version = "0.5.0"
 source = { directory = "../gan" }
 dependencies = [
     { name = "gandora-core" },
@@ -71,6 +73,18 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
+name = "jedi"
+version = "0.20.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parso" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/b7/a3635f6a2d7cf5b5dd98064fc1d5fbbafcb25477bcea204a3a92145d158b/jedi-0.20.0.tar.gz", hash = "sha256:c3f4ccbd276696f4b19c54618d4fb18f9fc24b0aef02acf704b23f487daa1011", size = 3119416, upload-time = "2026-05-01T23:38:47.814Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/93/242e2eab5fe682ffcb8b0084bde703a41d51e17ee0f3a31ff0d9d813620a/jedi-0.20.0-py2.py3-none-any.whl", hash = "sha256:7bdd9c2634f56713299976f4cbd59cb3fa92165cc5e05ea811fb253480728b67", size = 4884812, upload-time = "2026-05-01T23:38:43.919Z" },
+]
+
+[[package]]
 name = "lsprotocol"
 version = "2025.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -81,6 +95,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e9/26/67b84e6ec1402f0e6764ef3d2a0aaf9a79522cc1d37738f4e5bb0b21521a/lsprotocol-2025.0.0.tar.gz", hash = "sha256:e879da2b9301e82cfc3e60d805630487ac2f7ab17492f4f5ba5aaba94fe56c29", size = 74896, upload-time = "2025-06-17T21:30:18.156Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/f0/92f2d609d6642b5f30cb50a885d2bf1483301c69d5786286500d15651ef2/lsprotocol-2025.0.0-py3-none-any.whl", hash = "sha256:f9d78f25221f2a60eaa4a96d3b4ffae011b107537facee61d3da3313880995c7", size = 76250, upload-time = "2025-06-17T21:30:19.455Z" },
+]
+
+[[package]]
+name = "parso"
+version = "0.8.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/4b/90c937815137d43ce71ba043cd3566221e9df6b9c805f24b5d138c9d40a7/parso-0.8.7.tar.gz", hash = "sha256:eaaac4c9fdd5e9e8852dc778d2d7405897ec510f2a298071453e5e3a07914bb1", size = 401824, upload-time = "2026-05-01T23:13:02.138Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/5d/8268b644392ee874ee82a635cd0df1773de230bde356c38de28e298392cc/parso-0.8.7-py2.py3-none-any.whl", hash = "sha256:a8926eb2a1b915486941fdbd31e86a4baf88fe8c210f25f2f35ecec5b574ca1c", size = 107025, upload-time = "2026-05-01T23:12:58.867Z" },
 ]
 
 [[package]]
