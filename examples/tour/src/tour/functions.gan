@@ -15,8 +15,8 @@ defmodule Tour.Functions do
       _ -> :neg
     end
 
-    add = &(&1 + &2)        # capture with placeholders
-    sqrt = &$math.sqrt/1    # capture a Python function by name/arity
+    add = &(&1 + &2) # capture with placeholders
+    sqrt = &($math.sqrt/1) # capture a Python function by name/arity
 
     IO.puts("double.(21)  = #{double.(21)}")
     IO.puts("classify     = #{inspect([classify.(0), classify.(5), classify.(-5)])}")

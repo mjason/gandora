@@ -15,6 +15,7 @@ import sys
 import gandora_std.enum
 import gandora_std.map
 import gandora_std.string
+import gandora_tool.fmt
 
 
 def _gan_truthy(value):
@@ -23,7 +24,7 @@ def _gan_truthy(value):
 class GanMatchError(Exception):
     pass
 
-usage = "gan - the Gandora task runner\n\nUsage:\n  gan build | check | run <file> [args...] | exec <code> | repl\n  gan init <path> | version\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
+usage = "gan - the Gandora task runner\n\nUsage:\n  gan build | check | run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | init <path> | version\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
 
 gandora_jsonc = "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\"\n}\n"
 
@@ -55,11 +56,13 @@ def main():
             return _die_usage("exec requires code")
         case ["repl", *_] as _gan_l9 if isinstance(_gan_l9, list):
             return repl()
-        case ["init", path, *_] as _gan_l10 if isinstance(_gan_l10, list):
+        case ["fmt", *rest] as _gan_l10 if isinstance(_gan_l10, list):
+            return gandora_tool.fmt.run(rest)
+        case ["init", path, *_] as _gan_l11 if isinstance(_gan_l11, list):
             return init(path)
-        case ["init"] as _gan_l11 if isinstance(_gan_l11, list):
+        case ["init"] as _gan_l12 if isinstance(_gan_l12, list):
             return _die_usage("init requires a path")
-        case [cmd, *rest] as _gan_l12 if isinstance(_gan_l12, list):
+        case [cmd, *rest] as _gan_l13 if isinstance(_gan_l13, list):
             return _delegate(cmd, rest)
         case _:
             raise GanMatchError("no case clause matched: " + repr(_gan_case0))
@@ -106,11 +109,11 @@ def build():
 def check():
     diags = core.check(_root())
     def _gan_fn0(d):
-        _gan_fstr17 = gandora_std.map.get(d, "severity")
-        _gan_fstr18 = gandora_std.map.get(d, "path")
-        _gan_fstr19 = gandora_std.map.get(d, "line")
-        _gan_fstr20 = gandora_std.map.get(d, "message")
-        return print(f"{_gan_fstr17}: {_gan_fstr18}:{_gan_fstr19}: {_gan_fstr20}")
+        _gan_fstr18 = gandora_std.map.get(d, "severity")
+        _gan_fstr19 = gandora_std.map.get(d, "path")
+        _gan_fstr20 = gandora_std.map.get(d, "line")
+        _gan_fstr21 = gandora_std.map.get(d, "message")
+        return print(f"{_gan_fstr18}: {_gan_fstr19}:{_gan_fstr20}: {_gan_fstr21}")
     gandora_std.enum.each(diags, _gan_fn0)
     errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
     if _gan_truthy(gandora_std.enum.empty_p(errors)):
@@ -129,8 +132,8 @@ def run(file, args):
             print(f"gan: {file} is not a module of this project")
             return sys.exit(1)
         elif _gan_truthy((gandora_std.map.get(target, "python") is None)):
-            _gan_fstr21 = gandora_std.map.get(target, "module")
-            print(f"gan: {_gan_fstr21} defines only macros; nothing to run")
+            _gan_fstr22 = gandora_std.map.get(target, "module")
+            print(f"gan: {_gan_fstr22} defines only macros; nothing to run")
             return sys.exit(1)
         else:
             code = subprocess.call([_project_python(), "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
@@ -146,26 +149,26 @@ def exec_code(code):
 def repl():
     print(f"gan repl (gandora-core {core.version()}) — Ctrl-D to exit")
     ns = builtins.dict()
-    _gan_loop22 = 0
-    _gan_res23 = None
+    _gan_loop23 = 0
+    _gan_res24 = None
     while True:
-        n = _gan_loop22
+        n = _gan_loop23
         try:
-            _gan_tmp24 = builtins.input("gan> ")
+            _gan_tmp25 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp24 = "eof"
+            _gan_tmp25 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp24 = "eof"
-        line = _gan_tmp24
+            _gan_tmp25 = "eof"
+        line = _gan_tmp25
         if line == "eof":
-            _gan_res23 = n
+            _gan_res24 = n
             break
         elif gandora_std.string.trim(line) == "":
-            _gan_loop22 = n
+            _gan_loop23 = n
             continue
         else:
             _eval_line(line, ns)
-            _gan_loop22 = n + 1
+            _gan_loop23 = n + 1
             continue
         break
     return print("")

@@ -203,6 +203,46 @@ fn compile_string(source: &str, path: &str, root: Option<&str>) -> PyResult<Stri
     cg.compile(&expanded).map_err(raise)
 }
 
+
+/// The full lexical stream for tooling (GEP-0016-R001): comments kept,
+/// newlines uncollapsed, end spans included.
+#[pyfunction]
+#[pyo3(signature = (source, path = "nofile"))]
+fn tokens(py: Python, source: &str, path: &str) -> PyResult<PyObject> {
+    use compiler::lexer::{Lexer, Tok};
+    let toks = Lexer::new(path, source)
+        .tokenize_full()
+        .map_err(raise)?;
+    let out = PyList::empty_bound(py);
+    for (tok, start, end) in &toks {
+        let (kind, value): (&str, String) = match tok {
+            Tok::Int(n) => ("int", n.to_string()),
+            Tok::Float(f) => ("float", f.to_string()),
+            Tok::Str(parts) => ("str", format!("{parts:?}")),
+            Tok::Sigil(name, parts) => ("sigil", format!("~{name}{parts:?}")),
+            Tok::Atom(a) => ("atom", a.clone()),
+            Tok::PyRef(m) => ("pyref", m.clone()),
+            Tok::Ident(i) => ("ident", i.clone()),
+            Tok::UpIdent(i) => ("upident", i.clone()),
+            Tok::KwKey(k) => ("kwkey", k.clone()),
+            Tok::Comment(c) => ("comment", c.clone()),
+            Tok::Op(o) => ("op", o.to_string()),
+            Tok::Kw(k) => ("kw", k.to_string()),
+            Tok::Newline => ("newline", String::new()),
+            Tok::Eof => ("eof", String::new()),
+        };
+        let e = PyDict::new_bound(py);
+        let _ = e.set_item("kind", kind);
+        let _ = e.set_item("value", value);
+        let _ = e.set_item("line", start.line);
+        let _ = e.set_item("col", start.col);
+        let _ = e.set_item("end_line", end.line);
+        let _ = e.set_item("end_col", end.col);
+        let _ = out.append(e);
+    }
+    Ok(out.into_py(py))
+}
+
 #[pyfunction]
 #[pyo3(signature = (source, path = "nofile", root = None))]
 fn diagnostics(py: Python, source: &str, path: &str, root: Option<&str>) -> PyResult<PyObject> {
@@ -298,6 +338,7 @@ fn gandora_core(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(expand, m)?)?;
     m.add_function(wrap_pyfunction!(compile_string, m)?)?;
     m.add_function(wrap_pyfunction!(diagnostics, m)?)?;
+    m.add_function(wrap_pyfunction!(tokens, m)?)?;
     m.add_function(wrap_pyfunction!(compile_snippet, m)?)?;
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
     m.add_function(wrap_pyfunction!(build, m)?)?;

@@ -77,6 +77,9 @@ jobs:
           cd tools/gan
           uv sync
           ../../target/release/ganc build
+          uv sync --reinstall-package gandora-tool
+          python tests/fmt_conformance.py .venv/bin/gan .venv/bin/python
+          .venv/bin/gan fmt --check src ../lsp/src ../../std/src ../../examples/tour/src
           uv build --out-dir ../../dist-tool
       - name: compile gan-lsp with ganc, then package
         run: |

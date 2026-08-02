@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.0 — 2026-08-02
+
+- **`gan fmt` (GEP-0016)**: conservative formatting written in
+  Gandora — structural indentation (do/end, brackets, clause arrows,
+  pipeline alignment, hanging continuations), horizontal whitespace,
+  blank-line collapse, trailing-whitespace/final-newline hygiene, and
+  `&$mod.fun/1` -> `&($mod.fun/1)` capture parenthesization. Never
+  joins or splits lines; heredoc/sigil bodies shift as a unit. Safety:
+  a rewrite whose comments or parsed terms differ from the original
+  is refused (R006). `--check` for CI; the repository formats itself.
+- New `gandora_core.tokens` API (GEP-0016-R001): the full lexical
+  stream with comments, raw newlines, and end spans.
+- The whole repository is now `gan fmt`-clean, enforced in CI.
+
 ## v0.3.0 — 2026-08-02
 
 **Breaking: Python interop moves from `:module` to `$module`

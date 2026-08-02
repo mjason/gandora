@@ -37,12 +37,12 @@ defmodule Tour.Patterns do
   # with: chain of matches, else on the first failure
   def parse_pair(text) do
     with [a, b] <- text.split(","),
-         {:ok, x} <- parse_int(a),
-         {:ok, y} <- parse_int(b) do
-      {:ok, {x, y}}
-    else
-      _ -> :error
-    end
+      {:ok, x} <- parse_int(a),
+      {:ok, y} <- parse_int(b) do
+        {:ok, {x, y}}
+      else
+        _ -> :error
+      end
   end
 
   defp parse_int(s) do

@@ -19,16 +19,16 @@ defmodule Tour.Basics do
   end
 
   def arithmetic() do
-    a = 7 + 3 * 2        # 13, Elixir precedence
-    b = 10 / 4           # 2.5, / is true division
-    c = 10 // 4          # 2, truncated division (same as div(10, 4))
-    d = rem(-7, 2)       # -1, truncated remainder (Python % would give 1)
+    a = 7 + 3 * 2 # 13, Elixir precedence
+    b = 10 / 4 # 2.5, / is true division
+    c = 10 // 4 # 2, truncated division (same as div(10, 4))
+    d = rem(-7, 2) # -1, truncated remainder (Python % would give 1)
     {a, b, c, d}
   end
 
   def strings(name) do
     greeting = "Hello, #{name}!"     # interpolation -> f-string
-    upper = greeting.upper()         # any Python method, no wrapper
+    upper = greeting.upper() # any Python method, no wrapper
     joined = "a b c" <> " d"         # <> is string concatenation
     {greeting, upper, joined}
   end
@@ -46,7 +46,7 @@ defmodule Tour.Basics do
     IO.puts("literals:   #{inspect(literals())}")
     IO.puts("arithmetic: #{inspect(arithmetic())}")
     IO.puts("strings:    #{inspect(strings("gandora"))}")
-    IO.puts(truthiness(0))       # 0 is truthy in Gandora
+    IO.puts(truthiness(0)) # 0 is truthy in Gandora
     IO.puts(truthiness(nil))
     total = 1..10 |> $builtins.list() |> $builtins.sum()
     IO.puts("sum of 1..10 = #{total}")

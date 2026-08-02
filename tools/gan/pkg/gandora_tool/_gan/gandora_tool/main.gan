@@ -15,7 +15,7 @@ defmodule Main do
 
   Usage:
     gan build | check | run <file> [args...] | exec <code> | repl
-    gan init <path> | version
+    gan fmt [--check] [path...] | init <path> | version
     gan <plugin> ...        delegates to gan-<plugin>, then to ganc
   """
 
@@ -33,6 +33,7 @@ defmodule Main do
       ["exec", code | _] -> exec_code(code)
       ["exec"] -> die_usage("exec requires code")
       ["repl" | _] -> repl()
+      ["fmt" | rest] -> Fmt.run(rest)
       ["init", path | _] -> init(path)
       ["init"] -> die_usage("init requires a path")
       [cmd | rest] -> delegate(cmd, rest)

@@ -18,6 +18,8 @@ pub enum Tok {
     UpIdent(String),
     /// `name:` keyword key
     KwKey(String),
+    /// a `#` comment to end of line (only in `tokenize_full` streams)
+    Comment(String),
     /// operators and punctuation, e.g. "+", "|>", "(", "%{"
     Op(&'static str),
     /// structural keywords: do end fn else when and or not true false nil
@@ -44,6 +46,7 @@ pub struct Lexer<'a> {
     pos: usize,
     line: u32,
     col: u32,
+    keep_comments: bool,
 }
 
 impl<'a> Lexer<'a> {
@@ -54,6 +57,7 @@ impl<'a> Lexer<'a> {
             pos: 0,
             line: 1,
             col: 1,
+            keep_comments: false,
         }
     }
 
@@ -72,6 +76,23 @@ impl<'a> Lexer<'a> {
                 }
             }
             out.push((tok, span));
+            if is_eof {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
+    /// The full lexical stream for tooling (GEP-0016-R001): comments kept,
+    /// newlines uncollapsed, and an end span per token.
+    pub fn tokenize_full(mut self) -> Result<Vec<(Tok, Span, Span)>> {
+        self.keep_comments = true;
+        let mut out = Vec::new();
+        loop {
+            let (tok, span) = self.next_token()?;
+            let end = self.span();
+            let is_eof = tok == Tok::Eof;
+            out.push((tok, span, end));
             if is_eof {
                 break;
             }
@@ -115,6 +136,18 @@ impl<'a> Lexer<'a> {
                     self.bump();
                 }
                 Some('#') => {
+                    if self.keep_comments {
+                        let span = self.span();
+                        let mut text = String::new();
+                        while let Some(c) = self.peek() {
+                            if c == '\n' {
+                                break;
+                            }
+                            text.push(c);
+                            self.bump();
+                        }
+                        return Ok((Tok::Comment(text), span));
+                    }
                     while let Some(c) = self.peek() {
                         if c == '\n' {
                             break;

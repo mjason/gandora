@@ -1,0 +1,26 @@
+defmodule Messy do
+  @moduledoc """
+  docs stay put
+  """
+
+  def add(a, b) do
+    x = a+b
+    x
+  end
+
+  def pick(xs) do
+    case xs do
+      [] -> :none
+      [h | _] ->
+        {:ok, h}
+    end
+  end
+
+  def sq(), do: &($math.sqrt/1)
+
+  def pipeline(xs) do
+    xs
+    |> Enum.map(fn x -> x * 2 end)
+    |> Enum.sum()
+  end
+end

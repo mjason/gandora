@@ -1,0 +1,454 @@
+defmodule Fmt do
+  @moduledoc """
+  gan fmt (GEP-0016): conservative source formatting over the
+  gandora_core token stream. Rewrites indentation and horizontal
+  whitespace only — never joins or splits lines — and refuses to
+  write anything whose comments or parsed terms differ from the
+  original (R006).
+  """
+
+  pyimport gandora_core, as: core
+
+  # ---- entry ---------------------------------------------------------------
+
+  def run(args) do
+    check = Enum.member?(args, "--check")
+    paths = Enum.reject(args, fn a -> String.starts_with?(a, "--") end)
+    files = collect_files(paths)
+    if Enum.empty?(files) do
+      IO.puts("gan fmt: no .gan files found")
+      $sys.exit(1)
+    end
+    results = Enum.map(files, fn f -> format_file(f, check) end)
+    changed = Enum.filter(results, fn {_, status} -> status == :changed end)
+    errors = Enum.filter(results, fn {_, status} -> status == :error end)
+    cond do
+      not Enum.empty?(errors) ->
+        $sys.exit(2)
+      check and not Enum.empty?(changed) ->
+        Enum.each(changed, fn {f, _} -> IO.puts("would reformat #{f}") end)
+        $sys.exit(1)
+      true ->
+        IO.puts("#{Enum.count(changed)} file(s) reformatted, #{Enum.count(files)} checked")
+    end
+  end
+
+  defp collect_files(paths) do
+    roots = if Enum.empty?(paths) do
+      ["src"]
+    else
+      paths
+    end
+    Enum.flat_map(roots, fn p ->
+      path = $pathlib.Path(p)
+      cond do
+        path.is_dir() ->
+          Enum.sort(Enum.map($builtins.list(path.rglob("*.gan")), fn f -> to_string(f) end))
+        String.ends_with?(p, ".gan") -> [p]
+        true -> []
+      end
+    end)
+  end
+
+  defp format_file(file, check) do
+    text = $pathlib.Path(file).read_text()
+    case format_text(text) do
+      {:ok, new} ->
+        cond do
+          new == text -> {file, :unchanged}
+          check -> {file, :changed}
+          true ->
+            case verify(text, new) do
+              :ok ->
+                $pathlib.Path(file).write_text(new)
+                IO.puts("reformatted #{file}")
+                {file, :changed}
+              {:error, why} ->
+                IO.puts("gan fmt: internal error on #{file}: #{why} (GEP-0016-R006); file left unchanged")
+                {file, :error}
+            end
+        end
+      {:skip, why} ->
+        IO.puts("gan fmt: skipped #{file}: #{why}")
+        {file, :unchanged}
+    end
+  end
+
+  # ---- verification (R006) -------------------------------------------------
+
+  defp verify(old_text, new_text) do
+    cond do
+      comments_of(old_text) != comments_of(new_text) ->
+        {:error, "comment sequence changed"}
+      strip_meta(core.parse(old_text)) != strip_meta(core.parse(new_text)) ->
+        {:error, "parsed terms changed"}
+      true -> :ok
+    end
+  end
+
+  defp comments_of(text) do
+    core.tokens(text)
+    |> Enum.filter(fn t -> Map.get(t, "kind") == "comment" end)
+    |> Enum.map(fn t -> Map.get(t, "value").rstrip() end)
+  end
+
+  defp strip_meta(t) do
+    cond do
+      $builtins.isinstance(t, $builtins.tuple) and $builtins.len(t) == 3 ->
+        {strip_meta(elem(t, 0)), strip_meta(elem(t, 2))}
+      $builtins.isinstance(t, $builtins.tuple) ->
+        $builtins.tuple(Enum.map($builtins.list(t), fn x -> strip_meta(x) end))
+      $builtins.isinstance(t, $builtins.list) ->
+        Enum.map(t, fn x -> strip_meta(x) end)
+      true -> t
+    end
+  end
+
+  # ---- formatting ----------------------------------------------------------
+
+  def format_text(text) do
+    parsed = try do
+      core.parse(text)
+      :ok
+    rescue
+      _e in core.CompileError -> :parse_error
+    end
+    if parsed == :parse_error do
+      {:skip, "does not parse"}
+    else
+      {:ok, reflow(text)}
+    end
+  end
+
+  defp reflow(text) do
+    toks = Enum.reject(core.tokens(text), fn t ->
+      Map.get(t, "kind") == "eof" or Map.get(t, "kind") == "newline"
+    end)
+    lines = text.split("\n")
+    interior = interior_lines(toks)
+    buckets = bucket_by_line(toks)
+    n = Enum.count(lines)
+    out = loop {i, stack, prev_kind, prev_last, prev_hang, deltas, acc} =
+      {1, [], :blank_start, nil, false, %{}, []} do
+        if i > n do
+          break(Enum.reverse(acc))
+        else
+          line = Enum.at(lines, i - 1)
+          lt = Map.get(buckets, i, [])
+          cond do
+            Map.has_key?(interior, i) ->
+              # inside a multi-line string: shift by the opener's delta (R005)
+              d = Map.get(deltas, Map.get(interior, i), 0)
+              recur({i + 1, stack, :code, prev_last, prev_hang, deltas, [shift(line, d)] ++ acc})
+            Enum.empty?(lt) ->
+              # blank line: collapse runs, drop leading blanks
+              if prev_kind == :blank or prev_kind == :blank_start do
+                recur({i + 1, stack, prev_kind, prev_last, prev_hang, deltas, acc})
+              else
+                recur({i + 1, stack, :blank, prev_last, prev_hang, deltas, [""] ++ acc})
+              end
+            true ->
+              {level, stack2, hung} = line_level(lt, stack, prev_last, prev_hang)
+              indent = String.duplicate("  ", level)
+              multi = Enum.find(lt, fn t -> multiline?(t) end)
+              rendered = if is_nil(multi) do
+                indent <> render_tokens(capture_parens(lt), lines)
+              else
+                indent <> line.strip()
+              end
+              deltas2 = if is_nil(multi) do
+                deltas
+              else
+                old_lead = $builtins.len(line) - $builtins.len(line.lstrip())
+                Map.put(deltas, i, $builtins.len(indent) - old_lead)
+              end
+              stack3 = advance(lt, stack2, level)
+              recur({i + 1, stack3, :code, last_significant(lt), hung, deltas2, [rendered] ++ acc})
+          end
+        end
+      end
+    (out |> trim_trailing_blanks() |> Enum.join("\n")) <> "\n"
+  end
+
+  defp trim_trailing_blanks(ls) do
+    ls |> Enum.reverse() |> Enum.drop_while(fn l -> l == "" end) |> Enum.reverse()
+  end
+
+  defp shift(line, d) do
+    s = line.lstrip()
+    if s == "" do
+      ""
+    else
+      lead = $builtins.len(line) - $builtins.len(s)
+      String.duplicate(" ", Enum.max([lead + d, 0])) <> s.rstrip()
+    end
+  end
+
+  defp multiline?(t) do
+    (Map.get(t, "kind") == "str" or Map.get(t, "kind") == "sigil") and
+      Map.get(t, "end_line") > Map.get(t, "line")
+  end
+
+  defp interior_lines(toks) do
+    Enum.reduce(toks, %{}, fn t, acc ->
+      if multiline?(t) do
+        Enum.reduce(
+          $builtins.list($builtins.range(Map.get(t, "line") + 1, Map.get(t, "end_line") + 1)),
+          acc,
+          fn l, a -> Map.put(a, l, Map.get(t, "line")) end
+        )
+      else
+        acc
+      end
+    end)
+  end
+
+  defp bucket_by_line(toks) do
+    Enum.reduce(toks, %{}, fn t, acc ->
+      l = Map.get(t, "line")
+      Map.put(acc, l, Map.get(acc, l, []) ++ [t])
+    end)
+  end
+
+  defp last_significant(lt) do
+    sig = Enum.reject(lt, fn t -> Map.get(t, "kind") == "comment" end)
+    Enum.at(sig, -1)
+  end
+
+  # ---- structural indent (R004) --------------------------------------------
+
+  defp tok_is(t, kind, value) do
+    Map.get(t, "kind") == kind and Map.get(t, "value") == value
+  end
+
+  defp closer?(t) do
+    (Map.get(t, "kind") == "kw" and Map.get(t, "value") == "end") or
+      (Map.get(t, "kind") == "op" and Enum.member?([")", "]", "}"], Map.get(t, "value")))
+  end
+
+  defp mid?(t) do
+    Map.get(t, "kind") == "kw" and Enum.member?(["else", "rescue", "after"], Map.get(t, "value"))
+  end
+
+  defp opener_tok?(t) do
+    (Map.get(t, "kind") == "op" and Enum.member?(["(", "[", "{", "%{"], Map.get(t, "value"))) or
+      (Map.get(t, "kind") == "kw" and Enum.member?(["do", "fn"], Map.get(t, "value")))
+  end
+
+  # an `->` at line-relative depth 0 marks a clause head
+  defp clause_head?(lt) do
+    r = Enum.reduce(lt, {0, false}, fn t, {depth, found} ->
+      cond do
+        opener_tok?(t) -> {depth + 1, found}
+        closer?(t) -> {Enum.max([depth - 1, 0]), found}
+        tok_is(t, "op", "->") and depth == 0 -> {depth, true}
+        true -> {depth, found}
+      end
+    end)
+    elem(r, 1)
+  end
+
+  defp ends_with_arrow?(lt) do
+    last = last_significant(lt)
+    not is_nil(last) and tok_is(last, "op", "->")
+  end
+
+  @hang_enders ["=", "<-", "\\\\", "++", "<>", "and", "or", "when", "in"]
+  @hang_starters ["++", "<>", "and", "or", "when", "in", "==", "!=", "<=", ">=", "<", ">"]
+
+  defp hang?(first, prev_last, prev_hang, in_paren) do
+    starts = Enum.member?(["op", "kw"], Map.get(first, "kind")) and
+      Enum.member?(@hang_starters, Map.get(first, "value"))
+    ends = not is_nil(prev_last) and
+      Enum.member?(["op", "kw"], Map.get(prev_last, "kind")) and
+      Enum.member?(@hang_enders, Map.get(prev_last, "value"))
+    # a trailing comma continues the statement — but only outside brackets,
+    # where the bracket body already carries the indent
+    comma = not in_paren and not is_nil(prev_last) and tok_is(prev_last, "op", ",")
+    continues = tok_is(first, "op", "|>") and prev_hang
+    starts or ends or comma or continues
+  end
+
+  defp line_level(lt, stack, prev_last, prev_hang) do
+    first = Enum.at(lt, 0)
+    # sibling clause heads and block closers end an open clause body
+    popped = loop s = stack do
+      if Enum.empty?(s) do
+        break(s)
+      else
+        top = Enum.at(s, 0)
+        if Map.get(top, :kind) == :clause and
+          (closer?(first) or mid?(first) or clause_head?(lt)) do
+            recur(Enum.drop(s, 1))
+          else
+            break(s)
+          end
+      end
+    end
+    top = Enum.at(popped, 0)
+    level = cond do
+      Enum.empty?(popped) -> 0
+      closer?(first) -> Map.get(top, :open)
+      mid?(first) -> Map.get(top, :open)
+      true -> Map.get(top, :body)
+    end
+    top_paren = not Enum.empty?(popped) and Map.get(Enum.at(popped, 0), :kind) == :paren
+    hung = not closer?(first) and not mid?(first) and
+      hang?(first, prev_last, prev_hang, top_paren)
+    level = if hung do
+      level + 1
+    else
+      level
+    end
+    {Enum.max([level, 0]), popped, hung}
+  end
+
+  # push/pop the structures this line opens and closes
+  defp advance(lt, stack, level) do
+    stack2 = Enum.reduce(lt, stack, fn t, s ->
+      cond do
+        opener_tok?(t) -> [%{kind: struct_kind(t), body: level + 1, open: level}] ++ s
+        closer?(t) -> pop_to_opener(s)
+        true -> s
+      end
+    end)
+    if ends_with_arrow?(lt) do
+      [%{kind: :clause, body: level + 1, open: level}] ++ stack2
+    else
+      stack2
+    end
+  end
+
+  defp struct_kind(t) do
+    if Map.get(t, "kind") == "kw" do
+      :block
+    else
+      :paren
+    end
+  end
+
+  defp pop_to_opener(s) do
+    case s do
+      [] -> []
+      [%{kind: :clause} | rest] -> pop_to_opener(rest)
+      [_ | rest] -> rest
+    end
+  end
+
+  # ---- line rendering (R003) -----------------------------------------------
+
+  defp render_tokens(lt, lines) do
+    loop {toks, out, prev} = {lt, "", nil} do
+      case toks do
+        [] -> break(out)
+        [t | rest] ->
+          txt = tok_text(t, lines)
+          piece = cond do
+            is_nil(prev) -> txt
+            gap(prev, t) == 0 -> txt
+            true -> " " <> txt
+          end
+          recur({rest, out <> piece, t})
+      end
+    end
+  end
+
+  @space_around ["=", "|>", "->", "<-", "=>", "\\\\"]
+
+  defp space_around?(t) do
+    Map.get(t, "kind") == "op" and Enum.member?(@space_around, Map.get(t, "value"))
+  end
+
+  defp gap(prev, t) do
+    orig = Map.get(t, "col") - Map.get(prev, "end_col")
+    cond do
+      tok_is(t, "op", ",") -> 0
+      Map.get(t, "kind") == "op" and Enum.member?([")", "]", "}"], Map.get(t, "value")) -> 0
+      tok_is(prev, "op", ",") -> 1
+      Map.get(t, "kind") == "comment" -> 1
+      Map.get(prev, "kind") == "kwkey" -> 1
+      space_around?(prev) or space_around?(t) -> 1
+      Map.get(t, "kind") == "kw" and
+        Enum.member?(["do", "when", "in", "and", "or"], Map.get(t, "value")) -> 1
+      Map.get(prev, "kind") == "kw" and
+        Enum.member?(["do", "when", "in", "and", "or", "not", "fn", "end", "else", "rescue", "after"],
+          Map.get(prev, "value")) -> 1
+      orig <= 0 -> 0
+      true -> 1
+    end
+  end
+
+  defp tok_text(t, lines) do
+    cond do
+      Map.get(t, "kind") == "comment" -> Map.get(t, "value").rstrip()
+      Map.get(t, "synthetic", false) -> Map.get(t, "value")
+      true ->
+        line = Enum.at(lines, Map.get(t, "line") - 1)
+        String.slice(line, Map.get(t, "col") - 1,
+          Map.get(t, "end_col") - Map.get(t, "col"))
+    end
+  end
+
+  # ---- &$mod.fun/arity -> &($mod.fun/arity) (R008) -------------------------
+
+  defp capture_parens(lt) do
+    loop {toks, out} = {lt, []} do
+      case toks do
+        [] -> break(Enum.reverse(out))
+        [t | rest] ->
+          if tok_is(t, "op", "&") and not Enum.empty?(rest) and
+            Map.get(Enum.at(rest, 0), "kind") == "pyref" do
+              case split_capture(rest) do
+                {body, tail} ->
+                  open = synth("(", t)
+                  close = synth(")", Enum.at(body, -1))
+                  recur({tail, [close] ++ Enum.reverse(body) ++ [open, t] ++ out})
+                nil ->
+                  recur({rest, [t] ++ out})
+              end
+            else
+              recur({rest, [t] ++ out})
+            end
+      end
+    end
+  end
+
+  # $mod (. name)* / int — returns {body_tokens, rest} or nil
+  defp split_capture(toks) do
+    loop {left, taken, state} = {toks, [], :ref} do
+      case {state, left} do
+        {:ref, [t | rest]} ->
+          if Map.get(t, "kind") == "pyref" do
+            recur({rest, [t] ++ taken, :dot})
+          else
+            break(nil)
+          end
+        {:dot, [t | rest]} ->
+          cond do
+            tok_is(t, "op", ".") -> recur({rest, [t] ++ taken, :name})
+            tok_is(t, "op", "/") -> recur({rest, [t] ++ taken, :arity})
+            true -> break(nil)
+          end
+        {:name, [t | rest]} ->
+          if Map.get(t, "kind") == "ident" or Map.get(t, "kind") == "upident" do
+            recur({rest, [t] ++ taken, :dot})
+          else
+            break(nil)
+          end
+        {:arity, [t | rest]} ->
+          if Map.get(t, "kind") == "int" do
+            break({Enum.reverse([t] ++ taken), rest})
+          else
+            break(nil)
+          end
+        {_, []} -> break(nil)
+      end
+    end
+  end
+
+  defp synth(op, near) do
+    %{"kind" => "op", "value" => op, "synthetic" => true,
+      "line" => Map.get(near, "line"), "col" => Map.get(near, "end_col"),
+      "end_line" => Map.get(near, "line"), "end_col" => Map.get(near, "end_col")}
+  end
+end
