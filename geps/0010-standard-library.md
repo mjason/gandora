@@ -9,7 +9,7 @@ areas:
   - Standard Library
 created: 2026-08-02
 updated: 2026-08-02
-revision: 1
+revision: 2
 requires: [1, 3, 7]
 replaces: []
 superseded-by: null
@@ -90,16 +90,21 @@ first parameter, so every function is `|>`-ready. Semantics follow
 Elixir where the GEP-0001-R009 data mapping permits, and Python
 otherwise; each divergence MUST be recorded in the function's `@doc`.
 
-**GEP-0010-R005:** The initial set: `Enum` (map, filter, reject,
-reduce, sum, count, sort, sort_by, reverse, join, at, take, drop, zip,
-with_index, member?, all?, any?, empty?, uniq, flat_map, each, min,
-max), `String` (upcase, downcase, capitalize, split, split_on, trim,
+**GEP-0010-R005:** The set: `Enum` (map, filter, reject, reduce, sum,
+count, sort, sort_by, reverse, join, at, take, drop, zip, with_index,
+member?, all?, any?, empty?, uniq, flat_map, each, min, max, find,
+find_index, frequencies, group_by, max_by, min_by, product,
+take_while, drop_while, chunk_every, concat, intersperse, slice,
+dedup), `String` (upcase, downcase, capitalize, split, split_on, trim,
 replace, contains?, starts_with?, ends_with?, length, slice,
-pad_leading, pad_trailing, to_integer, to_float), `Map` (get, put,
-delete, keys, values, merge, has_key?, to_list, new, update), `List`
-(first, last, flatten, wrap, duplicate, insert_at, delete_at),
-`Keyword` (get, put, keys, values, has_key?). Additions accumulate
-under this GEP by revision.
+pad_leading, pad_trailing, to_integer, to_float, at, reverse,
+duplicate, trim_leading, trim_trailing, codepoints, match?), `Map`
+(get, put, delete, keys, values, merge, has_key?, to_list, new,
+update, fetch!, put_new, take, drop, filter), `List` (first, last,
+flatten, wrap, duplicate, insert_at, delete_at, to_tuple,
+starts_with?, replace_at, update_at), `Keyword` (get, put, keys,
+values, has_key?, delete, merge). Additions accumulate under this GEP
+by revision.
 
 **GEP-0010-R006:** Every stdlib function MUST carry a default `@doc`,
 a `zh-CN` `@doc_trans`, and — for functions whose behavior is not
@@ -209,4 +214,6 @@ package's own `gan test` passing every doctest.
 
 ## Change History
 
+- Revision 2, 2026-08-02: R005 extended — Enum +14, String +7, Map +5,
+  List +4, Keyword +2 functions.
 - Revision 1, 2026-08-02: Initial version.
