@@ -14,16 +14,13 @@ import gandora_std.string
 def _gan_truthy(value):
     return value is not None and value is not False
 
-def _gan_or(value, then):
-    return value if _gan_truthy(value) else then()
-
 class GanMatchError(Exception):
     pass
 
 pyimport_re = re.compile("pyimport\\s+([A-Za-z0-9_.]+)\\s*,\\s*as:\\s*([a-z_][A-Za-z0-9_]*)")
 
 
-def aliases(source):
+def aliases(source: str) -> dict[str, str]:
     def _gan_fn0(*_gan_args):
         match _gan_args:
             case ((mod, name) as _gan_t0, acc,) if isinstance(_gan_t0, tuple):
@@ -32,7 +29,7 @@ def aliases(source):
     return gandora_std.enum.reduce(pyimport_re.findall(source), {}, _gan_fn0)
 
 
-def target(source, token, pyref):
+def target(source: str, token: str, pyref: bool) -> tuple[str, str] | None:
     first = gandora_std.enum.at(token.split("."), 0)
     if _gan_truthy(pyref):
         return ("import " + first, token)
@@ -47,7 +44,7 @@ def _script(root, import_line, expr):
     return jedi.Script(f"{import_line}\n{expr}", project=jedi.Project(root))
 
 
-def hover_markdown(root, import_line, expr):
+def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
     try:
         names = builtins.list(_script(root, import_line, expr).help(2, gandora_std.string.length(expr)))
         _gan_case1 = names
@@ -67,14 +64,14 @@ def hover_markdown(root, import_line, expr):
         return None
 
 
-def complete(root, import_line, expr):
+def complete(root: str, import_line: str, expr: str) -> list[dict]:
     try:
         return gandora_std.enum.map(gandora_std.enum.take(builtins.list(_script(root, import_line, expr).complete(2, gandora_std.string.length(expr))), 120), lambda c: {"name": c.name, "kind": c.type})
     except Exception as _e:
         return []
 
 
-def goto(root, import_line, expr):
+def goto(root: str, import_line: str, expr: str) -> dict | None:
     try:
         names = builtins.list(_script(root, import_line, expr).goto(2, gandora_std.string.length(expr), follow_imports=True))
         _gan_case4 = names
@@ -82,7 +79,7 @@ def goto(root, import_line, expr):
             case [] as _gan_l5 if isinstance(_gan_l5, list):
                 return None
             case [n, *_] as _gan_l6 if isinstance(_gan_l6, list):
-                if _gan_truthy(_gan_or((n.module_path is None), lambda: (n.line is None))):
+                if (n.module_path is None) or (n.line is None):
                     return None
                 else:
                     return {"path": str(n.module_path), "line0": n.line - 1, "col0": _or_zero(n.column)}
@@ -92,7 +89,7 @@ def goto(root, import_line, expr):
         return None
 
 
-def signatures(root, import_line, callee):
+def signatures(root: str, import_line: str, callee: str) -> list[dict]:
     try:
         def _gan_fn1(s):
             params = gandora_std.enum.map(builtins.list(s.params), lambda p: p.to_string())
@@ -104,14 +101,14 @@ def signatures(root, import_line, callee):
 
 def _to_first_line(text):
     line = gandora_std.enum.at(text.strip().split("\n"), 0)
-    if _gan_truthy((line is None)):
+    if (line is None):
         return ""
     else:
         return line
 
 
 def _or_zero(v):
-    if _gan_truthy((v is None)):
+    if (v is None):
         return 0
     else:
         return v

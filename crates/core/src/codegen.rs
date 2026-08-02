@@ -1731,6 +1731,9 @@ impl Codegen {
                 Callee::Name(n) => matches!(
                     n.as_str(),
                     "==" | "!=" | "<" | ">" | "<=" | ">=" | "not" | "and" | "or" | "in"
+                        | "is_nil" | "is_list" | "is_map" | "is_tuple" | "is_atom"
+                        | "is_binary" | "is_boolean" | "is_integer" | "is_float"
+                        | "is_function"
                 ) && {
                     if n == "and" || n == "or" {
                         c.args.iter().all(|a| self.is_boolean_shaped(a))

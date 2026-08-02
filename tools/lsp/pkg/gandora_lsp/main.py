@@ -29,7 +29,7 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.5.1", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.5.2", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
 
@@ -98,7 +98,7 @@ def _word_at(line, character):
                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val1))
         return (s <= character) and (character < e)
     hit = gandora_std.enum.find(word_re.finditer(line), _gan_fn1)
-    if _gan_truthy((hit is None)):
+    if (hit is None):
         return None
     else:
         _gan_val3 = hit.span()
@@ -112,7 +112,7 @@ def _word_at(line, character):
 
 def _module_of(source):
     m = re.compile("defmodule\\s+([A-Za-z0-9_.]+)").search(source)
-    if _gan_truthy((m is None)):
+    if (m is None):
         return None
     else:
         return m.group(1)
@@ -123,7 +123,7 @@ def _target_of(source, token):
         return token
     else:
         mod = _module_of(source)
-        if _gan_truthy((mod is None)):
+        if (mod is None):
             return None
         else:
             return f"{mod}.{token}"
@@ -138,7 +138,7 @@ def hover(params):
         case _:
             raise GanMatchError("no match of right-hand side value: " + repr(_gan_val5))
     hit = _word_at(line, params.position.character)
-    if _gan_truthy((hit is None)):
+    if (hit is None):
         return None
     else:
         _gan_val7 = hit
@@ -149,7 +149,7 @@ def hover(params):
                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val7))
         pyref = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == "$")
         py = gandora_lsp.py_intel.target(doc.source, token, pyref)
-        if not (_gan_truthy((py is None))):
+        if not ((py is None)):
             _gan_val9 = py
             match _gan_val9:
                 case (import_line, expr) as _gan_t10 if isinstance(_gan_t10, tuple):
@@ -157,7 +157,7 @@ def hover(params):
                 case _:
                     raise GanMatchError("no match of right-hand side value: " + repr(_gan_val9))
             md = gandora_lsp.py_intel.hover_markdown(_root_path(), import_line, expr)
-            if not (_gan_truthy((md is None))):
+            if not ((md is None)):
                 return _markdown_hover(md)
             elif _gan_truthy(pyref):
                 return _pyref_hover(token)
@@ -176,7 +176,7 @@ def _root_path():
 
 
 def _lookup_doc(target):
-    if _gan_truthy((target is None)):
+    if (target is None):
         return None
     else:
         try:
@@ -192,7 +192,7 @@ def _pyref_hover(token):
     except Exception as _e:
         _gan_tmp11 = None
     spec = _gan_tmp11
-    if _gan_truthy((spec is None)):
+    if (spec is None):
         return _markdown_hover(f"`${mod}` — Python module (not found in this environment)")
     else:
         return _markdown_hover(f"`${mod}` — Python module\n\n`{spec.origin}`")
@@ -248,7 +248,7 @@ def definition(params):
         case _:
             raise GanMatchError("no match of right-hand side value: " + repr(_gan_val16))
     hit = _word_at(line, params.position.character)
-    if _gan_truthy((hit is None)):
+    if (hit is None):
         return None
     else:
         _gan_val18 = hit
@@ -259,7 +259,7 @@ def definition(params):
                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val18))
         pyref = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == "$")
         py = gandora_lsp.py_intel.target(doc.source, token, pyref)
-        if not (_gan_truthy((py is None))):
+        if not ((py is None)):
             _gan_val20 = py
             match _gan_val20:
                 case (import_line, expr) as _gan_t21 if isinstance(_gan_t21, tuple):
@@ -267,14 +267,14 @@ def definition(params):
                 case _:
                     raise GanMatchError("no match of right-hand side value: " + repr(_gan_val20))
             loc = gandora_lsp.py_intel.goto(_root_path(), import_line, expr)
-            if _gan_truthy((loc is None)):
+            if (loc is None):
                 return None
             else:
                 pos = types.Position(line=gandora_std.map.get(loc, "line0"), character=gandora_std.map.get(loc, "col0"))
                 return types.Location(uri="file://" + gandora_std.map.get(loc, "path"), range=types.Range(pos, pos))
         else:
             target = _target_of(doc.source, token)
-            if _gan_truthy((target is None)):
+            if (target is None):
                 _gan_tmp22 = None
             else:
                 try:
@@ -282,7 +282,7 @@ def definition(params):
                 except Exception as _e:
                     _gan_tmp22 = None
             loc = _gan_tmp22
-            if _gan_truthy((loc is None)):
+            if (loc is None):
                 return None
             else:
                 pos = types.Position(line=gandora_std.enum.max([gandora_std.map.get(loc, "line") - 1, 0]), character=gandora_std.enum.max([gandora_std.map.get(loc, "col") - 1, 0]))
@@ -293,7 +293,7 @@ def definition(params):
 def document_symbol(params):
     doc = server.workspace.get_text_document(params.text_document.uri)
     mod = _module_of(doc.source)
-    if _gan_truthy((mod is None)):
+    if (mod is None):
         _gan_tmp23 = []
     else:
         try:
@@ -307,7 +307,7 @@ def document_symbol(params):
         rng = types.Range(pos, pos)
         return types.DocumentSymbol(name=gandora_std.map.get(s, "name"), detail=gandora_std.map.get(s, "head"), kind=_symbol_kind(gandora_std.map.get(s, "kind")), range=rng, selection_range=rng)
     children = gandora_std.enum.map(syms, _gan_fn5)
-    if _gan_truthy((mod is None)):
+    if (mod is None):
         return []
     else:
         zero = types.Position(line=0, character=0)
@@ -335,12 +335,12 @@ def completion(params):
             raise GanMatchError("no match of right-hand side value: " + repr(_gan_val24))
     prefix = gandora_std.string.slice(line, 0, params.position.character)
     pym = re.compile("(\\$?)([A-Za-z_][A-Za-z0-9_.]*)\\.([A-Za-z0-9_]*)$").search(prefix)
-    if _gan_truthy((pym is None)):
+    if (pym is None):
         _gan_tmp26 = None
     else:
         _gan_tmp26 = gandora_lsp.py_intel.target(doc.source, pym.group(2) + ("." + pym.group(3)), pym.group(1) == "$")
     py = _gan_tmp26
-    if not (_gan_truthy((py is None))):
+    if not ((py is None)):
         _gan_val27 = py
         match _gan_val27:
             case (import_line, expr) as _gan_t28 if isinstance(_gan_t28, tuple):
@@ -369,11 +369,11 @@ def _py_completion_kind(*_gan_args):
 
 def _gandora_completion(prefix):
     m = re.compile("([A-Z][A-Za-z0-9_]*(?:\\.[A-Z][A-Za-z0-9_]*)*)\\.([a-z_][A-Za-z0-9_]*)?$").search(prefix)
-    if _gan_truthy((m is None)):
+    if (m is None):
         return []
     else:
         mod = m.group(1)
-        if _gan_truthy((m.group(2) is None)):
+        if (m.group(2) is None):
             _gan_tmp29 = ""
         else:
             _gan_tmp29 = m.group(2)
@@ -417,7 +417,7 @@ def signature_help(params):
             raise GanMatchError("no match of right-hand side value: " + repr(_gan_val34))
     prefix = gandora_std.string.slice(line, 0, params.position.character)
     call = _open_call(prefix)
-    if _gan_truthy((call is None)):
+    if (call is None):
         return None
     else:
         _gan_val36 = call
@@ -429,7 +429,7 @@ def signature_help(params):
         pyref = gandora_std.string.starts_with_p(callee, "$")
         token = callee.lstrip("$")
         py = gandora_lsp.py_intel.target(doc.source, token, pyref)
-        if not (_gan_truthy((py is None))):
+        if not ((py is None)):
             _gan_val39 = py
             match _gan_val39:
                 case (import_line, expr) as _gan_t40 if isinstance(_gan_t40, tuple):
@@ -483,7 +483,7 @@ def _open_call(prefix):
         break
     _gan_tmp41 = _gan_res43
     found = _gan_tmp41
-    if _gan_truthy((found is None)):
+    if (found is None):
         return None
     else:
         _gan_val45 = found
@@ -494,7 +494,7 @@ def _open_call(prefix):
                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val45))
         head = gandora_std.string.slice(prefix, 0, open_at)
         m = re.compile("(\\$?[A-Za-z_][A-Za-z0-9_.!?]*)\\s*$").search(head)
-        if _gan_truthy((m is None)):
+        if (m is None):
             return None
         else:
             return (m.group(1), commas)
@@ -505,11 +505,11 @@ def _build_signature(label, params, docline):
 
 
 def _gandora_signatures(info):
-    if _gan_truthy((info is None)):
+    if (info is None):
         return []
     else:
         prose = gandora_std.map.get(gandora_std.map.get(info, "entries", {}), "default")
-        if _gan_truthy((prose is None)):
+        if (prose is None):
             _gan_tmp47 = None
         else:
             _gan_tmp47 = gandora_std.enum.at(prose.strip().split("\n"), 0)
@@ -526,7 +526,7 @@ def _gandora_signatures(info):
 
 def _head_params(head):
     m = re.compile("\\((.*)\\)").search(head)
-    if _gan_truthy((m is None)):
+    if (m is None):
         return []
     else:
         inner = m.group(1)

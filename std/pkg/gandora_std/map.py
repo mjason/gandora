@@ -1,6 +1,7 @@
 """Data-first dict functions; all updates return new maps (GEP-0010)."""
 
 import builtins
+import collections.abc
 
 
 def _gan_truthy(value):
@@ -10,7 +11,7 @@ class GanMatchError(Exception):
     pass
 
 
-def get(*_gan_args):
+def get(*_gan_args) -> object:
     """The value for `key`, or `default` (nil unless given) when absent.
 
     >>> get({"a": 1}, "b", 0)
@@ -24,7 +25,7 @@ def get(*_gan_args):
     raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
 
 
-def put(m, key, value):
+def put(m: dict, key: object, value: object) -> dict:
     """A new map with `key` set to `value`.
 
     >>> put({"a": 1}, "b", 2)
@@ -33,42 +34,42 @@ def put(m, key, value):
     return ({**(m), (key): (value)})
 
 
-def delete(m, key):
+def delete(m: dict, key: object) -> dict:
     """A new map without `key`."""
     return ({k: v for k, v in (m).items() if k != (key)})
 
 
-def keys(m):
+def keys(m: dict) -> list:
     """The keys as a list."""
     return builtins.list(m.keys())
 
 
-def values(m):
+def values(m: dict) -> list:
     """The values as a list."""
     return builtins.list(m.values())
 
 
-def merge(m1, m2):
+def merge(m1: dict, m2: dict) -> dict:
     """Merges `m2` into `m1`; `m2` wins on conflicts."""
     return ({**(m1), **(m2)})
 
 
-def has_key_p(m, key):
+def has_key_p(m: dict, key: object) -> bool:
     """Whether `key` is present."""
     return ((key) in (m))
 
 
-def to_list(m):
+def to_list(m: dict) -> list[tuple[object, object]]:
     """The entries as a list of `{key, value}` tuples."""
     return builtins.list(m.items())
 
 
-def new():
+def new() -> dict:
     """An empty map."""
     return {}
 
 
-def update(m, key, default, f):
+def update(m: dict, key: object, default: object, f: collections.abc.Callable) -> dict:
     """Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4).
 
     >>> update({"a": 1}, "a", 0, lambda v: v + 10)
@@ -80,12 +81,12 @@ def update(m, key, default, f):
         return put(m, key, default)
 
 
-def fetch_bang(m, key):
+def fetch_bang(m: dict, key: object) -> object:
     """The value for `key`; raises Python KeyError when absent."""
     return ((m)[(key)])
 
 
-def put_new(m, key, value):
+def put_new(m: dict, key: object, value: object) -> dict:
     """Sets `key` only when absent."""
     if _gan_truthy(has_key_p(m, key)):
         return m
@@ -93,17 +94,17 @@ def put_new(m, key, value):
         return put(m, key, value)
 
 
-def take(m, keys):
+def take(m: dict, keys: list) -> dict:
     """The submap with only `keys` (missing keys ignored)."""
     return ({k: v for k, v in (m).items() if k in (keys)})
 
 
-def drop(m, keys):
+def drop(m: dict, keys: list) -> dict:
     """The map without `keys`."""
     return ({k: v for k, v in (m).items() if k not in (keys)})
 
 
-def filter(m, f):
+def filter(m: dict, f: collections.abc.Callable) -> dict:
     """Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy.
 
     >>> filter({"a": 1, "b": 5}, lambda pair: pair[1] > 2)

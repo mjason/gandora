@@ -6,6 +6,7 @@ defmodule Tour.Templates do
   runtime values in every language, and compiled code in ~python.
   """
 
+  @spec sales_query(number()) :: string()
   def sales_query(min_units) do
     ~sql"""
     SELECT product, SUM(units) AS total
@@ -15,6 +16,7 @@ defmodule Tour.Templates do
     """
   end
 
+  @spec report(string(), list(number())) :: string()
   def report(name, xs) do
     ~markdown"""
     # Sales report for <%= name.upper() %>
@@ -27,6 +29,7 @@ defmodule Tour.Templates do
     """
   end
 
+  @spec evens_capped(list(integer()), integer()) :: list(integer())
   def evens_capped(xs, limit) do
     # ~python splices are CODE: the compiled expression lands inside
     # the comprehension — Python-only syntax, Gandora bindings

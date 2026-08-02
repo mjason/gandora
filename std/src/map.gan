@@ -8,6 +8,7 @@ defmodule Map do
       gan> Map.get(%{a: 1}, :b, 0)
       0
   """
+  @spec get(map(), any(), any()) :: any()
   def get(m, key, default \\ nil), do: m.get(key, default)
 
   @doc "A new map with `key` set to `value`."
@@ -16,34 +17,42 @@ defmodule Map do
       gan> Map.put(%{a: 1}, :b, 2)
       {'a': 1, 'b': 2}
   """
+  @spec put(map(), any(), any()) :: map()
   def put(m, key, value), do: ~python({**<%= m %>, <%= key %>: <%= value %>})
 
   @doc "A new map without `key`."
   @doc_trans zh_CN: "移除 `key` 后的新映射。"
+  @spec delete(map(), any()) :: map()
   def delete(m, key), do: ~python({k: v for k, v in <%= m %>.items() if k != <%= key %>})
 
   @doc "The keys as a list."
   @doc_trans zh_CN: "键的列表。"
+  @spec keys(map()) :: list()
   def keys(m), do: $builtins.list(m.keys())
 
   @doc "The values as a list."
   @doc_trans zh_CN: "值的列表。"
+  @spec values(map()) :: list()
   def values(m), do: $builtins.list(m.values())
 
   @doc "Merges `m2` into `m1`; `m2` wins on conflicts."
   @doc_trans zh_CN: "将 `m2` 并入 `m1`；冲突时 `m2` 胜出。"
+  @spec merge(map(), map()) :: map()
   def merge(m1, m2), do: ~python({**<%= m1 %>, **<%= m2 %>})
 
   @doc "Whether `key` is present."
   @doc_trans zh_CN: "是否存在键 `key`。"
+  @spec has_key?(map(), any()) :: boolean()
   def has_key?(m, key), do: ~python(<%= key %> in <%= m %>)
 
   @doc "The entries as a list of `{key, value}` tuples."
   @doc_trans zh_CN: "以 `{键, 值}` 元组列表表示的条目。"
+  @spec to_list(map()) :: list(tuple(any(), any()))
   def to_list(m), do: $builtins.list(m.items())
 
   @doc "An empty map."
   @doc_trans zh_CN: "空映射。"
+  @spec new() :: map()
   def new(), do: %{}
 
   @doc "Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4)."
@@ -52,6 +61,7 @@ defmodule Map do
       gan> Map.update(%{a: 1}, :a, 0, fn v -> v + 10 end)
       {'a': 11}
   """
+  @spec update(map(), any(), any(), fun()) :: map()
   def update(m, key, default, f) do
     if has_key?(m, key) do
       put(m, key, f.(get(m, key)))
@@ -61,10 +71,12 @@ defmodule Map do
   end
   @doc "The value for `key`; raises Python KeyError when absent."
   @doc_trans zh_CN: "键 `key` 的值；不存在时抛 Python KeyError。"
+  @spec fetch!(map(), any()) :: any()
   def fetch!(m, key), do: ~python(<%= m %>[<%= key %>])
 
   @doc "Sets `key` only when absent."
   @doc_trans zh_CN: "仅当 `key` 不存在时设置。"
+  @spec put_new(map(), any(), any()) :: map()
   def put_new(m, key, value) do
     if has_key?(m, key) do
       m
@@ -75,10 +87,12 @@ defmodule Map do
 
   @doc "The submap with only `keys` (missing keys ignored)."
   @doc_trans zh_CN: "仅含 `keys` 的子映射（缺失的键忽略）。"
+  @spec take(map(), list()) :: map()
   def take(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k in <%= keys %>})
 
   @doc "The map without `keys`."
   @doc_trans zh_CN: "移除 `keys` 后的映射。"
+  @spec drop(map(), list()) :: map()
   def drop(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k not in <%= keys %>})
 
   @doc "Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy."
@@ -87,5 +101,6 @@ defmodule Map do
       gan> Map.filter(%{"a" => 1, "b" => 5}, fn pair -> elem(pair, 1) > 2 end)
       {'b': 5}
   """
+  @spec filter(map(), fun()) :: map()
   def filter(m, f), do: ~python({k: v for k, v in <%= m %>.items() if <%= f %>((k, v))})
 end

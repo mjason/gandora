@@ -20,6 +20,7 @@ defmodule App.Mathy do
       gan> fact(10)
       3628800
   """
+  @spec fact(integer()) :: integer()
   def fact(0), do: 1
   def fact(n) when n > 0, do: n * fact(n - 1)
 
@@ -31,6 +32,7 @@ defmodule App.Mathy do
       gan> [classify(0), classify(9)]
       ['zero', 'positive']
   """
+  @spec classify(number()) :: atom()
   def classify(x) do
     cond do
       x < 0 -> :negative
@@ -42,6 +44,7 @@ defmodule App.Mathy do
   @doc deprecated: "Use norm/1 instead.", since: "0.1.0"
   @doc "Same as norm/1; kept for early adopters."
   @doc_trans zh_CN: "与 norm/1 相同；为早期用户保留。"
+  @spec old_norm(list(number())) :: float()
   def old_norm(xs), do: norm(xs)
 
   @doc since: "0.1.0"
@@ -50,6 +53,7 @@ defmodule App.Mathy do
       gan> norm([3, 4])
       5.0
   """
+  @spec norm(list(number())) :: float()
   def norm(xs) do
     xs
     |> sum_squares()

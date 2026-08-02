@@ -4,14 +4,17 @@ defmodule String do
 
   @doc "Uppercases the string."
   @doc_trans zh_CN: "转为大写。"
+  @spec upcase(string()) :: string()
   def upcase(s), do: s.upper()
 
   @doc "Lowercases the string."
   @doc_trans zh_CN: "转为小写。"
+  @spec downcase(string()) :: string()
   def downcase(s), do: s.lower()
 
   @doc "Uppercases the first character, lowercases the rest."
   @doc_trans zh_CN: "首字符大写，其余小写。"
+  @spec capitalize(string()) :: string()
   def capitalize(s), do: s.capitalize()
 
   @doc "Splits on whitespace runs, dropping empty parts (Elixir semantics)."
@@ -20,34 +23,42 @@ defmodule String do
       gan> String.split("  a  b c ")
       ['a', 'b', 'c']
   """
+  @spec split(string()) :: list(string())
   def split(s), do: s.split()
 
   @doc "Splits on the separator `sep`."
   @doc_trans zh_CN: "按分隔符 `sep` 切分。"
+  @spec split_on(string(), string()) :: list(string())
   def split_on(s, sep), do: s.split(sep)
 
   @doc "Removes leading and trailing whitespace."
   @doc_trans zh_CN: "去除首尾空白。"
+  @spec trim(string()) :: string()
   def trim(s), do: s.strip()
 
   @doc "Replaces every occurrence of `pattern` with `replacement`."
   @doc_trans zh_CN: "将每处 `pattern` 替换为 `replacement`。"
+  @spec replace(string(), string(), string()) :: string()
   def replace(s, pattern, replacement), do: s.replace(pattern, replacement)
 
   @doc "Whether the string contains `part`."
   @doc_trans zh_CN: "是否包含子串 `part`。"
+  @spec contains?(string(), string()) :: boolean()
   def contains?(s, part), do: ~python(<%= part %> in <%= s %>)
 
   @doc "Whether the string starts with `prefix`."
   @doc_trans zh_CN: "是否以 `prefix` 开头。"
+  @spec starts_with?(string(), string()) :: boolean()
   def starts_with?(s, prefix), do: s.startswith(prefix)
 
   @doc "Whether the string ends with `suffix`."
   @doc_trans zh_CN: "是否以 `suffix` 结尾。"
+  @spec ends_with?(string(), string()) :: boolean()
   def ends_with?(s, suffix), do: s.endswith(suffix)
 
   @doc "The number of characters (Unicode code points, Python `len`)."
   @doc_trans zh_CN: "字符数（Unicode 码点，即 Python 的 `len`）。"
+  @spec length(string()) :: integer()
   def length(s), do: $builtins.len(s)
 
   @doc "The substring of `len` characters starting at `start` (negative start counts from the end)."
@@ -56,25 +67,31 @@ defmodule String do
       gan> String.slice("gandora", 3, 4)
       'dora'
   """
+  @spec slice(string(), integer(), integer()) :: string()
   def slice(s, start, len), do: ~python(<%= s %>[<%= start %>:] [:<%= len %>])
 
   @doc "Pads on the left with spaces to `width`."
   @doc_trans zh_CN: "左侧以空格填充至 `width`。"
+  @spec pad_leading(string(), integer()) :: string()
   def pad_leading(s, width), do: s.rjust(width)
 
   @doc "Pads on the right with spaces to `width`."
   @doc_trans zh_CN: "右侧以空格填充至 `width`。"
+  @spec pad_trailing(string(), integer()) :: string()
   def pad_trailing(s, width), do: s.ljust(width)
 
   @doc "Parses an integer; raises Python ValueError on bad input."
   @doc_trans zh_CN: "解析整数；非法输入抛 Python ValueError。"
+  @spec to_integer(string()) :: integer()
   def to_integer(s), do: $builtins.int(s)
 
   @doc "Parses a float; raises Python ValueError on bad input."
   @doc_trans zh_CN: "解析浮点数；非法输入抛 Python ValueError。"
+  @spec to_float(string()) :: float()
   def to_float(s), do: $builtins.float(s)
   @doc "The character at `index` (negative counts from the end), or nil."
   @doc_trans zh_CN: "位于 `index` 的字符（负数从尾部数起），越界为 nil。"
+  @spec at(string(), integer()) :: string() | nil
   def at(s, index) do
     if index < $builtins.len(s) and index >= -$builtins.len(s) do
       ~python(<%= s %>[<%= index %>])
@@ -85,18 +102,22 @@ defmodule String do
 
   @doc "The string reversed."
   @doc_trans zh_CN: "反转后的字符串。"
+  @spec reverse(string()) :: string()
   def reverse(s), do: ~python(<%= s %>[::-1])
 
   @doc "The string repeated `n` times."
   @doc_trans zh_CN: "重复 `n` 次的字符串。"
+  @spec duplicate(string(), integer()) :: string()
   def duplicate(s, n), do: ~python(<%= s %> * <%= n %>)
 
   @doc "Removes leading whitespace."
   @doc_trans zh_CN: "去除首部空白。"
+  @spec trim_leading(string()) :: string()
   def trim_leading(s), do: s.lstrip()
 
   @doc "Removes trailing whitespace."
   @doc_trans zh_CN: "去除尾部空白。"
+  @spec trim_trailing(string()) :: string()
   def trim_trailing(s), do: s.rstrip()
 
   @doc "The characters as a list of one-character strings."
@@ -105,6 +126,7 @@ defmodule String do
       gan> String.codepoints("héllo") |> Enum.take(2)
       ['h', 'é']
   """
+  @spec codepoints(string()) :: list(string())
   def codepoints(s), do: $builtins.list(s)
 
   @doc "Whether the compiled regex (`~r/.../`) matches anywhere in the string."
@@ -113,5 +135,6 @@ defmodule String do
       gan> String.match?("gandora-2026", ~r/\\d+/)
       True
   """
+  @spec match?(string(), $re.Pattern) :: boolean()
   def match?(s, regex), do: not is_nil(regex.search(s))
 end

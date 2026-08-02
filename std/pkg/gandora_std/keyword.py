@@ -7,7 +7,7 @@ class GanMatchError(Exception):
     pass
 
 
-def get(kw, key):
+def get(kw: list, key: str) -> object:
     """The first value for `key`, or nil.
 
     >>> get([("a", 1), ("b", 2)], "a")
@@ -16,7 +16,7 @@ def get(kw, key):
     return (next((v for k, v in (kw) if k == (key)), None))
 
 
-def put(kw, key, value):
+def put(kw: list, key: str, value: object) -> list:
     """Replaces `key` with `value`, prepending it (Elixir Keyword.put)."""
     def _gan_fn0(*_gan_args):
         match _gan_args:
@@ -26,7 +26,7 @@ def put(kw, key, value):
     return [(key, value)] + gandora_std.enum.reject(kw, _gan_fn0)
 
 
-def keys(kw):
+def keys(kw: list) -> list[str]:
     """The keys, in order, duplicates included."""
     def _gan_fn1(*_gan_args):
         match _gan_args:
@@ -36,7 +36,7 @@ def keys(kw):
     return gandora_std.enum.map(kw, _gan_fn1)
 
 
-def values(kw):
+def values(kw: list) -> list:
     """The values, in order."""
     def _gan_fn2(*_gan_args):
         match _gan_args:
@@ -46,7 +46,7 @@ def values(kw):
     return gandora_std.enum.map(kw, _gan_fn2)
 
 
-def has_key_p(kw, key):
+def has_key_p(kw: list, key: str) -> bool:
     """Whether `key` is present."""
     def _gan_fn3(*_gan_args):
         match _gan_args:
@@ -56,7 +56,7 @@ def has_key_p(kw, key):
     return gandora_std.enum.any_p(kw, _gan_fn3)
 
 
-def delete(kw, key):
+def delete(kw: list, key: str) -> list:
     """Removes every entry for `key`."""
     def _gan_fn4(*_gan_args):
         match _gan_args:
@@ -66,7 +66,7 @@ def delete(kw, key):
     return gandora_std.enum.reject(kw, _gan_fn4)
 
 
-def merge(kw1, kw2):
+def merge(kw1: list, kw2: list) -> list:
     """Merges `kw2` into `kw1`; `kw2` wins, its entries appended.
 
     >>> merge([("a", 1), ("b", 2)], [("b", 9), ("c", 3)])

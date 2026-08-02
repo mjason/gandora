@@ -128,10 +128,10 @@ def run(file, args):
         modules = core.build(_root(), cache)
         abs = str(pathlib.Path(file).resolve())
         target = gandora_std.enum.find(modules, lambda m: gandora_std.map.get(m, "source") == abs)
-        if _gan_truthy((target is None)):
+        if (target is None):
             print(f"gan: {file} is not a module of this project")
             return sys.exit(1)
-        elif _gan_truthy((gandora_std.map.get(target, "python") is None)):
+        elif (gandora_std.map.get(target, "python") is None):
             _gan_fstr22 = gandora_std.map.get(target, "module")
             print(f"gan: {_gan_fstr22} defines only macros; nothing to run")
             return sys.exit(1)
@@ -179,7 +179,7 @@ def _eval_line(code, ns):
         compiled = core.compile_snippet(code, _root())
         builtins.exec(compiled, ns)
         result = gandora_std.map.get(ns, "_")
-        if not (_gan_truthy((result is None))):
+        if not ((result is None)):
             return print(repr(result))
         else:
             return None
@@ -211,7 +211,7 @@ def init(path):
 def _find_plugin(cmd):
     venv_bin = _root() + "/.venv/bin"
     local = shutil.which("gan-" + cmd, path=venv_bin)
-    if _gan_truthy((local is None)):
+    if (local is None):
         return shutil.which("gan-" + cmd)
     else:
         return local
@@ -220,9 +220,9 @@ def _find_plugin(cmd):
 def _delegate(cmd, rest):
     plugin = _find_plugin(cmd)
     ganc = shutil.which("ganc")
-    if not (_gan_truthy((plugin is None))):
+    if not ((plugin is None)):
         return sys.exit(subprocess.call([plugin] + rest))
-    elif not (_gan_truthy((ganc is None))):
+    elif not ((ganc is None)):
         return sys.exit(subprocess.call([ganc, cmd] + rest))
     else:
         return _die_usage(f"unknown command '{cmd}' (no gan-{cmd} plugin, no ganc)")

@@ -8,27 +8,33 @@ defmodule Keyword do
       gan> Keyword.get([a: 1, b: 2], :a)
       1
   """
+  @spec get(list(), atom()) :: any()
   def get(kw, key), do: ~python(next((v for k, v in <%= kw %> if k == <%= key %>), None))
 
   @doc "Replaces `key` with `value`, prepending it (Elixir Keyword.put)."
   @doc_trans zh_CN: "以 `value` 替换 `key` 并将其前置（Elixir 的 Keyword.put）。"
+  @spec put(list(), atom(), any()) :: list()
   def put(kw, key, value) do
     [{key, value}] ++ Enum.reject(kw, fn {k, _} -> k == key end)
   end
 
   @doc "The keys, in order, duplicates included."
   @doc_trans zh_CN: "按序的全部键（含重复）。"
+  @spec keys(list()) :: list(atom())
   def keys(kw), do: Enum.map(kw, fn {k, _} -> k end)
 
   @doc "The values, in order."
   @doc_trans zh_CN: "按序的全部值。"
+  @spec values(list()) :: list()
   def values(kw), do: Enum.map(kw, fn {_, v} -> v end)
 
   @doc "Whether `key` is present."
   @doc_trans zh_CN: "是否存在键 `key`。"
+  @spec has_key?(list(), atom()) :: boolean()
   def has_key?(kw, key), do: Enum.any?(kw, fn {k, _} -> k == key end)
   @doc "Removes every entry for `key`."
   @doc_trans zh_CN: "移除键为 `key` 的全部条目。"
+  @spec delete(list(), atom()) :: list()
   def delete(kw, key), do: Enum.reject(kw, fn {k, _} -> k == key end)
 
   @doc "Merges `kw2` into `kw1`; `kw2` wins, its entries appended."
@@ -37,6 +43,7 @@ defmodule Keyword do
       gan> Keyword.merge([a: 1, b: 2], [b: 9, c: 3])
       [('a', 1), ('b', 9), ('c', 3)]
   """
+  @spec merge(list(), list()) :: list()
   def merge(kw1, kw2) do
     Enum.reject(kw1, fn {k, _} -> has_key?(kw2, k) end) ++ kw2
   end

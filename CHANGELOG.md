@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.5.2 — 2026-08-02
+
+- **The standard library is fully spec'd**: all 94 public functions
+  across Enum/Map/String/List/Keyword carry `@spec` (GEP-0017), so
+  every std call has typed hints, hover signatures, and signature
+  help — `String.match?` takes `$re.Pattern`, the host type at the
+  boundary. pyright over the generated std: 0 errors.
+- Toolchain, tour, and playground modules annotated where their
+  types are crisp; the typed surface (std + fully-annotated modules)
+  passes pyright clean.
+- Codegen: guard built-ins (`is_list`, `is_nil`, ...) are
+  boolean-shaped — no more `_gan_truthy` wrapping around
+  `isinstance`, which both reads better and lets type checkers
+  narrow.
+
 ## v0.5.1 — 2026-08-02
 
 - **gan-lsc mirrors the full LSP capability set** (GEP-0015 rev 6):

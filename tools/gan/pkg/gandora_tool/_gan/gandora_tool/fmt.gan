@@ -11,6 +11,7 @@ defmodule Fmt do
 
   # ---- entry ---------------------------------------------------------------
 
+  @spec run(list(string())) :: nil
   def run(args) do
     check = Enum.member?(args, "--check")
     paths = Enum.reject(args, fn a -> String.starts_with?(a, "--") end)
@@ -76,6 +77,7 @@ defmodule Fmt do
 
   # ---- verification (R006) -------------------------------------------------
 
+  @spec verify(string(), string()) :: atom() | tuple(atom(), string())
   def verify(old_text, new_text) do
     cond do
       comments_of(old_text) != comments_of(new_text) ->
@@ -106,6 +108,7 @@ defmodule Fmt do
 
   # ---- formatting ----------------------------------------------------------
 
+  @spec format_text(string()) :: tuple(atom(), string())
   def format_text(text) do
     parsed = try do
       core.parse(text)

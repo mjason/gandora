@@ -10,12 +10,14 @@ defmodule PyIntel do
   @pyimport_re ~r/pyimport\s+([A-Za-z0-9_.]+)\s*,\s*as:\s*([a-z_][A-Za-z0-9_]*)/
 
   # alias -> module map from the file's pyimport declarations
+  @spec aliases(string()) :: map(string(), string())
   def aliases(source) do
     @pyimport_re.findall(source)
     |> Enum.reduce(%{}, fn {mod, name}, acc -> Map.put(acc, name, mod) end)
   end
 
   # {import_line, expr} for a `$mod.chain` or aliased `np.chain` token
+  @spec target(string(), string(), boolean()) :: tuple(string(), string()) | nil
   def target(source, token, pyref) do
     first = Enum.at(token.split("."), 0)
     cond do
@@ -32,6 +34,7 @@ defmodule PyIntel do
     jedi.Script("#{import_line}\n#{expr}", project: jedi.Project(root))
   end
 
+  @spec hover_markdown(string(), string(), string()) :: string() | nil
   def hover_markdown(root, import_line, expr) do
     try do
       names = $builtins.list(script(root, import_line, expr).help(2, String.length(expr)))
@@ -51,6 +54,7 @@ defmodule PyIntel do
     end
   end
 
+  @spec complete(string(), string(), string()) :: list(map())
   def complete(root, import_line, expr) do
     try do
       $builtins.list(script(root, import_line, expr).complete(2, String.length(expr)))
@@ -62,6 +66,7 @@ defmodule PyIntel do
   end
 
   # zero-based line/character, ready for LSP positions
+  @spec goto(string(), string(), string()) :: map() | nil
   def goto(root, import_line, expr) do
     try do
       names = $builtins.list(
@@ -81,6 +86,7 @@ defmodule PyIntel do
     end
   end
 
+  @spec signatures(string(), string(), string()) :: list(map())
   def signatures(root, import_line, callee) do
     try do
       $builtins.list(

@@ -8,7 +8,7 @@ class GanMatchError(Exception):
     pass
 
 
-def fact(*_gan_args):
+def fact(*_gan_args) -> int:
     """Factorial via multi-clause dispatch. Prose lives in @doc and is
 translated; runnable examples live in @example, tested by `gan test`
 and shared by every locale.
@@ -30,7 +30,7 @@ Since: 0.1.0
     raise GanMatchError("no clause of fact/1 matched " + repr(_gan_args))
 
 
-def classify(x):
+def classify(x: int | float) -> str:
     """Sign of a number as an atom.
 
     >>> classify(-3)
@@ -46,7 +46,7 @@ def classify(x):
         return "positive"
 
 
-def old_norm(xs):
+def old_norm(xs: list[int | float]) -> float:
     """Same as norm/1; kept for early adopters.
 
 Deprecated: Use norm/1 instead.
@@ -56,7 +56,7 @@ Since: 0.1.0
     return norm(xs)
 
 
-def norm(xs):
+def norm(xs: list[int | float]) -> float:
     """Euclidean norm through a pipeline.
 
     >>> norm([3, 4])

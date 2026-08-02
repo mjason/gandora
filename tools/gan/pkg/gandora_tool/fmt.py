@@ -33,7 +33,7 @@ hang_starters = ["++", "<>", "and", "or", "when", "in", "==", "!=", "<=", ">=", 
 space_around = ["=", "|>", "->", "<-", "=>", "\\\\"]
 
 
-def run(args):
+def run(args: list[str]) -> None:
     check = gandora_std.enum.member_p(args, "--check")
     paths = gandora_std.enum.reject(args, lambda a: gandora_std.string.starts_with_p(a, "--"))
     files = _collect_files(paths)
@@ -112,7 +112,7 @@ def _format_file(file, check):
             raise GanMatchError("no case clause matched: " + repr(_gan_case4))
 
 
-def verify(old_text, new_text):
+def verify(old_text: str, new_text: str) -> str | tuple[str, str]:
     if _comments_of(old_text) != _comments_of(new_text):
         return ("error", "comment sequence changed")
     elif _strip_meta(core.parse(old_text)) != _strip_meta(core.parse(new_text)):
@@ -136,7 +136,7 @@ def _strip_meta(t):
         return t
 
 
-def format_text(text):
+def format_text(text: str) -> tuple[str, str]:
     try:
         core.parse(text)
         _gan_tmp9 = "ok"
@@ -189,12 +189,12 @@ def _reflow(text):
                         raise GanMatchError("no match of right-hand side value: " + repr(_gan_val14))
                 indent = gandora_std.string.duplicate("  ", level)
                 multi = gandora_std.enum.find(lt, lambda t: _multiline_p(t))
-                if _gan_truthy((multi is None)):
+                if (multi is None):
                     _gan_tmp16 = indent + _render_tokens(_capture_parens(lt), lines)
                 else:
                     _gan_tmp16 = indent + line.strip()
                 rendered = _gan_tmp16
-                if _gan_truthy((multi is None)):
+                if (multi is None):
                     _gan_tmp17 = deltas
                 else:
                     old_lead = builtins.len(line) - builtins.len(line.lstrip())
@@ -282,13 +282,13 @@ def _clause_head_p(lt):
 
 def _ends_with_arrow_p(lt):
     last = _last_significant(lt)
-    return _gan_and(not (_gan_truthy((last is None))), lambda: _tok_is(last, "op", "->"))
+    return _gan_and(not ((last is None)), lambda: _tok_is(last, "op", "->"))
 
 
 def _hang_p(first, prev_last, prev_hang, in_paren):
     starts = _gan_and(gandora_std.enum.member_p(["op", "kw"], gandora_std.map.get(first, "kind")), lambda: gandora_std.enum.member_p(hang_starters, gandora_std.map.get(first, "value")))
-    ends = _gan_and(_gan_and(not (_gan_truthy((prev_last is None))), lambda: gandora_std.enum.member_p(["op", "kw"], gandora_std.map.get(prev_last, "kind"))), lambda: gandora_std.enum.member_p(hang_enders, gandora_std.map.get(prev_last, "value")))
-    comma = _gan_and(not (_gan_truthy(in_paren)) and not (_gan_truthy((prev_last is None))), lambda: _tok_is(prev_last, "op", ","))
+    ends = _gan_and(_gan_and(not ((prev_last is None)), lambda: gandora_std.enum.member_p(["op", "kw"], gandora_std.map.get(prev_last, "kind"))), lambda: gandora_std.enum.member_p(hang_enders, gandora_std.map.get(prev_last, "value")))
+    comma = _gan_and(not (_gan_truthy(in_paren)) and not ((prev_last is None)), lambda: _tok_is(prev_last, "op", ","))
     continues = _gan_and(_tok_is(first, "op", "|>"), lambda: prev_hang)
     return _gan_or(_gan_or(_gan_or(starts, lambda: ends), lambda: comma), lambda: continues)
 
@@ -384,7 +384,7 @@ def _render_tokens(lt, lines):
                 break
             case [t, *rest] as _gan_l35 if isinstance(_gan_l35, list):
                 txt = _tok_text(t, lines)
-                if _gan_truthy((prev is None)):
+                if (prev is None):
                     _gan_tmp36 = txt
                 elif _gap(prev, t) == 0:
                     _gan_tmp36 = txt
