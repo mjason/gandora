@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.4 — 2026-08-02
+
+- **Parser: block constructs are expressions everywhere.** `if`,
+  `unless`, `case`, `cond`, `with`, `try`, `loop`, and `quote` now
+  parse inside tuples, lists, map values, and call arguments —
+  `{1, if ok do 2 else 3 end}` — matching Elixir, where they were
+  previously statement-position only.
+- **New diagnostic: Python stdlib shadowing.** A top-level module
+  whose file name collides with a Python standard-library module
+  (`Collections` -> `collections.py`) now gets a warning — such a file
+  shadows the stdlib for everything on the project path and breaks
+  imports in surprising ways.
+
 ## v0.2.3 — 2026-08-02
 
 - **Codegen: f-string interpolations are hoisted when they contain

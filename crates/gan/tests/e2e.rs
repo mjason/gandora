@@ -447,3 +447,27 @@ fn marker_runtime_resolution_and_py_package() {
     assert!(py.contains("gandora_std.enum.map("), "{py}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn warns_when_module_shadows_python_stdlib() {
+    let dir = temp_dir("shadow");
+    let project = dir.join("app");
+    let out = gan().arg("init").arg(&project).output().unwrap();
+    assert!(out.status.success());
+    std::fs::write(
+        project.join("src/collections.gan"),
+        "defmodule Collections do\n  def ok(), do: 1\nend\n",
+    )
+    .unwrap();
+    let out = gan().current_dir(&project).arg("check").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        all.contains("shadowing Python's standard-library module 'collections'"),
+        "{all}"
+    );
+}

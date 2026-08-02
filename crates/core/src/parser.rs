@@ -291,13 +291,24 @@ impl Parser {
                 if *self.peek() == Tok::Op("(") {
                     return Ok(var);
                 }
-                if command && self.starts_expr() {
+                // block constructs are expressions everywhere, as in Elixir:
+                // `{1, if ok do 2 else 3 end}`, `f(case x do ... end)`
+                let block_form = matches!(
+                    name.as_str(),
+                    "if" | "unless" | "case" | "cond" | "with" | "try" | "loop" | "quote"
+                );
+                if (command || block_form) && self.starts_expr() {
                     let args = self.parse_command_args()?;
-                    return Ok(Term::Call(Box::new(Call {
+                    let mut call = Call {
                         callee: Callee::Name(name),
                         args,
                         span,
-                    })));
+                    };
+                    if !command && *self.peek() == Tok::Kw("do") {
+                        let mut block_args = self.parse_do_block()?;
+                        call.args.append(&mut block_args);
+                    }
+                    return Ok(Term::Call(Box::new(call)));
                 }
                 Ok(var)
             }
@@ -883,6 +894,28 @@ mod tests {
                 }
                 other => panic!("{other:?}"),
             },
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn block_forms_are_expressions_everywhere() {
+        // `if`/`case`/... are ordinary expressions, as in Elixir: inside
+        // tuples, lists, call arguments, and map values
+        let t = parse("{1, if ok do 2 else 3 end}");
+        match &t {
+            Term::Tuple(items) => {
+                assert!(matches!(&items[1], Term::Call(c)
+                    if matches!(&c.callee, Callee::Name(n) if n == "if")));
+            }
+            other => panic!("{other:?}"),
+        }
+        let t = parse("f(case x do\n 1 -> :a\n end)");
+        match &t {
+            Term::Call(c) => {
+                assert!(matches!(&c.args[0], Term::Call(inner)
+                    if matches!(&inner.callee, Callee::Name(n) if n == "case")));
+            }
             other => panic!("{other:?}"),
         }
     }
