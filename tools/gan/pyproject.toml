@@ -27,3 +27,4 @@ packages = ["pkg/gandora_tool"]
 # affect the published wheel's metadata)
 [tool.uv.sources]
 gandora-core = { path = "../../crates/core-py" }
+gandora-std = { path = "../../std" }

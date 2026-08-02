@@ -24,3 +24,4 @@ packages = ["pkg/gandora_lsp"]
 
 [tool.uv.sources]
 gandora-core = { path = "../../crates/core-py" }
+gandora-std = { path = "../../std" }

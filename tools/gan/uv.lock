@@ -4,24 +4,17 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "gandora-core"
-version = "0.1.0"
-source = { path = "../../target/wheels/gandora_core-0.1.0-cp39-abi3-manylinux_2_34_x86_64.whl" }
-wheels = [
-    { filename = "gandora_core-0.1.0-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:410119eaaabda1a1bab2c5ac270d1bffdfa76dee574af66e368fa07b7e49ed9d" },
-]
+version = "0.2.0"
+source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-std"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/56/7a/68a94a79c175b63e4857b59a92e3eb7e228c21c1d9d5453865b4f4782c21/gandora_std-0.1.0.tar.gz", hash = "sha256:ff802200fb74147c4c597fbf550936c876cb68d47fe050d0c89f2c7e444dbfba", size = 10418, upload-time = "2026-08-02T02:07:14.236Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/57/26e165798976ee7644940dcb901c8e8649a33bf82c1b5f58fdd7350dfda3/gandora_std-0.1.0-py3-none-any.whl", hash = "sha256:43ec4e58643b17635f5f2e6bc9987f851d62cfcc4e931d997990e62dc440851f", size = 16287, upload-time = "2026-08-02T02:07:13.225Z" },
-]
+version = "0.2.0"
+source = { directory = "../../std" }
 
 [[package]]
 name = "gandora-tool"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
@@ -30,6 +23,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gandora-core", path = "../../target/wheels/gandora_core-0.1.0-cp39-abi3-manylinux_2_34_x86_64.whl" },
-    { name = "gandora-std", specifier = ">=0.1.0" },
+    { name = "gandora-core", directory = "../../crates/core-py" },
+    { name = "gandora-std", directory = "../../std" },
 ]
