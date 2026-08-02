@@ -4,5 +4,5 @@
   "outDir": "pkg",
   "targetPython": "3.11",
   "package": true,
-  "pyPackage": "gandora_std",
+  "pyPackage": "gandora_std"
 }

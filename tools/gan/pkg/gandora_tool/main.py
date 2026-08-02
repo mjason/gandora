@@ -25,7 +25,7 @@ class GanMatchError(Exception):
 
 usage = "gan - the Gandora task runner\n\nUsage:\n  gan build | check | run <file> [args...] | exec <code> | repl\n  gan init <path> | version\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
 
-gandora_jsonc = "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\",\n}\n"
+gandora_jsonc = "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\"\n}\n"
 
 gitignore = "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n"
 

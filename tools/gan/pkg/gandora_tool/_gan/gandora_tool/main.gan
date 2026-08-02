@@ -159,7 +159,7 @@ defmodule Main do
   {
     "source": ["src"],
     "outDir": "dist",
-    "targetPython": "3.11",
+    "targetPython": "3.11"
   }
   """
 

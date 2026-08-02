@@ -83,7 +83,7 @@ const INIT_CONFIG: &str = r#"{
   // Python package metadata and dependencies stay in pyproject.toml.
   "source": ["src"],
   "outDir": "dist",
-  "targetPython": "3.11",
+  "targetPython": "3.11"
 }
 "#;
 
@@ -171,7 +171,7 @@ fn cmd_init_package(args: &[String]) -> Result<(), Diagnostic> {
   "source": ["src"],
   "outDir": "pkg",
   "targetPython": "3.11",
-  "package": true,
+  "package": true
 }
 "#;
     std::fs::write(path.join("gandora.jsonc"), config).map_err(io_err(&path))?;
