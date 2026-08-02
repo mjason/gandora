@@ -19,10 +19,8 @@ jobs:
           command: build
           args: --release --out dist-lang
           manylinux: auto
-      - uses: PyO3/maturin-action@v1
-        with:
-          command: sdist
-          args: --out dist-lang
+      # sdist omitted: maturin sdist of a workspace bin crate carries local
+      # path deps PyPI rejects; the wheel is the distribution (binary tool)
       - uses: actions/upload-artifact@v4
         with:
           name: dist-lang
