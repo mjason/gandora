@@ -48,8 +48,9 @@ jobs:
           path: dist-std
 
   # Trusted Publishing (OIDC): no tokens anywhere.
-  # PyPI side: two pending publishers (gandora-lang, gandora-std), both
-  # owner=mjason repo=gandora workflow=release.yml environment=pypi.
+  # PyPI side: two pending publishers — gandora-lang uses environment
+  # `pypi`, gandora-std uses `pypi-std` (PyPI requires the repo/workflow/
+  # environment tuple to be unique per project).
   publish-lang:
     needs: [build-lang]
     runs-on: ubuntu-latest
@@ -66,7 +67,7 @@ jobs:
   publish-std:
     needs: [build-std]
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: pypi-std
     permissions:
       id-token: write
     steps:
