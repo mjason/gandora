@@ -1,13 +1,14 @@
 [project]
 name = "gandora-lsp"
-version = "0.2.0"
+version = "0.2.1"
 description = "gan-lsp — the Gandora language server, written in Gandora (GEP-0015)"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0"]
+dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0", "pygls>=2"]
 
 [project.scripts]
 gan-lsp = "gandora_lsp.main:main"
+gan-lsc = "gandora_lsp.lsc:main"
 
 [build-system]
 requires = ["hatchling"]

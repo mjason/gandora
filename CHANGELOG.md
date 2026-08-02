@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.1 — 2026-08-02
+
+- gan-lsp rewritten on **pygls** (protocol machinery from the LSP
+  ecosystem; language logic stays Gandora, attached via module
+  attributes + @decorate).
+- New **gan-lsc**: the Language Server Console — language intelligence
+  as one JSON value per query (`version`, `diagnostics`, `ast`,
+  `expand`, `compile`, `resolve`), the AI-facing isomorphic surface,
+  reachable as `gan lsc`.
+
 ## v0.2.0 — 2026-08-02
 
 The toolchain becomes Gandora (GEP-0012..0015).

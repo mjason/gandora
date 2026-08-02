@@ -1,151 +1,62 @@
 defmodule Main do
   @moduledoc """
-  gan-lsp: a Language Server Protocol server written in Gandora
-  (GEP-0015). v1: lifecycle + push diagnostics via gandora_core.
+  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 2).
+  pygls owns protocol machinery; this module owns language logic.
   """
 
   pyimport gandora_core, as: core
-  pyimport json
-  pyimport urllib.parse, as: urlparse
+  pyimport lsprotocol.types, as: types
 
-  def main() do
-    loop state = %{"root" => nil, "running" => true} do
-      case read_message() do
-        :eof -> break(0)
-        msg ->
-          next = try do
-            handle(msg, state)
-          rescue
-            e ->
-              log("handler error: #{:builtins.type(e).__name__}: #{to_string(e)}")
-              state
-          end
-          if Map.get(next, "running") do
-            recur(next)
-          else
-            break(0)
-          end
-      end
+  @server :"pygls.lsp.server".LanguageServer("gan-lsp", "0.2.1")
+
+  @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)
+  def did_open(params) do
+    publish(params.text_document.uri, params.text_document.text)
+  end
+
+  @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_CHANGE)
+  def did_change(params) do
+    text = Enum.at(:builtins.list(params.content_changes), -1).text
+    publish(params.text_document.uri, text)
+  end
+
+  @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_CLOSE)
+  def did_close(params) do
+    send_diagnostics(params.text_document.uri, [])
+  end
+
+  defp send_diagnostics(uri, items) do
+    @server.text_document_publish_diagnostics(
+      :"lsprotocol.types".PublishDiagnosticsParams(uri: uri, diagnostics: items)
+    )
+  end
+
+  defp publish(uri, text) do
+    path = String.replace(uri, "file://", "")
+    root = @server.workspace.root_path
+    diags = try do
+      core.diagnostics(text, path, root)
+    rescue
+      _e -> []
     end
-    :sys.exit(0)
-  end
-
-  # ---- framing -----------------------------------------------------------
-
-  defp read_message() do
-    len = loop n = nil do
-      line = :sys.stdin.buffer.readline()
-      cond do
-        :builtins.len(line) == 0 -> break(:eof)
-        line == :builtins.bytes("\r\n", "ascii") -> break(n)
-        true ->
-          text = line.decode("ascii").strip()
-          if String.starts_with?(String.downcase(text), "content-length:") do
-            recur(String.to_integer(String.trim(Enum.at(text.split(":"), 1))))
-          else
-            recur(n)
-          end
-      end
-    end
-    cond do
-      len == :eof -> :eof
-      is_nil(len) -> :eof
-      true ->
-        body = :sys.stdin.buffer.read(len)
-        json.loads(body.decode("utf-8"))
-    end
-  end
-
-  defp send_message(payload) do
-    body = json.dumps(payload).encode("utf-8")
-    header = :builtins.bytes("Content-Length: #{:builtins.len(body)}\r\n\r\n", "ascii")
-    :sys.stdout.buffer.write(header)
-    :sys.stdout.buffer.write(body)
-    :sys.stdout.buffer.flush()
-  end
-
-  defp respond(id, result), do: send_message(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
-
-  defp respond_error(id, code, message),
-    do: send_message(%{"jsonrpc" => "2.0", "id" => id, "error" => %{"code" => code, "message" => message}})
-
-  defp notify(method, params),
-    do: send_message(%{"jsonrpc" => "2.0", "method" => method, "params" => params})
-
-  defp log(message),
-    do: notify("window/logMessage", %{"type" => 2, "message" => "gan-lsp: " <> message})
-
-  # ---- dispatch ----------------------------------------------------------
-
-  defp handle(msg, state) do
-    method = Map.get(msg, "method")
-    id = Map.get(msg, "id")
-    case method do
-      "initialize" ->
-        root = root_path(Map.get(msg, "params"))
-        respond(id, %{
-          "capabilities" => %{"textDocumentSync" => 1},
-          "serverInfo" => %{"name" => "gan-lsp", "version" => core.version()}
-        })
-        Map.put(state, "root", root)
-      "initialized" -> state
-      "textDocument/didOpen" ->
-        doc = Map.get(Map.get(msg, "params"), "textDocument")
-        publish(Map.get(doc, "uri"), Map.get(doc, "text"), state)
-        state
-      "textDocument/didChange" ->
-        params = Map.get(msg, "params")
-        uri = Map.get(Map.get(params, "textDocument"), "uri")
-        changes = Map.get(params, "contentChanges")
-        text = Map.get(Enum.at(changes, -1), "text")
-        publish(uri, text, state)
-        state
-      "textDocument/didClose" ->
-        uri = Map.get(Map.get(Map.get(msg, "params"), "textDocument"), "uri")
-        notify("textDocument/publishDiagnostics", %{"uri" => uri, "diagnostics" => []})
-        state
-      "shutdown" ->
-        respond(id, nil)
-        state
-      "exit" -> Map.put(state, "running", false)
-      _ ->
-        if is_nil(id) do
-          state
-        else
-          respond_error(id, -32601, "method not found: #{method}")
-          state
-        end
-    end
-  end
-
-  defp root_path(params) do
-    uri = Map.get(params, "rootUri")
-    if is_nil(uri), do: Map.get(params, "rootPath"), else: uri_to_path(uri)
-  end
-
-  defp uri_to_path(uri), do: urlparse.unquote(String.replace(uri, "file://", ""))
-
-  # ---- diagnostics -------------------------------------------------------
-
-  defp publish(uri, text, state) do
-    path = uri_to_path(uri)
-    diags = core.diagnostics(text, path, Map.get(state, "root"))
     lsp = Enum.map(diags, fn d ->
       line = Enum.max([Map.get(d, "line") - 1, 0])
       col = Enum.max([Map.get(d, "col") - 1, 0])
-      %{
-        "range" => %{
-          "start" => %{"line" => line, "character" => col},
-          "end" => %{"line" => line, "character" => col}
-        },
-        "severity" => severity(Map.get(d, "severity")),
-        "source" => "gan",
-        "message" => Map.get(d, "message")
-      }
+      pos = types.Position(line: line, character: col)
+      types.Diagnostic(
+        range: types.Range(pos, pos),
+        message: Map.get(d, "message"),
+        severity: severity(Map.get(d, "severity")),
+        source: "gan"
+      )
     end)
-    notify("textDocument/publishDiagnostics", %{"uri" => uri, "diagnostics" => lsp})
+    send_diagnostics(uri, lsp)
   end
 
-  defp severity("error"), do: 1
-  defp severity(_), do: 2
+  defp severity("error"), do: :"lsprotocol.types".DiagnosticSeverity.Error
+  defp severity(_), do: :"lsprotocol.types".DiagnosticSeverity.Warning
+
+  def main() do
+    @server.start_io()
+  end
 end

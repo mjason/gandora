@@ -1,0 +1,73 @@
+defmodule Lsc do
+  @moduledoc """
+  gan-lsc: the Language Server Console (GEP-0015-R001A) — language
+  intelligence as one JSON value per query, for AI agents and shells.
+  """
+
+  pyimport gandora_core, as: core
+  pyimport json
+  pyimport pathlib
+
+  @usage """
+  gan lsc <query> — one JSON value on stdout
+
+  Queries (each accepts --root <dir>, default: cwd):
+    version                     compiler/library version
+    diagnostics <file>          full-pipeline diagnostics
+    ast <file>                  quoted term of the source
+    expand <file>               quoted term after macro expansion
+    compile <file>              generated Python source (plain text)
+    resolve <module>            how a module reference resolves
+  """
+
+  def main() do
+    args = :builtins.list(:sys.argv) |> Enum.drop(1)
+    {root, args} = take_root(args)
+    try do
+      dispatch(args, root)
+    rescue
+      e in core.CompileError ->
+        parts = :builtins.list(e.args)
+        emit(%{
+          "error" => Enum.at(parts, 0),
+          "path" => Enum.at(parts, 1),
+          "line" => Enum.at(parts, 2),
+          "col" => Enum.at(parts, 3)
+        })
+        :sys.exit(1)
+    end
+  end
+
+  defp dispatch(args, root) do
+    case args do
+      ["version" | _] ->
+        emit(%{"version" => core.version()})
+      ["diagnostics", file | _] ->
+        emit(core.diagnostics(read(file), file, root))
+      ["ast", file | _] ->
+        emit(core.parse(read(file), file))
+      ["expand", file | _] ->
+        emit(core.expand(read(file), file, root))
+      ["compile", file | _] ->
+        IO.puts(core.compile_string(read(file), file, root))
+      ["resolve", module | _] ->
+        emit(core.resolve(root, module))
+      _ ->
+        IO.puts(@usage)
+        :sys.exit(2)
+    end
+  end
+
+  defp take_root(args) do
+    case Enum.find_index(args, fn a -> a == "--root" end) do
+      nil -> {:os.getcwd(), args}
+      i ->
+        root = Enum.at(args, i + 1)
+        {root, Enum.take(args, i) ++ Enum.drop(args, i + 2)}
+    end
+  end
+
+  defp read(file), do: :pathlib.Path(file).read_text()
+
+  defp emit(value), do: IO.puts(json.dumps(value))
+end
