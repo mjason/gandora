@@ -1044,5 +1044,14 @@
         }
       ]
     }
+  },
+  "injections": {
+    "L:meta.embedded.block - (meta.embedded.splice | meta.embedded.doctest)": {
+      "patterns": [
+        {
+          "include": "#splice"
+        }
+      ]
+    }
   }
 }
