@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.1 — 2026-08-02
+
+- **LSP hover (GEP-0015 rev 3)**: hovering a `Module.function`
+  reference, a module name, or a local function shows its GEP-0007
+  docs — default-locale prose, every translation, metadata, and
+  `@example` blocks — via the new `gandora_core.doc` lookup API.
+- **Two-line dependency story (GEP-0013 rev 2)**: projects need only
+  `gandora-std` (runtime) plus `gandora-tool[dev]` (dev group; the
+  new extra aggregates the language server, compiler library comes
+  transitively). Scaffolds emit exactly this.
+- VS Code extension 0.1.6: eager output channel with startup logs
+  (the silent-success case is now visible), server spawned with the
+  workspace as cwd so the project venv's toolchain wins, pinned
+  `extensionKind: workspace`.
+
 ## v0.4.0 — 2026-08-02
 
 - **`gan fmt` (GEP-0016)**: conservative formatting written in

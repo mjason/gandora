@@ -126,8 +126,8 @@ fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
     write_if_absent(&path.join(".python-version"), "3.11\n")?;
     // the stdlib ships on PyPI in lockstep with the compiler (GEP-0010-R001)
     let pyproject = format!(
-        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={}\"]\n",
-        env!("CARGO_PKG_VERSION")
+        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={v}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={v}\"]\n",
+        v = env!("CARGO_PKG_VERSION")
     );
     write_if_absent(&path.join("pyproject.toml"), &pyproject)?;
     std::fs::create_dir_all(path.join("src")).map_err(io_err(&path))?;

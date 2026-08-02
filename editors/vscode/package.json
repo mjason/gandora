@@ -2,7 +2,7 @@
   "name": "gandora",
   "displayName": "Gandora",
   "description": "Gandora language support via gan lsp",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {
@@ -64,5 +64,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/mjason/gandora"
-  }
+  },
+  "extensionKind": [
+    "workspace"
+  ]
 }

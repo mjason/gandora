@@ -243,6 +243,47 @@ fn tokens(py: Python, source: &str, path: &str) -> PyResult<PyObject> {
     Ok(out.into_py(py))
 }
 
+
+/// Documentation lookup (GEP-0007/GEP-0015): `doc("Stats.mean")` returns
+/// {"label", "entries" (locale -> markdown), "examples", "meta", "hidden"}
+/// or None when the module/function has no docs.
+#[pyfunction]
+#[pyo3(signature = (target, root = None))]
+fn doc(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
+    let segs: Vec<&str> = target.split('.').collect();
+    let (module_name, fun) = match segs.last() {
+        Some(last) if last.chars().next().is_some_and(|c| c.is_lowercase()) => {
+            (segs[..segs.len() - 1].join("."), Some((*last).to_string()))
+        }
+        _ => (target.to_string(), None),
+    };
+    if module_name.is_empty() {
+        return Ok(py.None());
+    }
+    let root_dir = std::path::Path::new(root.unwrap_or("."));
+    let config =
+        compiler::project::load_config(&root_dir.join("gandora.jsonc")).map_err(raise)?;
+    let info = compiler::project::find_doc(&config, &module_name, fun.as_deref()).map_err(raise)?;
+    let Some(info) = info else {
+        return Ok(py.None());
+    };
+    let out = PyDict::new_bound(py);
+    let _ = out.set_item("label", target);
+    let _ = out.set_item("hidden", info.hidden);
+    let entries = PyDict::new_bound(py);
+    for (loc, text) in &info.entries {
+        let _ = entries.set_item(loc, text);
+    }
+    let _ = out.set_item("entries", entries);
+    let _ = out.set_item("examples", PyList::new_bound(py, &info.examples));
+    let meta = PyList::empty_bound(py);
+    for (k, v) in &info.meta {
+        let _ = meta.append(PyTuple::new_bound(py, [k, v]));
+    }
+    let _ = out.set_item("meta", meta);
+    Ok(out.into_py(py))
+}
+
 #[pyfunction]
 #[pyo3(signature = (source, path = "nofile", root = None))]
 fn diagnostics(py: Python, source: &str, path: &str, root: Option<&str>) -> PyResult<PyObject> {
@@ -339,6 +380,7 @@ fn gandora_core(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_string, m)?)?;
     m.add_function(wrap_pyfunction!(diagnostics, m)?)?;
     m.add_function(wrap_pyfunction!(tokens, m)?)?;
+    m.add_function(wrap_pyfunction!(doc, m)?)?;
     m.add_function(wrap_pyfunction!(compile_snippet, m)?)?;
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
     m.add_function(wrap_pyfunction!(build, m)?)?;

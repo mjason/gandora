@@ -1,14 +1,18 @@
 defmodule Main do
   @moduledoc """
-  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 2).
-  pygls owns protocol machinery; this module owns language logic.
+  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 3).
+  pygls owns protocol machinery; this module owns language logic:
+  push diagnostics on every edit, and hover serving the GEP-0007
+  documentation channel (default locale plus available translations).
   """
 
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.4.0",
+  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.4.1",
     text_document_sync_kind: $"lsprotocol.types".TextDocumentSyncKind.Full)
+
+  @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
 
   @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)
   def did_open(params) do
@@ -56,6 +60,88 @@ defmodule Main do
 
   defp severity("error"), do: $"lsprotocol.types".DiagnosticSeverity.Error
   defp severity(_), do: $"lsprotocol.types".DiagnosticSeverity.Warning
+
+  # ---- hover: the GEP-0007 doc channel at the cursor (GEP-0015-R005) ------
+
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_HOVER)
+  def hover(params) do
+    doc = @server.workspace.get_text_document(params.text_document.uri)
+    line = Enum.at(doc.source.split("\n"), params.position.line)
+    token = word_at(line, params.position.character)
+    target = cond do
+      is_nil(token) -> nil
+      String.match?(token, ~r/^[A-Z]/) -> token
+      true ->
+        # a bare lowercase name resolves against the file's own module
+        mod = module_of(doc.source)
+        if is_nil(mod) do
+          nil
+        else
+          "#{mod}.#{token}"
+        end
+    end
+    if is_nil(target) do
+      nil
+    else
+      info = try do
+        core.doc(target, @server.workspace.root_path)
+      rescue
+        _e -> nil
+      end
+      render_hover(target, info)
+    end
+  end
+
+  # the reference whose span covers the column
+  defp word_at(line, character) do
+    hit = Enum.find(@word_re.finditer(line), fn m ->
+      {s, e} = m.span()
+      s <= character and character < e
+    end)
+    if is_nil(hit) do
+      nil
+    else
+      hit.group(0).rstrip(".")
+    end
+  end
+
+  defp module_of(source) do
+    m = ~r/defmodule\s+([A-Za-z0-9_.]+)/.search(source)
+    if is_nil(m) do
+      nil
+    else
+      m.group(1)
+    end
+  end
+
+  defp render_hover(target, info) do
+    if is_nil(info) or info.get("hidden") do
+      nil
+    else
+      entries = Map.get(info, "entries", %{})
+      prose = Map.get(entries, "default")
+      translations = entries.items()
+      |> Enum.filter(fn {loc, _} -> loc != "default" end)
+      |> Enum.map(fn {loc, text} -> "\n---\n**#{loc}**\n\n#{text}" end)
+      meta = Map.get(info, "meta", [])
+      |> Enum.map(fn {k, v} -> "\n*#{k}*: #{v}" end)
+      examples = Map.get(info, "examples", [])
+      |> Enum.map(fn ex -> "\n```elixir\n#{ex.strip()}\n```" end)
+      body = [prose] ++ translations ++ meta ++ examples
+      |> Enum.reject(fn part -> is_nil(part) end)
+      |> Enum.join("\n")
+      if String.trim(body) == "" do
+        nil
+      else
+        types.Hover(
+          contents: types.MarkupContent(
+            kind: $"lsprotocol.types".MarkupKind.Markdown,
+            value: "### #{target}\n\n#{body}"
+          )
+        )
+      end
+    end
+  end
 
   def main() do
     @server.start_io()

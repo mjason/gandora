@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 2
+revision: 3
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -41,9 +41,10 @@ first long-running process.
 
 ## Scope
 
-Protocol framing, lifecycle, and diagnostics. Hover, completion,
-definition, and symbols are later revisions once span-range
-enrichment lands; they MUST reuse the same library queries.
+Protocol framing, lifecycle, diagnostics, and documentation hover.
+Completion, definition, and symbols are later revisions once
+span-range enrichment lands; they MUST reuse the same library
+queries.
 
 ## Specification
 
@@ -77,6 +78,14 @@ mapping severities and 1-based compiler spans to 0-based zero-length
 LSP ranges. A request that raises is answered with an error response
 (or logged, for notifications); the server MUST NOT die on bad input
 (GEP-0014 `try/rescue`).
+
+**GEP-0015-R005:** `textDocument/hover` serves the GEP-0007
+documentation channel: the reference under the cursor (a
+`Module.function` chain, a module name, or a bare local name resolved
+against the file's own module) is looked up through
+`gandora_core.doc`, and the hover renders the default-locale prose,
+every available translation, metadata, and `@example` blocks as
+Markdown. Undocumented or `@doc false` targets produce no hover.
 
 **GEP-0015-R004:** The repository ships a minimal VS Code client in
 `editors/vscode` that spawns `gan lsp` for `.gan` files; it contains
@@ -127,6 +136,9 @@ the right span, a didChange that fixes it producing an empty list,
 didClose clearing, and shutdown/exit terminating with code 0.
 
 ## Change History
+
+- Revision 3, 2026-08-02: Added R005 — documentation hover over the
+  `gandora_core.doc` lookup (new core API).
 
 - Revision 2, 2026-08-02: Adopted pygls for protocol machinery; added
   the gan-lsc isomorphic JSON console (R001A).

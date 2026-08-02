@@ -6,8 +6,9 @@ const { LanguageClient } = require("vscode-languageclient/node");
 let client;
 
 const INSTALL_HINT =
-  "Install the toolchain with: uv tool install gandora-tool && " +
-  "uv tool install gandora-lsp — or set `gandora.gan.path`.";
+  "Add `gandora-tool[dev]` to the project's dev dependencies (uv add --dev " +
+  '"gandora-tool[dev]") or install globally: uv tool install gandora-tool ' +
+  "gandora-lsp — or set `gandora.gan.path`.";
 
 function ganCommand() {
   return vscode.workspace.getConfiguration("gandora").get("gan.path") || "gan";
@@ -17,9 +18,9 @@ function ganCommand() {
 // (gan-lsc ships in the same package as gan-lsp), so a missing runner
 // or missing plugin surfaces as one actionable message instead of a
 // languageclient crash loop.
-function preflight(cmd) {
+function preflight(cmd, cwd) {
   return new Promise((resolve) => {
-    execFile(cmd, ["lsc", "version"], { timeout: 10000 }, (err, stdout) => {
+    execFile(cmd, ["lsc", "version"], { timeout: 10000, cwd }, (err, stdout) => {
       if (err) {
         resolve(
           err.code === "ENOENT"
@@ -36,19 +37,29 @@ function preflight(cmd) {
 }
 
 async function activate() {
+  const output = vscode.window.createOutputChannel("Gandora Language Server");
   const cmd = ganCommand();
-  const problem = await preflight(cmd);
+  const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  output.appendLine(`[gandora] activating: command '${cmd}', workspace ${cwd ?? "(none)"}`);
+  const problem = await preflight(cmd, cwd);
   if (problem) {
+    output.appendLine(`[gandora] preflight failed: ${problem}`);
+    output.show(true);
     vscode.window.showErrorMessage(`Gandora LSP not started: ${problem}`);
     return;
   }
+  output.appendLine("[gandora] preflight ok, starting `" + cmd + " lsp`");
   client = new LanguageClient(
     "gandora",
     "Gandora Language Server",
-    { command: cmd, args: ["lsp"] },
-    { documentSelector: [{ scheme: "file", language: "gandora" }] }
+    { command: cmd, args: ["lsp"], options: { cwd } },
+    {
+      documentSelector: [{ scheme: "file", language: "gandora" }],
+      outputChannel: output,
+    }
   );
-  client.start();
+  await client.start();
+  output.appendLine("[gandora] language server running (diagnostics + hover)");
 }
 
 function deactivate() {

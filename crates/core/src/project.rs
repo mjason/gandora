@@ -477,6 +477,99 @@ const PY_STDLIB_MODULES: &[&str] = &[
     "zoneinfo",
 ];
 
+
+/// Locate a module's source (project first, then installed packages) and
+/// extract the documentation of the module or one of its functions
+/// (GEP-0007). Returns Ok(None) when the module or doc is absent.
+pub fn find_doc(
+    config: &Config,
+    module_name: &str,
+    fun: Option<&str>,
+) -> crate::diag::Result<Option<crate::codegen::DocInfo>> {
+    use crate::ast::{Callee, Term};
+    use crate::codegen;
+    let mut source: Option<std::path::PathBuf> = None;
+    for (path, module) in discover_sources(config)? {
+        if module.join(".") == module_name {
+            source = Some(path);
+            break;
+        }
+    }
+    if source.is_none() {
+        source = find_installed_source(config, module_name);
+    }
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    let file = source.display().to_string();
+    let text = std::fs::read_to_string(&source)
+        .map_err(|e| crate::diag::Diagnostic::new(&file, crate::diag::Span::default(), e.to_string()))?;
+    let term = crate::parser::parse_file(&file, &text)?;
+
+    let mut module_doc: Option<codegen::DocInfo> = None;
+    let mut fun_doc: Option<codegen::DocInfo> = None;
+    let mut pending: Option<codegen::DocInfo> = None;
+    for stmt in term.as_block() {
+        if !stmt.is_call_named("defmodule") {
+            continue;
+        }
+        let Term::Call(dm) = &stmt else { continue };
+        let Some(body) = Term::keyword_arg(&dm.args, "do") else { continue };
+        for inner in body.as_block() {
+            let Term::Call(c) = &inner else { continue };
+            let Callee::Name(name) = &c.callee else { continue };
+            match name.as_str() {
+                "@moduledoc" => {
+                    let info = module_doc.get_or_insert_with(codegen::DocInfo::default);
+                    codegen::merge_doc_value(&file, c, info, "@moduledoc")?;
+                }
+                "@doc" => {
+                    let info = pending.get_or_insert_with(codegen::DocInfo::default);
+                    codegen::merge_doc_value(&file, c, info, "@doc")?;
+                }
+                "@doc_trans" => {
+                    if let Some(info) = pending.as_mut() {
+                        codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;
+                    }
+                }
+                "@example" => {
+                    let ex = codegen::example_from_args(&file, c)?;
+                    pending
+                        .get_or_insert_with(codegen::DocInfo::default)
+                        .examples
+                        .push(ex);
+                }
+                "@moduledoc_trans" => {
+                    if let Some(info) = module_doc.as_mut() {
+                        codegen::merge_doc_trans(&file, c, info, "@moduledoc_trans")?;
+                    }
+                }
+                "def" | "defp" | "defmacro" => {
+                    let head_name = c.args.first().and_then(|h| match h {
+                        Term::Call(hc) => match &hc.callee {
+                            Callee::Name(n) => Some(n.clone()),
+                            _ => None,
+                        },
+                        Term::Var(n, _) => Some(n.clone()),
+                        _ => None,
+                    });
+                    if let (Some(f), Some(h)) = (&fun, &head_name) {
+                        if *f == h.as_str() && fun_doc.is_none() {
+                            fun_doc = pending.take();
+                        }
+                    }
+                    pending = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(match fun {
+        Some(_) => fun_doc,
+        None => module_doc,
+    })
+}
+
 /// Modules named by `require`/`import`, whose macros become visible.
 fn macro_deps(term: &Term) -> Vec<String> {
     let mut deps = Vec::new();

@@ -94,6 +94,10 @@ def main():
             isinstance(sync, dict) and sync.get("change") == 1,
             f"announces full text sync (GEP-0015-R002), got {sync!r}",
         )
+        check(
+            bool(resp["result"]["capabilities"].get("hoverProvider")),
+            "announces hoverProvider (GEP-0015-R005)",
+        )
         s.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
 
         bad = "defmodule Main do\n  def broken( do\nend\n"

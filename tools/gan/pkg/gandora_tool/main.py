@@ -190,7 +190,7 @@ def _eval_line(code, ns):
 
 
 def _pyproject_toml(name):
-    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n"
+    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\"]\n"
 
 
 def init(path):

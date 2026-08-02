@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 1
+revision: 2
 requires: [6, 12, 14]
 replaces: []
 superseded-by: null
@@ -80,6 +80,13 @@ delegation to `ganc <name> ...` (covering `expand`, `doc`, `test`,
 `compile`, `lsc` and future stage-0 commands); otherwise the usage
 error. Plugins are ordinary distributions exposing a `gan-<name>`
 entry point — installing one is `uv add`.
+
+**GEP-0013-R006:** A project needs exactly two Gandora entries in its
+`pyproject.toml`: `gandora-std` as a runtime dependency (generated
+code imports it) and `gandora-tool[dev]` in the `dev` dependency
+group — the `dev` extra aggregates the toolchain (the language
+server, with the compiler library arriving transitively). Scaffolds
+(`gan init`, `ganc init`) MUST emit exactly this shape.
 
 **GEP-0013-R004:** Runner output and exit codes follow GEP-0001-R023.
 The runner MUST NOT depend on the `gan` rust binary existing at
@@ -152,5 +159,8 @@ mismatch warning; and a wheel-installed runner driving a project with
 no Rust toolchain present.
 
 ## Change History
+
+- Revision 2, 2026-08-02: Added R006 — the `gandora-tool[dev]` extra
+  as the single dev-dependency entry; scaffolds emit it.
 
 - Revision 1, 2026-08-02: Initial version.

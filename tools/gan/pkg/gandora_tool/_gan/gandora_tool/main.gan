@@ -185,6 +185,9 @@ defmodule Main do
     version = "0.1.0"
     requires-python = ">=3.11"
     dependencies = ["gandora-std>=<%= core.version() %>"]
+
+    [dependency-groups]
+    dev = ["gandora-tool[dev]>=<%= core.version() %>"]
     """
   end
 
