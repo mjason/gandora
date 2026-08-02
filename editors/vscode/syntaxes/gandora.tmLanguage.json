@@ -1,0 +1,205 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Gandora",
+  "scopeName": "source.gandora",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#doc-heredoc" },
+    { "include": "#sigil-python" },
+    { "include": "#sigil-sql" },
+    { "include": "#sigil-markdown" },
+    { "include": "#sigil-html" },
+    { "include": "#sigil-json" },
+    { "include": "#sigil-regex" },
+    { "include": "#sigil-generic" },
+    { "include": "#heredoc" },
+    { "include": "#string" },
+    { "include": "#attribute" },
+    { "include": "#keyword" },
+    { "include": "#atom" },
+    { "include": "#number" },
+    { "include": "#module" },
+    { "include": "#function-def" },
+    { "include": "#operator" },
+    { "include": "#variable" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#(?!\\{).*$",
+      "name": "comment.line.number-sign.gandora"
+    },
+    "splice": {
+      "begin": "<%=",
+      "end": "%>",
+      "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.gandora" } },
+      "endCaptures": { "0": { "name": "punctuation.section.embedded.end.gandora" } },
+      "contentName": "meta.embedded.splice.gandora",
+      "patterns": [{ "include": "source.gandora" }]
+    },
+    "interpolation": {
+      "begin": "#\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.gandora" } },
+      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.gandora" } },
+      "contentName": "meta.embedded.interpolation.gandora",
+      "patterns": [{ "include": "source.gandora" }]
+    },
+    "doc-heredoc": {
+      "begin": "(@(?:moduledoc|doc|example|doc_trans|moduledoc_trans))\\b([^\"\\n]*)(\"\"\")",
+      "end": "\"\"\"",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.attribute.gandora" },
+        "3": { "name": "string.quoted.triple.gandora punctuation.definition.string.begin.gandora" }
+      },
+      "endCaptures": { "0": { "name": "string.quoted.triple.gandora punctuation.definition.string.end.gandora" } },
+      "contentName": "meta.embedded.block.markdown text.html.markdown",
+      "patterns": [
+        { "match": "^\\s*gan>.*$", "name": "markup.raw.doctest.gandora" },
+        { "include": "text.html.markdown" }
+      ]
+    },
+    "sigil-python": {
+      "patterns": [
+        {
+          "begin": "~python\"\"\"",
+          "end": "\"\"\"",
+          "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "contentName": "meta.embedded.block.python source.python",
+          "patterns": [{ "include": "#splice" }, { "include": "source.python" }]
+        },
+        {
+          "begin": "~python\\(",
+          "end": "\\)",
+          "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "contentName": "meta.embedded.block.python source.python",
+          "patterns": [
+            { "include": "#splice" },
+            { "include": "#paren-nest-python" },
+            { "include": "source.python" }
+          ]
+        }
+      ]
+    },
+    "paren-nest-python": {
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [
+        { "include": "#splice" },
+        { "include": "#paren-nest-python" },
+        { "include": "source.python" }
+      ]
+    },
+    "sigil-sql": {
+      "begin": "~sql(\"\"\"|\\()",
+      "end": "\"\"\"|\\)",
+      "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "contentName": "meta.embedded.block.sql source.sql",
+      "patterns": [{ "include": "#splice" }, { "include": "source.sql" }]
+    },
+    "sigil-markdown": {
+      "begin": "~markdown(\"\"\"|\\()",
+      "end": "\"\"\"|\\)",
+      "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "contentName": "meta.embedded.block.markdown text.html.markdown",
+      "patterns": [{ "include": "#splice" }, { "include": "text.html.markdown" }]
+    },
+    "sigil-html": {
+      "begin": "~html(\"\"\"|\\()",
+      "end": "\"\"\"|\\)",
+      "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "contentName": "meta.embedded.block.html text.html.basic",
+      "patterns": [{ "include": "#splice" }, { "include": "text.html.basic" }]
+    },
+    "sigil-json": {
+      "begin": "~json(\"\"\"|\\()",
+      "end": "\"\"\"|\\)",
+      "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "contentName": "meta.embedded.block.json source.json",
+      "patterns": [{ "include": "#splice" }, { "include": "source.json" }]
+    },
+    "sigil-regex": {
+      "begin": "~r(/|\\(|\")",
+      "end": "/|\\)|\"",
+      "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+      "contentName": "string.regexp.gandora",
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "sigil-generic": {
+      "patterns": [
+        {
+          "begin": "~[a-zA-Z]+\"\"\"",
+          "end": "\"\"\"",
+          "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "contentName": "string.unquoted.sigil.gandora",
+          "patterns": [{ "include": "#splice" }]
+        },
+        {
+          "begin": "~[a-zA-Z]+[\\(\\[\\{/|\"]",
+          "end": "[\\)\\]\\}/|\"]",
+          "beginCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "endCaptures": { "0": { "name": "keyword.other.sigil.gandora" } },
+          "contentName": "string.unquoted.sigil.gandora",
+          "patterns": [{ "include": "#splice" }, { "include": "#interpolation" }]
+        }
+      ]
+    },
+    "heredoc": {
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "name": "string.quoted.triple.gandora",
+      "patterns": [{ "include": "#interpolation" }]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.gandora",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.gandora" },
+        { "include": "#interpolation" }
+      ]
+    },
+    "attribute": {
+      "match": "@[a-zA-Z_][a-zA-Z0-9_]*",
+      "name": "keyword.control.attribute.gandora"
+    },
+    "keyword": {
+      "match": "\\b(defmodule|defmacro|defstruct|defattr|defp|def|do|end|fn|if|else|unless|case|cond|with|try|rescue|after|loop|recur|break|quote|unquote_splicing|unquote|var!|when|and|or|not|in|use|import|alias|require|pyimport|true|false|nil)\\b",
+      "name": "keyword.control.gandora"
+    },
+    "atom": {
+      "patterns": [
+        { "match": ":\"[^\"]*\"", "name": "constant.other.symbol.quoted.gandora" },
+        { "match": ":[a-zA-Z_][a-zA-Z0-9_]*[?!]?", "name": "constant.other.symbol.gandora" },
+        { "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?=:\\s)", "name": "constant.other.keyword-key.gandora" }
+      ]
+    },
+    "number": {
+      "match": "\\b\\d[\\d_]*(\\.\\d+)?([eE][+-]?\\d+)?\\b",
+      "name": "constant.numeric.gandora"
+    },
+    "module": {
+      "match": "\\b[A-Z][a-zA-Z0-9_]*(\\.[A-Z][a-zA-Z0-9_]*)*\\b",
+      "name": "entity.name.type.module.gandora"
+    },
+    "function-def": {
+      "match": "(?<=\\b(?:def|defp|defmacro)\\s)([a-z_][a-zA-Z0-9_]*[?!]?)",
+      "name": "entity.name.function.gandora"
+    },
+    "operator": {
+      "match": "\\|>|\\+\\+|<>|<%=|%>|\\\\\\\\|->|<-|=>|==|!=|<=|>=|//|\\.\\.|=|\\+|-|\\*|/|<|>|\\^|&|\\|",
+      "name": "keyword.operator.gandora"
+    },
+    "variable": {
+      "match": "\\b[a-z_][a-zA-Z0-9_]*[?!]?\\b",
+      "name": "variable.other.gandora"
+    }
+  }
+}

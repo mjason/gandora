@@ -5,17 +5,51 @@
   "version": "0.1.0",
   "publisher": "mjason",
   "license": "MIT",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Programming Languages"],
-  "activationEvents": ["onLanguage:gandora"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:gandora"
+  ],
   "main": "./src/extension.js",
   "contributes": {
-    "languages": [{
-      "id": "gandora",
-      "extensions": [".gan"],
-      "aliases": ["Gandora"],
-      "configuration": "./language-configuration.json"
-    }]
+    "languages": [
+      {
+        "id": "gandora",
+        "extensions": [
+          ".gan"
+        ],
+        "aliases": [
+          "Gandora"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gandora",
+        "scopeName": "source.gandora",
+        "path": "./syntaxes/gandora.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.python": "python",
+          "meta.embedded.block.sql": "sql",
+          "meta.embedded.block.markdown": "markdown",
+          "meta.embedded.block.html": "html",
+          "meta.embedded.block.json": "json",
+          "meta.embedded.splice.gandora": "gandora",
+          "meta.embedded.interpolation.gandora": "gandora"
+        }
+      }
+    ]
   },
-  "dependencies": { "vscode-languageclient": "^9.0.1" }
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mjason/gandora"
+  }
 }
