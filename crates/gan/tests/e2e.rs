@@ -69,7 +69,7 @@ fn init_creates_a_runnable_project() {
 
 #[test]
 fn tour_example_produces_expected_output() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan().current_dir(&tour).arg("build").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let dist = tour.join("dist");
@@ -83,7 +83,7 @@ fn tour_example_produces_expected_output() {
 
 #[test]
 fn build_is_deterministic() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan().current_dir(&tour).arg("build").output().unwrap();
     assert!(out.status.success());
     let first = std::fs::read_to_string(tour.join("dist/app/mathy.py")).unwrap();
@@ -108,7 +108,7 @@ fn check_reports_diagnostics_with_spans() {
 
 #[test]
 fn expand_prints_surface_syntax() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan()
         .current_dir(&tour)
         .args(["expand", "src/app/cli.gan"])
@@ -130,7 +130,7 @@ fn cli_misuse_exits_2() {
 
 #[test]
 fn structs_and_module_attributes_run() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan().current_dir(&tour).arg("build").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let dist = tour.join("dist");
@@ -142,7 +142,7 @@ fn structs_and_module_attributes_run() {
 
 #[test]
 fn sigils_run() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan().current_dir(&tour).arg("build").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let dist = tour.join("dist");
@@ -159,7 +159,7 @@ fn generated_snapshot_is_current() {
     // examples/tour/generated/ is the checked-in compilation result shown in
     // the docs; this test fails when the compiler output drifts from it.
     // Refresh with: cd examples/tour && gan build && cp -r dist/* generated/
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan().current_dir(&tour).arg("build").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let mut stack = vec![tour.join("generated")];
@@ -189,7 +189,7 @@ fn generated_snapshot_is_current() {
 
 #[test]
 fn macro_only_module_emits_no_file() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let out = gan().current_dir(&tour).arg("build").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -213,7 +213,7 @@ fn macro_only_module_emits_no_file() {
 fn pandas_and_numpy_chapters_run() {
     // these chapters need the tour's uv dev dependencies; skip cleanly when
     // the .venv is absent so stdlib-only environments still pass
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let venv_py = tour.join(".venv/bin/python");
     if !venv_py.exists() {
         eprintln!("skipping: examples/tour/.venv not present (run `uv sync`)");
@@ -334,7 +334,7 @@ fn copy_tree(from: &Path, to: &Path) {
 
 #[test]
 fn fastapi_chapter_runs() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     let venv_py = tour.join(".venv/bin/python");
     if !venv_py.exists() {
         eprintln!("skipping: examples/tour/.venv not present (run `uv sync`)");
@@ -366,7 +366,7 @@ fn fastapi_chapter_runs() {
 
 #[test]
 fn doctests_and_localized_docs() {
-    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/tour");
+    let tour = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/tour");
     // gan doc: default, exact locale, and prefix fallback
     let out = gan().current_dir(&tour).args(["doc", "App.Mathy.fact"]).output().unwrap();
     assert!(out.status.success());

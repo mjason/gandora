@@ -28,6 +28,25 @@ jobs:
           name: dist-lang
           path: dist-lang
 
+  # gandora-core: the compiler as a Python extension (GEP-0012)
+  build-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist-core --manifest-path crates/core-py/Cargo.toml
+          manylinux: auto
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist-core --manifest-path crates/core-py/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-core
+          path: dist-core
+
   # gandora-std: the standard library, compiled by the gan we just built
   build-std:
     runs-on: ubuntu-latest
@@ -61,6 +80,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist-lang
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-core:
+    needs: [build-core]
+    runs-on: ubuntu-latest
+    environment: pypi-core
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-core
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 

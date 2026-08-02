@@ -69,6 +69,9 @@ The practical guide is the [language manual](docs/syntax.md)
   ([中文](geps/local/zh/0010-standard-library.md))
 - [GEP-0011](geps/0011-multi-arity-functions.md) — multi-arity name groups
   and `\\` default parameters ([中文](geps/local/zh/0011-multi-arity-functions.md))
+- [GEP-0012](geps/0012-compiler-as-a-library.md) — [gandora-core](https://pypi.org/project/gandora-core/):
+  the compiler as a Python extension, quoted terms as native data — tooling
+  is written in Gandora itself ([中文](geps/local/zh/0012-compiler-as-a-library.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -171,8 +174,8 @@ inserts explicit truthiness checks where needed.
 
 ## Repository layout
 
-- `src/` — the Rust compiler (`lexer`, `parser`, `expander`, `codegen`,
-  `project`, CLI in `main.rs`)
+- `crates/core` — the compiler library; `crates/gan` — the CLI;
+  `crates/core-py` — the `gandora_core` Python extension (GEP-0012)
 - `docs/` — the language manual (+ `docs/local/zh/` translations)
 - `geps/` — Gandora Enhancement Proposals (+ `geps/local/zh/` translations)
 - `examples/tour` — a runnable multi-module example

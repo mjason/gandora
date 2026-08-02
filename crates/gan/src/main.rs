@@ -1,12 +1,4 @@
-mod ast;
-mod codegen;
-mod diag;
-mod expander;
-mod jsonc;
-mod lexer;
-mod parser;
-mod printer;
-mod project;
+use gandora_core::{ast, codegen, diag, expander, parser, printer, project};
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

@@ -1,12 +1,8 @@
-[package]
-name = "gandora"
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/gan", "crates/core-py"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-description = "The gan compiler: an Elixir-flavored language that compiles to Python"
 license = "MIT"
-
-[[bin]]
-name = "gan"
-path = "src/main.rs"
-
-[dependencies]

@@ -1,0 +1,14 @@
+[package]
+name = "gandora-core-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Gandora compiler as a Python extension module"
+
+[lib]
+name = "gandora_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+compiler = { path = "../core", package = "gandora-core" }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }

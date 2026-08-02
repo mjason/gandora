@@ -1,0 +1,11 @@
+[package]
+name = "gandora-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Gandora compiler as a library"
+
+[lib]
+name = "gandora_core"
+
+[dependencies]

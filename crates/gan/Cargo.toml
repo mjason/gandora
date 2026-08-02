@@ -1,0 +1,13 @@
+[package]
+name = "gan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The gan compiler CLI"
+
+[[bin]]
+name = "gan"
+path = "src/main.rs"
+
+[dependencies]
+gandora-core = { path = "../core" }

@@ -17,5 +17,6 @@
     "0009-embedded-languages-and-templates.md",
     "0010-standard-library.md",
     "0011-multi-arity-functions.md",
+    "0012-compiler-as-a-library.md",
   ],
 }

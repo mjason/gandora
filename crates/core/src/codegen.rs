@@ -3234,3 +3234,49 @@ mod gep0011_tests {
         assert!(err.contains("GEP-0011-R003"), "{err}");
     }
 }
+
+/// Compile a statement sequence for interactive use (GEP-0012-R003):
+/// the returned Python code executes the snippet and leaves the value of
+/// its final expression in `_`.
+pub fn compile_snippet(
+    file: &str,
+    term: &Term,
+    project_modules: std::collections::BTreeSet<String>,
+    installed_modules: BTreeMap<String, String>,
+) -> crate::diag::Result<String> {
+    let mut cg = Codegen::new(file, vec![]);
+    cg.project_modules = project_modules;
+    cg.installed_modules = installed_modules;
+    cg.tmp_names.push("_".to_string());
+    let result = 0usize;
+    let stmts = term.as_block();
+    let mut lines: Vec<String> = Vec::new();
+    if stmts.is_empty() {
+        lines.push("_ = None".to_string());
+    }
+    for (i, stmt) in stmts.iter().enumerate() {
+        let dest = if i + 1 == stmts.len() {
+            Dest::Assign(result)
+        } else {
+            Dest::Ignore
+        };
+        cg.emit_stmt(stmt, dest, &mut lines)?;
+    }
+    let mut out = String::new();
+    for m in &cg.py_imports {
+        out.push_str(&format!("import {m}\n"));
+    }
+    for m in &cg.gan_imports {
+        out.push_str(&format!("import {m}\n"));
+    }
+    let helpers = cg.helper_code();
+    if !helpers.is_empty() {
+        out.push_str(&helpers);
+        out.push('\n');
+    }
+    for l in &lines {
+        out.push_str(l);
+        out.push('\n');
+    }
+    Ok(out)
+}

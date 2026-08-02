@@ -22,6 +22,7 @@ Issues = "https://github.com/mjason/gandora/issues"
 
 [tool.maturin]
 bindings = "bin"
+manifest-path = "crates/gan/Cargo.toml"
 
 [tool.uv]
 cache-keys = [
