@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2.2 — 2026-08-02
+
+- **Heredoc dedent (GEP-0001-R026)**: `"""` strings follow Elixir's
+  semantics — the opening newline is dropped and the closing
+  delimiter's indentation is stripped. Docstrings and templates are
+  now flush-left. `"""` sigil bodies dedent the same way
+  (GEP-0009 rev 2).
+- **Scaffold defaults to Python 3.11** (`gan init`/`ganc init`,
+  `targetPython`, `.python-version`); every published package lowers
+  its floor to `requires-python >= 3.11`.
+- `gan init` rewritten with `~gan`/`~toml`/`~jsonc` sigil templates.
+- **gan-lsp: full text sync announced explicitly** — pygls defaults
+  to incremental, which would hand the compiler partial text on real
+  editor edits. GEP-0015 conformance session test added and run in CI.
+- Runner plugin lookup checks the project `.venv/bin` before PATH
+  (GEP-0013-R003: installing a plugin is `uv add`).
+- `ganc` usage/error text rebranded from its old `gan` identity.
+- VS Code extension 0.1.3: doc-heredoc markdown no longer swallows
+  the closing `"""`; per-delimiter sigil rules; splice injection
+  keeps `<%= %>` highlighted inside embedded-language strings;
+  `~gan`/`~toml`/`~jsonc` embedded highlighting.
+
 ## v0.2.1 — 2026-08-02
 
 - gan-lsp rewritten on **pygls** (protocol machinery from the LSP
