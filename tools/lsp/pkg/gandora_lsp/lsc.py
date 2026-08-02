@@ -8,13 +8,14 @@ import json
 import os
 import pathlib
 import sys
+import gandora_lsp.py_intel
 import gandora_std.enum
 
 
 class GanMatchError(Exception):
     pass
 
-usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n"
+usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n  doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples\n  definition <Mod>[.<fun>]    defining source path/line/col\n  symbols <Mod>               every definition with rendered heads\n  pydoc <mod.chain>           Python docstring for a $-style reference\n  pycomplete <mod.prefix>     Python member completions\n  pygoto <mod.chain>          Python source location\n  pysig <mod.fun>             Python call signatures\n"
 
 
 def main():
@@ -48,14 +49,32 @@ def _dispatch(args, root):
             return print(core.compile_string(_read(file), file, root))
         case ["resolve", module, *_] as _gan_l8 if isinstance(_gan_l8, list):
             return _emit(core.resolve(root, module))
+        case ["doc", target, *_] as _gan_l9 if isinstance(_gan_l9, list):
+            return _emit(core.doc(target, root))
+        case ["definition", target, *_] as _gan_l10 if isinstance(_gan_l10, list):
+            return _emit(core.definition(target, root))
+        case ["symbols", module, *_] as _gan_l11 if isinstance(_gan_l11, list):
+            return _emit(core.symbols(module, root))
+        case ["pydoc", chain, *_] as _gan_l12 if isinstance(_gan_l12, list):
+            return _emit(gandora_lsp.py_intel.hover_markdown(root, _import_line(chain), chain))
+        case ["pycomplete", chain, *_] as _gan_l13 if isinstance(_gan_l13, list):
+            return _emit(gandora_lsp.py_intel.complete(root, _import_line(chain), chain))
+        case ["pygoto", chain, *_] as _gan_l14 if isinstance(_gan_l14, list):
+            return _emit(gandora_lsp.py_intel.goto(root, _import_line(chain), chain))
+        case ["pysig", chain, *_] as _gan_l15 if isinstance(_gan_l15, list):
+            return _emit(gandora_lsp.py_intel.signatures(root, _import_line(chain), chain))
         case _:
             print(usage)
             return sys.exit(2)
 
 
+def _import_line(chain):
+    return "import " + gandora_std.enum.at(chain.split("."), 0)
+
+
 def _take_root(args):
-    _gan_case9 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case9:
+    _gan_case16 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case16:
         case None:
             return (os.getcwd(), args)
         case i:

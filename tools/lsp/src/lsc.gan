@@ -18,6 +18,13 @@ defmodule Lsc do
     expand <file>               quoted term after macro expansion
     compile <file>              generated Python source (plain text)
     resolve <module>            how a module reference resolves
+    doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples
+    definition <Mod>[.<fun>]    defining source path/line/col
+    symbols <Mod>               every definition with rendered heads
+    pydoc <mod.chain>           Python docstring for a $-style reference
+    pycomplete <mod.prefix>     Python member completions
+    pygoto <mod.chain>          Python source location
+    pysig <mod.fun>             Python call signatures
   """
 
   def main() do
@@ -52,10 +59,28 @@ defmodule Lsc do
         IO.puts(core.compile_string(read(file), file, root))
       ["resolve", module | _] ->
         emit(core.resolve(root, module))
+      ["doc", target | _] ->
+        emit(core.doc(target, root))
+      ["definition", target | _] ->
+        emit(core.definition(target, root))
+      ["symbols", module | _] ->
+        emit(core.symbols(module, root))
+      ["pydoc", chain | _] ->
+        emit(PyIntel.hover_markdown(root, import_line(chain), chain))
+      ["pycomplete", chain | _] ->
+        emit(PyIntel.complete(root, import_line(chain), chain))
+      ["pygoto", chain | _] ->
+        emit(PyIntel.goto(root, import_line(chain), chain))
+      ["pysig", chain | _] ->
+        emit(PyIntel.signatures(root, import_line(chain), chain))
       _ ->
         IO.puts(@usage)
         $sys.exit(2)
     end
+  end
+
+  defp import_line(chain) do
+    "import " <> Enum.at(chain.split("."), 0)
   end
 
   defp take_root(args) do

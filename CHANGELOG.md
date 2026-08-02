@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.1 — 2026-08-02
+
+- **gan-lsc mirrors the full LSP capability set** (GEP-0015 rev 6):
+  `doc`, `definition`, `symbols`, plus the Python-side quartet
+  `pydoc` / `pycomplete` / `pygoto` / `pysig` — every editor
+  capability now has an AI-facing one-JSON-value query.
+
 ## v0.5.0 — 2026-08-02
 
 **Typespecs (GEP-0017).** `@spec mean(list(number()), integer()) ::

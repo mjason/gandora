@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 5
+revision: 6
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -60,11 +60,14 @@ package only — the core toolchain stays dependency-lean.
 **GEP-0015-R001A:** The same package exposes `gan-lsc` — the Language
 Server Console, the AI-facing isomorphic surface. Every query prints
 exactly one JSON value on stdout (quoted-term tuples appear as JSON
-arrays) and exits per GEP-0001-R023. Version 2 queries: `version`,
+arrays) and exits per GEP-0001-R023. Queries: `version`,
 `diagnostics <file>`, `ast <file>`, `expand <file>`,
-`compile <file>`, `resolve <module>`, each accepting `--root <dir>`.
-`gan lsc ...` reaches it through the same delegation. LSP
-capabilities MUST remain expressible as lsc queries.
+`compile <file>`, `resolve <module>`, `doc <Mod>[.<fun>]`,
+`definition <Mod>[.<fun>]`, `symbols <Mod>`, and the Python side
+mirroring R009 — `pydoc`, `pycomplete`, `pygoto`, `pysig` over
+`$`-style module chains — each accepting `--root <dir>`.
+`gan lsc ...` reaches it through the same delegation; formatting is
+`gan fmt`. LSP capabilities MUST remain expressible as lsc queries.
 
 **GEP-0015-R002:** Version 1 handles: `initialize` (announcing full
 text sync), `initialized`, `textDocument/didOpen`, `didChange`,
@@ -170,6 +173,10 @@ the right span, a didChange that fixes it producing an empty list,
 didClose clearing, and shutdown/exit terminating with code 0.
 
 ## Change History
+
+- Revision 6, 2026-08-02: lsc mirrors the full capability set (R001A
+  updated): doc/definition/symbols and the pydoc/pycomplete/pygoto/
+  pysig Python queries.
 
 - Revision 5, 2026-08-02: Added R009 (jedi-backed Python-side hover/
   completion/definition/signatures) and R010 (signature help); hover
