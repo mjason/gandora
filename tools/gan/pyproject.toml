@@ -1,11 +1,11 @@
 [project]
 name = "gandora-tool"
-version = "0.1.0"
+version = "0.2.0"
 description = "gan — the Gandora task runner (mix/cargo role), written in Gandora"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = ["gandora-core>=0.1.0", "gandora-std>=0.1.0"]
+dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0"]
 
 [project.scripts]
 gan = "gandora_tool.main:main"
@@ -26,4 +26,4 @@ packages = ["pkg/gandora_tool"]
 # local development until gandora-core reaches PyPI (uv.sources does not
 # affect the published wheel's metadata)
 [tool.uv.sources]
-gandora-core = { path = "../../target/wheels/gandora_core-0.1.0-cp39-abi3-manylinux_2_34_x86_64.whl" }
+gandora-core = { path = "../../crates/core-py" }

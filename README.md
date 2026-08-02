@@ -97,7 +97,8 @@ configured by `.env`) and human-reviewed per GEP-0000-R030.
 ## Quick start
 
 ```console
-uv tool install gandora-lang     # the gan compiler, from PyPI
+uv tool install gandora-tool     # gan — the task runner (written in Gandora)
+uv tool install gandora-lang     # ganc — the stage-0 compiler it delegates to
 
 gan init my-app                  # adds gandora-std to dependencies
 cd my-app

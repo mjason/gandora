@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.0 — 2026-08-02
+
+The toolchain becomes Gandora (GEP-0012..0015).
+
+- **gandora-core** (new): the compiler as a Python extension — parse,
+  expand, diagnostics, compile, snippets, resolution; quoted terms in
+  the Elixir encoding. Cargo workspace: core lib / `ganc` CLI / PyO3.
+- **gan task runner** (new, `gandora-tool`): the mix/cargo entry point,
+  written in Gandora — build/check/run/exec/repl natively over the
+  library; `gan-<name>` plugin delegation, then `ganc` fallback. The
+  Rust binary is renamed `ganc` (stage-0).
+- **gan-lsp** (new, `gandora-lsp`): an LSP server written in Gandora —
+  lifecycle + push diagnostics; VS Code client in `editors/vscode`.
+- **Language** (GEP-0014): `try/rescue/after`, `loop/recur/break`
+  (constant-stack iteration), and the `in` operator.
+- Codegen fixes: parenthesized binary-operand postfix bases; submodule
+  interop via quoted dotted atoms.
+
 ## v0.1.0 — 2026-08-02
 
 On PyPI: [gandora-lang](https://pypi.org/project/gandora-lang/) (the
