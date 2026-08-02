@@ -65,8 +65,9 @@ deferred.
 
 **GEP-0010-R001:** The standard library is the Gandora package
 `gandora-std`, authored in Gandora, published and consumed through
-GEP-0006 with no special-casing in the compiler. It is released to
-PyPI in lockstep with each compiler release, and `gan init` SHOULD add
+GEP-0006 with no special-casing in the compiler. It lives in the
+compiler repository under `std/` and is released to PyPI in lockstep
+with each compiler release, and `gan init` SHOULD add
 it to new projects' dependencies once published there — but it remains
 an ordinary, explicitly declared, independently upgradable dependency.
 

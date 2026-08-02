@@ -1,0 +1,27 @@
+schema = 1
+compiler = "0.1.0"
+
+[[modules]]
+name = "Enum"
+python = "gandora_std/enum.py"
+source = "gandora_std/_gan/gandora_std/enum.gan"
+
+[[modules]]
+name = "Keyword"
+python = "gandora_std/keyword.py"
+source = "gandora_std/_gan/gandora_std/keyword.gan"
+
+[[modules]]
+name = "List"
+python = "gandora_std/list.py"
+source = "gandora_std/_gan/gandora_std/list.gan"
+
+[[modules]]
+name = "Map"
+python = "gandora_std/map.py"
+source = "gandora_std/_gan/gandora_std/map.gan"
+
+[[modules]]
+name = "String"
+python = "gandora_std/string.py"
+source = "gandora_std/_gan/gandora_std/string.gan"

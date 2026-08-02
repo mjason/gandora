@@ -1,0 +1,19 @@
+[project]
+name = "gandora-std"
+version = "0.1.0"
+description = "The Gandora standard library: Enum, String, Map, List, Keyword (GEP-0010)"
+requires-python = ">=3.12"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+ignore-vcs = true
+
+[tool.hatch.build.targets.sdist]
+include = ["pkg", "src", "gandora.jsonc"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pkg/gandora_std"]

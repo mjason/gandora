@@ -1,0 +1,58 @@
+defmodule Map do
+  @moduledoc "Data-first dict functions; all updates return new maps (GEP-0010)."
+  @moduledoc_trans zh_CN: "数据优先的 dict 函数；所有更新都返回新映射（GEP-0010）。"
+
+  @doc "The value for `key`, or nil when absent."
+  @doc_trans zh_CN: "键 `key` 的值，不存在时为 nil。"
+  def get(m, key), do: m.get(key)
+
+  @doc "A new map with `key` set to `value`."
+  @doc_trans zh_CN: "设置 `key` 为 `value` 后的新映射。"
+  @example """
+      gan> Map.put(%{a: 1}, :b, 2)
+      {'a': 1, 'b': 2}
+  """
+  def put(m, key, value), do: ~python({**<%= m %>, <%= key %>: <%= value %>})
+
+  @doc "A new map without `key`."
+  @doc_trans zh_CN: "移除 `key` 后的新映射。"
+  def delete(m, key), do: ~python({k: v for k, v in <%= m %>.items() if k != <%= key %>})
+
+  @doc "The keys as a list."
+  @doc_trans zh_CN: "键的列表。"
+  def keys(m), do: :builtins.list(m.keys())
+
+  @doc "The values as a list."
+  @doc_trans zh_CN: "值的列表。"
+  def values(m), do: :builtins.list(m.values())
+
+  @doc "Merges `m2` into `m1`; `m2` wins on conflicts."
+  @doc_trans zh_CN: "将 `m2` 并入 `m1`；冲突时 `m2` 胜出。"
+  def merge(m1, m2), do: ~python({**<%= m1 %>, **<%= m2 %>})
+
+  @doc "Whether `key` is present."
+  @doc_trans zh_CN: "是否存在键 `key`。"
+  def has_key?(m, key), do: ~python(<%= key %> in <%= m %>)
+
+  @doc "The entries as a list of `{key, value}` tuples."
+  @doc_trans zh_CN: "以 `{键, 值}` 元组列表表示的条目。"
+  def to_list(m), do: :builtins.list(m.items())
+
+  @doc "An empty map."
+  @doc_trans zh_CN: "空映射。"
+  def new(), do: %{}
+
+  @doc "Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4)."
+  @doc_trans zh_CN: "以 `f` 更新 `key`；键不存在时使用 `default`（Elixir 的 Map.update/4）。"
+  @example """
+      gan> Map.update(%{a: 1}, :a, 0, fn v -> v + 10 end)
+      {'a': 11}
+  """
+  def update(m, key, default, f) do
+    if has_key?(m, key) do
+      put(m, key, f.(get(m, key)))
+    else
+      put(m, key, default)
+    end
+  end
+end
