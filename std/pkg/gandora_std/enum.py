@@ -2,7 +2,6 @@
 
 import builtins
 import functools
-import gandora_std.enum
 import gandora_std.string
 
 
@@ -21,7 +20,7 @@ def map(xs, f):
     """Applies `f` to every element.
 
 
-      >>> gandora_std.enum.map([1, 2, 3], lambda x: x * 10)
+      >>> map([1, 2, 3], lambda x: x * 10)
       [10, 20, 30]
 """
     return builtins.list(builtins.map(f, xs))
@@ -31,7 +30,7 @@ def filter(xs, f):
     """Keeps elements for which `f` is truthy.
 
 
-      >>> gandora_std.enum.filter([1, 2, 3, 4], lambda x: _gan_rem(x, 2) == 0)
+      >>> filter([1, 2, 3, 4], lambda x: _gan_rem(x, 2) == 0)
       [2, 4]
 """
     return ([x for x in (xs) if (f)(x)])
@@ -46,7 +45,7 @@ def reduce(xs, acc, f):
     """Folds left with Elixir argument order: `f` receives (element, acc).
 
 
-      >>> gandora_std.enum.reduce([1, 2, 3, 4], 0, lambda x, acc: acc + x)
+      >>> reduce([1, 2, 3, 4], 0, lambda x, acc: acc + x)
       10
 """
     return functools.reduce(lambda a, x: f(x, a), xs, acc)
@@ -71,7 +70,7 @@ def sort_by(xs, f):
     """Sorts by the key computed by `f` (Python `key=`, not a comparator).
 
 
-      >>> gandora_std.enum.sort_by(["ccc", "a", "bb"], lambda s: gandora_std.string.length(s))
+      >>> sort_by(["ccc", "a", "bb"], lambda s: gandora_std.string.length(s))
       ['a', 'bb', 'ccc']
 """
     return builtins.sorted(xs, key=f)
@@ -86,7 +85,7 @@ def join(xs, sep):
     """Joins elements (converted by `to_string`) with `sep`.
 
 
-      >>> gandora_std.enum.join([1, 2, 3], "-")
+      >>> join([1, 2, 3], "-")
       '1-2-3'
 """
     return sep.join(([str(x) for x in (xs)]))
@@ -119,7 +118,7 @@ def with_index(xs):
     """Each element paired with its index: `{element, index}`.
 
 
-      >>> gandora_std.enum.with_index(["a", "b"])
+      >>> with_index(["a", "b"])
       [('a', 0), ('b', 1)]
 """
     return ([(x, i) for i, x in enumerate((xs))])
@@ -154,7 +153,7 @@ def flat_map(xs, f):
     """Maps `f` (which returns a list) and concatenates the results.
 
 
-      >>> gandora_std.enum.flat_map([1, 2], lambda x: [x, x * 10])
+      >>> flat_map([1, 2], lambda x: [x, x * 10])
       [1, 10, 2, 20]
 """
     return ([y for x in (xs) for y in (f)(x)])

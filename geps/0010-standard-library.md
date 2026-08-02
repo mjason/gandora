@@ -129,6 +129,11 @@ few lines over Python builtins/methods. A function needing real
 algorithmic code does not belong in the stdlib; it belongs in a
 package (GEP-0006).
 
+**GEP-0010-R009A:** Intra-stdlib dependencies MUST stay acyclic and
+layered: `Enum` is the base; `List` and `Keyword` may call `Enum`;
+`String` and `Map` stand alone. A qualified reference to the current
+module compiles as a local call (no self-import).
+
 **GEP-0010-R010:** The R005 list is the complete library. There is no
 partial-parity tracking against Elixir: a function is either fully
 present (documented, translated, doctested, Elixir-named,

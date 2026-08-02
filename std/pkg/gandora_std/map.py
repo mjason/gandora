@@ -1,7 +1,6 @@
 """Data-first dict functions; all updates return new maps (GEP-0010)."""
 
 import builtins
-import gandora_std.map
 
 
 def _gan_truthy(value):
@@ -17,7 +16,7 @@ def put(m, key, value):
     """A new map with `key` set to `value`.
 
 
-      >>> gandora_std.map.put({"a": 1}, "b", 2)
+      >>> put({"a": 1}, "b", 2)
       {'a': 1, 'b': 2}
 """
     return ({**(m), (key): (value)})
@@ -62,7 +61,7 @@ def update(m, key, default, f):
     """Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4).
 
 
-      >>> gandora_std.map.update({"a": 1}, "a", 0, lambda v: v + 10)
+      >>> update({"a": 1}, "a", 0, lambda v: v + 10)
       {'a': 11}
 """
     if _gan_truthy(has_key_p(m, key)):

@@ -1496,6 +1496,22 @@ impl Codegen {
                         if resolved == vec!["IO".to_string()] {
                             return self.emit_io_call(name, call, pre);
                         }
+                        // a qualified reference to the current module is a
+                        // local call: no self-import
+                        if resolved == self.module_segs {
+                            let mut f = map_ident(name);
+                            if self
+                                .private_funs
+                                .contains(&(name.clone(), call.args.len()))
+                            {
+                                f.insert(0, '_');
+                            }
+                            if *is_call {
+                                let args = self.emit_args(&call.args, pre)?;
+                                return Ok(format!("{f}({args})"));
+                            }
+                            return Ok(f);
+                        }
                         let path = self.gan_module_import(&resolved);
                         let f = map_ident(name);
                         if *is_call {

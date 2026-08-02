@@ -1,7 +1,6 @@
 """Data-first string functions over Python str (GEP-0010)."""
 
 import builtins
-import gandora_std.string
 
 
 def upcase(s):
@@ -23,7 +22,7 @@ def split(s):
     """Splits on whitespace runs, dropping empty parts (Elixir semantics).
 
 
-      >>> gandora_std.string.split("  a  b c ")
+      >>> split("  a  b c ")
       ['a', 'b', 'c']
 """
     return s.split()
@@ -68,7 +67,7 @@ def slice(s, start, len):
     """The substring of `len` characters starting at `start` (negative start counts from the end).
 
 
-      >>> gandora_std.string.slice("gandora", 3, 4)
+      >>> slice("gandora", 3, 4)
       'dora'
 """
     return ((s)[(start):] [:(len)])

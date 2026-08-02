@@ -1,7 +1,6 @@
 """List-shape helpers; element-wise work lives in Enum (GEP-0010)."""
 
 import gandora_std.enum
-import gandora_std.list
 
 
 def _gan_truthy(value):
@@ -22,7 +21,7 @@ def flatten(xs):
     """Flattens nested lists to any depth.
 
 
-      >>> gandora_std.list.flatten([1, [2, [3, 4]], 5])
+      >>> flatten([1, [2, [3, 4]], 5])
       [1, 2, 3, 4, 5]
 """
     def _gan_fn0(x):

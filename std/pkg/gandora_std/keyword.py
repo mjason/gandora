@@ -1,7 +1,6 @@
 """Functions over keyword lists — lists of {atom, value} tuples (GEP-0010)."""
 
 import gandora_std.enum
-import gandora_std.keyword
 
 
 class GanMatchError(Exception):
@@ -12,7 +11,7 @@ def get(kw, key):
     """The first value for `key`, or nil.
 
 
-      >>> gandora_std.keyword.get([("a", 1), ("b", 2)], "a")
+      >>> get([("a", 1), ("b", 2)], "a")
       1
 """
     return (next((v for k, v in (kw) if k == (key)), None))
