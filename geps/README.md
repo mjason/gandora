@@ -15,7 +15,7 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0000](0000-gep-process.md) | GEP Purpose and Process | Process | Active | 1 | [zh](local/zh/0000-gep-process.md) |
 | [0001](0001-language-and-cli.md) | The Gandora Language and the gan CLI | Standards Track | Accepted | 5 | [zh](local/zh/0001-language-and-cli.md) |
 | [0002](0002-macro-system.md) | The Macro System | Standards Track | Accepted | 2 | [zh](local/zh/0002-macro-system.md) |
-| [0003](0003-python-interop.md) | Python Interop | Standards Track | Accepted | 2 | [zh](local/zh/0003-python-interop.md) |
+| [0003](0003-python-interop.md) | Python Interop | Standards Track | Accepted | 3 | [zh](local/zh/0003-python-interop.md) |
 | [0004](0004-structs-and-module-attributes.md) | Structs and Module Attributes | Standards Track | Accepted | 2 | [zh](local/zh/0004-structs-and-module-attributes.md) |
 | [0005](0005-sigils.md) | Sigils | Standards Track | Accepted | 2 | [zh](local/zh/0005-sigils.md) |
 | [0006](0006-package-publication.md) | Package Publication | Standards Track | Accepted | 2 | [zh](local/zh/0006-package-publication.md) |
@@ -29,5 +29,5 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0014](0014-control-flow-completion.md) | Control-Flow Completion | Standards Track | Accepted | 2 | [zh](local/zh/0014-control-flow-completion.md) |
 | [0015](0015-the-language-server.md) | The Language Server | Standards Track | Accepted | 6 | [zh](local/zh/0015-the-language-server.md) |
 | [0016](0016-the-formatter.md) | The Formatter | Standards Track | Accepted | 1 | [zh](local/zh/0016-the-formatter.md) |
-| [0017](0017-typespecs.md) | Typespecs and the Typed Boundary | Standards Track | Accepted | 2 | [zh](local/zh/0017-typespecs.md) |
+| [0017](0017-typespecs.md) | Typespecs and the Typed Boundary | Standards Track | Accepted | 3 | [zh](local/zh/0017-typespecs.md) |
 | [0018](0018-parameter-documentation.md) | Parameter Documentation | Standards Track | Accepted | 1 | [zh](local/zh/0018-parameter-documentation.md) |
