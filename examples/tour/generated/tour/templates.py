@@ -1,8 +1,7 @@
-"""
-  GEP-0009: the ~<lang> embedded-language family with EEx-style
-  <%= expr %> splices. Any sigil name is a language tag; bodies are raw
-  (no #{} — it collides with target-language syntax). Splices insert
-  runtime values in every language, and compiled code in ~python.
+"""GEP-0009: the ~<lang> embedded-language family with EEx-style
+<%= expr %> splices. Any sigil name is a language tag; bodies are raw
+(no #{} — it collides with target-language syntax). Splices insert
+runtime values in every language, and compiled code in ~python.
 """
 
 import builtins

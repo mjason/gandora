@@ -1,11 +1,10 @@
-"""
-  The FastAPI chapter, rewritten in the Elixir style: routes declared
-  with the Tour.WebDsl macros instead of raw @decorate lines. Serving is
-  unchanged — the app is still the module attribute `app`:
+"""The FastAPI chapter, rewritten in the Elixir style: routes declared
+with the Tour.WebDsl macros instead of raw @decorate lines. Serving is
+unchanged — the app is still the module attribute `app`:
 
-      uv run uvicorn tour.webapi:app --app-dir dist
+    uv run uvicorn tour.webapi:app --app-dir dist
 
-  `gan run src/tour/webapi.gan` self-tests the app with TestClient.
+`gan run src/tour/webapi.gan` self-tests the app with TestClient.
 """
 
 import builtins

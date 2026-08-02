@@ -13,9 +13,8 @@ class GanMatchError(Exception):
 def get(*_gan_args):
     """The value for `key`, or `default` (nil unless given) when absent.
 
-
-      >>> get({"a": 1}, "b", 0)
-      0
+    >>> get({"a": 1}, "b", 0)
+    0
 """
     match _gan_args:
         case (m, key, default,):
@@ -28,9 +27,8 @@ def get(*_gan_args):
 def put(m, key, value):
     """A new map with `key` set to `value`.
 
-
-      >>> put({"a": 1}, "b", 2)
-      {'a': 1, 'b': 2}
+    >>> put({"a": 1}, "b", 2)
+    {'a': 1, 'b': 2}
 """
     return ({**(m), (key): (value)})
 
@@ -73,9 +71,8 @@ def new():
 def update(m, key, default, f):
     """Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4).
 
-
-      >>> update({"a": 1}, "a", 0, lambda v: v + 10)
-      {'a': 11}
+    >>> update({"a": 1}, "a", 0, lambda v: v + 10)
+    {'a': 11}
 """
     if _gan_truthy(has_key_p(m, key)):
         return put(m, key, f(get(m, key)))
@@ -109,8 +106,7 @@ def drop(m, keys):
 def filter(m, f):
     """Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy.
 
-
-      >>> filter({"a": 1, "b": 5}, lambda pair: pair[1] > 2)
-      {'b': 5}
+    >>> filter({"a": 1, "b": 5}, lambda pair: pair[1] > 2)
+    {'b': 5}
 """
     return ({k: v for k, v in (m).items() if (f)((k, v))})

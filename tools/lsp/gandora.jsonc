@@ -2,7 +2,7 @@
   // gan-lsp: the LSP server, written in Gandora (GEP-0015).
   "source": ["src"],
   "outDir": "pkg",
-  "targetPython": "3.12",
+  "targetPython": "3.11",
   "package": true,
   "pyPackage": "gandora_lsp",
 }

@@ -1,8 +1,7 @@
-"""
-  Wrapping a native Python decorator as an Elixir-style attribute — the
-  same mechanism @doc itself uses (GEP-0008). `@cache 64` before a def
-  applies functools.lru_cache(maxsize: 64); functions without the
-  attribute pass through untouched.
+"""Wrapping a native Python decorator as an Elixir-style attribute — the
+same mechanism @doc itself uses (GEP-0008). `@cache 64` before a def
+applies functools.lru_cache(maxsize: 64); functions without the
+attribute pass through untouched.
 """
 
 import builtins

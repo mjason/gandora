@@ -9,18 +9,16 @@ class GanMatchError(Exception):
 
 
 def fact(*_gan_args):
-    """
-  Factorial via multi-clause dispatch. Prose lives in @doc and is
-  translated; runnable examples live in @example, tested by `gan test`
-  and shared by every locale.
+    """Factorial via multi-clause dispatch. Prose lives in @doc and is
+translated; runnable examples live in @example, tested by `gan test`
+and shared by every locale.
 
+## Examples
 
-  ## Examples
-
-      >>> fact(0)
-      1
-      >>> fact(10)
-      3628800
+    >>> fact(0)
+    1
+    >>> fact(10)
+    3628800
 
 Since: 0.1.0
 """
@@ -35,11 +33,10 @@ Since: 0.1.0
 def classify(x):
     """Sign of a number as an atom.
 
-
-      >>> classify(-3)
-      'negative'
-      >>> [classify(0), classify(9)]
-      ['zero', 'positive']
+    >>> classify(-3)
+    'negative'
+    >>> [classify(0), classify(9)]
+    ['zero', 'positive']
 """
     if x < 0:
         return "negative"
@@ -62,9 +59,8 @@ Since: 0.1.0
 def norm(xs):
     """Euclidean norm through a pipeline.
 
-
-      >>> norm([3, 4])
-      5.0
+    >>> norm([3, 4])
+    5.0
 
 Since: 0.1.0
 """

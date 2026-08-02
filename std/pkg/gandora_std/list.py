@@ -21,9 +21,8 @@ def last(xs):
 def flatten(xs):
     """Flattens nested lists to any depth.
 
-
-      >>> flatten([1, [2, [3, 4]], 5])
-      [1, 2, 3, 4, 5]
+    >>> flatten([1, [2, [3, 4]], 5])
+    [1, 2, 3, 4, 5]
 """
     def _gan_fn0(x):
         if _gan_truthy(isinstance(x, list)):
@@ -76,8 +75,7 @@ def replace_at(xs, index, value):
 def update_at(xs, index, f):
     """Updates the element at `index` by `f`.
 
-
-      >>> update_at([1, 2, 3], 1, lambda v: v * 10)
-      [1, 20, 3]
+    >>> update_at([1, 2, 3], 1, lambda v: v * 10)
+    [1, 20, 3]
 """
     return replace_at(xs, index, f(gandora_std.enum.at(xs, index)))

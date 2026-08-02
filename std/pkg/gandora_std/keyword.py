@@ -10,9 +10,8 @@ class GanMatchError(Exception):
 def get(kw, key):
     """The first value for `key`, or nil.
 
-
-      >>> get([("a", 1), ("b", 2)], "a")
-      1
+    >>> get([("a", 1), ("b", 2)], "a")
+    1
 """
     return (next((v for k, v in (kw) if k == (key)), None))
 
@@ -70,9 +69,8 @@ def delete(kw, key):
 def merge(kw1, kw2):
     """Merges `kw2` into `kw1`; `kw2` wins, its entries appended.
 
-
-      >>> merge([("a", 1), ("b", 2)], [("b", 9), ("c", 3)])
-      [('a', 1), ('b', 9), ('c', 3)]
+    >>> merge([("a", 1), ("b", 2)], [("b", 9), ("c", 3)])
+    [('a', 1), ('b', 9), ('c', 3)]
 """
     def _gan_fn5(*_gan_args):
         match _gan_args:

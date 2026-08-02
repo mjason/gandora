@@ -274,7 +274,7 @@ fn package_publication_round_trip() {
     let consumer = dir.join("app");
     let out = gan().arg("init").arg(&consumer).output().unwrap();
     assert!(out.status.success());
-    let site = consumer.join(".venv/lib/python3.12/site-packages");
+    let site = consumer.join(".venv/lib/python3.11/site-packages");
     copy_tree(&pkg.join("pkg/acme_demo"), &site.join("acme_demo"));
     std::fs::write(
         consumer.join("src/main.gan"),
@@ -423,7 +423,7 @@ fn marker_runtime_resolution_and_py_package() {
     let proj = dir.join("app");
     let out = gan().arg("init").arg(&proj).output().unwrap();
     assert!(out.status.success());
-    let site = proj.join(".venv/lib/python3.12/site-packages/gandora_std");
+    let site = proj.join(".venv/lib/python3.11/site-packages/gandora_std");
     std::fs::create_dir_all(&site).unwrap();
     std::fs::write(
         site.join("enum.py"),

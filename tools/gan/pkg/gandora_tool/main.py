@@ -1,7 +1,6 @@
-"""
-  gan — the Gandora task runner (GEP-0013), written in Gandora.
-  Native commands drive gandora-core in-process; unknown subcommands
-  delegate to gan-<name> plugins, then to the stage-0 compiler ganc.
+"""gan — the Gandora task runner (GEP-0013), written in Gandora.
+Native commands drive gandora-core in-process; unknown subcommands
+delegate to gan-<name> plugins, then to the stage-0 compiler ganc.
 """
 
 import builtins
@@ -23,7 +22,13 @@ def _gan_truthy(value):
 class GanMatchError(Exception):
     pass
 
-usage = "\n  gan - the Gandora task runner\n\n  Usage:\n    gan build | check | run <file> [args...] | exec <code> | repl\n    gan init <path> | version\n    gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n  "
+usage = "gan - the Gandora task runner\n\nUsage:\n  gan build | check | run <file> [args...] | exec <code> | repl\n  gan init <path> | version\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
+
+gandora_jsonc = "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\",\n}\n"
+
+gitignore = "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n"
+
+hello_gan = "defmodule Main do\n  def main(), do: IO.puts(\"Hello from Gandora!\")\nend\n"
 
 
 def main():
@@ -165,18 +170,22 @@ def _eval_line(code, ns):
         return print(f"{builtins.type(e).__name__}: {str(e)}")
 
 
+def _pyproject_toml(name):
+    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n"
+
+
 def init(path):
     p = pathlib.Path(path)
-    if str(builtins.bool(p.exists())) == "True":
+    if _gan_truthy(p.exists()):
         print(f"gan: {path} already exists")
         sys.exit(1)
     (p / "src").mkdir(parents=True)
     name = str(p.resolve().name)
-    (p / "gandora.jsonc").write_text("{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.12\",\n}\n")
-    (p / "pyproject.toml").write_text("[project]\nname = \"" + (name + ("\"\nversion = \"0.1.0\"\nrequires-python = \">=3.12\"\ndependencies = [\"gandora-std>=" + (core.version() + "\"]\n"))))
-    (p / ".gitignore").write_text("__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n")
-    (p / ".python-version").write_text("3.12\n")
-    ((p / "src") / "main.gan").write_text("defmodule Main do\n  def main(), do: IO.puts(\"Hello from Gandora!\")\nend\n")
+    (p / "gandora.jsonc").write_text(gandora_jsonc)
+    (p / "pyproject.toml").write_text(_pyproject_toml(name))
+    (p / ".gitignore").write_text(gitignore)
+    (p / ".python-version").write_text("3.11\n")
+    ((p / "src") / "main.gan").write_text(hello_gan)
     return print(f"Initialized Gandora project in {path}")
 
 

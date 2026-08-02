@@ -22,9 +22,8 @@ def _gan_rem(a, b):
 def map(xs, f):
     """Applies `f` to every element.
 
-
-      >>> map([1, 2, 3], lambda x: x * 10)
-      [10, 20, 30]
+    >>> map([1, 2, 3], lambda x: x * 10)
+    [10, 20, 30]
 """
     return builtins.list(builtins.map(f, xs))
 
@@ -32,9 +31,8 @@ def map(xs, f):
 def filter(xs, f):
     """Keeps elements for which `f` is truthy.
 
-
-      >>> filter([1, 2, 3, 4], lambda x: _gan_rem(x, 2) == 0)
-      [2, 4]
+    >>> filter([1, 2, 3, 4], lambda x: _gan_rem(x, 2) == 0)
+    [2, 4]
 """
     return ([x for x in (xs) if (f)(x)])
 
@@ -47,9 +45,8 @@ def reject(xs, f):
 def reduce(xs, acc, f):
     """Folds left with Elixir argument order: `f` receives (element, acc).
 
-
-      >>> reduce([1, 2, 3, 4], 0, lambda x, acc: acc + x)
-      10
+    >>> reduce([1, 2, 3, 4], 0, lambda x, acc: acc + x)
+    10
 """
     return functools.reduce(lambda a, x: f(x, a), xs, acc)
 
@@ -72,9 +69,8 @@ def sort(xs):
 def sort_by(xs, f):
     """Sorts by the key computed by `f` (Python `key=`, not a comparator).
 
-
-      >>> sort_by(["ccc", "a", "bb"], lambda s: gandora_std.string.length(s))
-      ['a', 'bb', 'ccc']
+    >>> sort_by(["ccc", "a", "bb"], lambda s: gandora_std.string.length(s))
+    ['a', 'bb', 'ccc']
 """
     return builtins.sorted(xs, key=f)
 
@@ -87,9 +83,8 @@ def reverse(xs):
 def join(xs, sep):
     """Joins elements (converted by `to_string`) with `sep`.
 
-
-      >>> join([1, 2, 3], "-")
-      '1-2-3'
+    >>> join([1, 2, 3], "-")
+    '1-2-3'
 """
     return sep.join(([str(x) for x in (xs)]))
 
@@ -120,9 +115,8 @@ def zip(xs, ys):
 def with_index(xs):
     """Each element paired with its index: `{element, index}`.
 
-
-      >>> with_index(["a", "b"])
-      [('a', 0), ('b', 1)]
+    >>> with_index(["a", "b"])
+    [('a', 0), ('b', 1)]
 """
     return ([(x, i) for i, x in enumerate((xs))])
 
@@ -155,9 +149,8 @@ def uniq(xs):
 def flat_map(xs, f):
     """Maps `f` (which returns a list) and concatenates the results.
 
-
-      >>> flat_map([1, 2], lambda x: [x, x * 10])
-      [1, 10, 2, 20]
+    >>> flat_map([1, 2], lambda x: [x, x * 10])
+    [1, 10, 2, 20]
 """
     return ([y for x in (xs) for y in (f)(x)])
 
@@ -181,9 +174,8 @@ def max(xs):
 def find(xs, f):
     """The first element for which `f` is truthy, or nil.
 
-
-      >>> find([1, 2, 3, 4], lambda x: x > 2)
-      3
+    >>> find([1, 2, 3, 4], lambda x: x > 2)
+    3
 """
     return (next((x for x in (xs) if (f)(x)), None))
 
@@ -196,9 +188,8 @@ def find_index(xs, f):
 def frequencies(xs):
     """A map from each distinct element to its occurrence count.
 
-
-      >>> frequencies(["a", "b", "a"])
-      {'a': 2, 'b': 1}
+    >>> frequencies(["a", "b", "a"])
+    {'a': 2, 'b': 1}
 """
     return builtins.dict(collections.Counter(xs))
 
@@ -206,9 +197,8 @@ def frequencies(xs):
 def group_by(xs, f):
     """Groups elements by the key computed by `f`, preserving order.
 
-
-      >>> group_by([1, 2, 3, 4, 5], lambda x: _gan_rem(x, 2))
-      {1: [1, 3, 5], 0: [2, 4]}
+    >>> group_by([1, 2, 3, 4, 5], lambda x: _gan_rem(x, 2))
+    {1: [1, 3, 5], 0: [2, 4]}
 """
     return ({k: [x for x in (xs) if (f)(x) == k] for k in dict.fromkeys((f)(x) for x in (xs))})
 
@@ -241,9 +231,8 @@ def drop_while(xs, f):
 def chunk_every(xs, n):
     """Splits into chunks of `n` elements; the last chunk may be shorter.
 
-
-      >>> chunk_every([1, 2, 3, 4, 5], 2)
-      [[1, 2], [3, 4], [5]]
+    >>> chunk_every([1, 2, 3, 4, 5], 2)
+    [[1, 2], [3, 4], [5]]
 """
     return ([(xs)[i:i + (n)] for i in range(0, len((xs)), (n))])
 
@@ -256,9 +245,8 @@ def concat(xss):
 def intersperse(xs, sep):
     """Puts `sep` between every two elements.
 
-
-      >>> intersperse([1, 2, 3], "x")
-      [1, 'x', 2, 'x', 3]
+    >>> intersperse([1, 2, 3], "x")
+    [1, 'x', 2, 'x', 3]
 """
     return ([v for x in (xs) for v in (x, (sep))][:-1])
 
@@ -271,8 +259,7 @@ def slice(xs, start, count):
 def dedup(xs):
     """Collapses consecutive duplicate elements.
 
-
-      >>> dedup([1, 1, 2, 2, 2, 1])
-      [1, 2, 1]
+    >>> dedup([1, 1, 2, 2, 2, 1])
+    [1, 2, 1]
 """
     return ([x for i, x in enumerate((xs)) if i == 0 or x != (xs)[i - 1]])

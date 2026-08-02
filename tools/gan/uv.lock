@@ -1,20 +1,20 @@
 version = 1
 revision = 3
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 
 [[package]]
 name = "gandora-core"
-version = "0.2.0"
+version = "0.2.1"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-std"
-version = "0.2.0"
+version = "0.2.1"
 source = { directory = "../../std" }
 
 [[package]]
 name = "gandora-tool"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },

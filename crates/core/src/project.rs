@@ -30,7 +30,7 @@ impl Config {
             root,
             source: vec!["src".into()],
             out_dir: "dist".into(),
-            target_python: "3.12".into(),
+            target_python: "3.11".into(),
             exclude: Vec::new(),
             package: false,
             py_package: None,
@@ -520,7 +520,7 @@ fn parse_marker(text: &str) -> Vec<(String, String)> {
     let mut name: Option<String> = None;
     let mut source: Option<String> = None;
     let mut schema_ok = false;
-    let mut flush = |name: &mut Option<String>, source: &mut Option<String>,
+    let flush = |name: &mut Option<String>, source: &mut Option<String>,
                      entries: &mut Vec<(String, String)>| {
         if let (Some(n), Some(s)) = (name.take(), source.take()) {
             entries.push((n, s));
@@ -598,7 +598,7 @@ fn parse_marker_python(text: &str) -> Vec<(String, String)> {
     let mut name: Option<String> = None;
     let mut python: Option<String> = None;
     let mut schema_ok = false;
-    let mut flush = |name: &mut Option<String>, python: &mut Option<String>,
+    let flush = |name: &mut Option<String>, python: &mut Option<String>,
                      entries: &mut Vec<(String, String)>| {
         if let (Some(n), Some(p)) = (name.take(), python.take()) {
             entries.push((n, p));

@@ -10,8 +10,8 @@ areas:
   - CLI
   - Configuration
 created: 2026-08-01
-updated: 2026-08-01
-revision: 3
+updated: 2026-08-02
+revision: 4
 requires: [0]
 replaces: []
 superseded-by: null
@@ -258,6 +258,15 @@ pipe is a method pipe: `x |> .name(args)` evaluates to the postfix call
 segments may follow. This composes Python fluent APIs (pandas, numpy)
 with Elixir pipelines without intermediate bindings.
 
+**GEP-0001-R026:** Triple-quoted strings (`"""`) are heredocs with
+Elixir's semantics: the newline after the opening delimiter is not part
+of the value, and the whitespace indentation of the line holding the
+closing delimiter is stripped from the start of every content line.
+A heredoc whose content begins on the opening line, or whose closing
+delimiter does not sit alone on its line, is taken verbatim. This is
+what makes indented heredocs — documentation, usage text, scaffolding
+templates — read cleanly in source while producing flush-left values.
+
 **GEP-0001-R024:** Generated Python MUST be deterministic: compiling the
 same sources with the same compiler version and configuration produces
 byte-identical output.
@@ -341,6 +350,8 @@ R021–R024. The repository's test suite maps test names to these requirement
 identifiers.
 
 ## Change History
+
+- Revision 4, 2026-08-02: Added R026, Elixir heredoc dedent semantics.
 
 - Revision 3, 2026-08-01: Added R025, the `|> .method(args)` method pipe.
 

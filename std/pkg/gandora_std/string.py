@@ -27,9 +27,8 @@ def capitalize(s):
 def split(s):
     """Splits on whitespace runs, dropping empty parts (Elixir semantics).
 
-
-      >>> split("  a  b c ")
-      ['a', 'b', 'c']
+    >>> split("  a  b c ")
+    ['a', 'b', 'c']
 """
     return s.split()
 
@@ -72,9 +71,8 @@ def length(s):
 def slice(s, start, len):
     """The substring of `len` characters starting at `start` (negative start counts from the end).
 
-
-      >>> slice("gandora", 3, 4)
-      'dora'
+    >>> slice("gandora", 3, 4)
+    'dora'
 """
     return ((s)[(start):] [:(len)])
 
@@ -130,9 +128,8 @@ def trim_trailing(s):
 def codepoints(s):
     """The characters as a list of one-character strings.
 
-
-      >>> gandora_std.enum.take(codepoints("héllo"), 2)
-      ['h', 'é']
+    >>> gandora_std.enum.take(codepoints("héllo"), 2)
+    ['h', 'é']
 """
     return builtins.list(s)
 
@@ -140,8 +137,7 @@ def codepoints(s):
 def match_p(s, regex):
     """Whether the compiled regex (`~r/.../`) matches anywhere in the string.
 
-
-      >>> match_p("gandora-2026", re.compile("\\d+"))
-      True
+    >>> match_p("gandora-2026", re.compile("\\d+"))
+    True
 """
     return not (_gan_truthy((regex.search(s) is None)))

@@ -1,6 +1,5 @@
-"""
-  numpy: arrays, broadcasting through plain operators, and |> .method chains.
-  Needs `uv sync` first, then: gan run src/tour/numpy.gan
+"""numpy: arrays, broadcasting through plain operators, and |> .method chains.
+Needs `uv sync` first, then: gan run src/tour/numpy.gan
 """
 
 import numpy as np

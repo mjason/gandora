@@ -83,7 +83,7 @@ const INIT_CONFIG: &str = r#"{
   // Python package metadata and dependencies stay in pyproject.toml.
   "source": ["src"],
   "outDir": "dist",
-  "targetPython": "3.12",
+  "targetPython": "3.11",
 }
 "#;
 
@@ -123,10 +123,10 @@ fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
 
     write_if_absent(&path.join("gandora.jsonc"), INIT_CONFIG)?;
     write_if_absent(&path.join(".gitignore"), INIT_GITIGNORE)?;
-    write_if_absent(&path.join(".python-version"), "3.12\n")?;
+    write_if_absent(&path.join(".python-version"), "3.11\n")?;
     // the stdlib ships on PyPI in lockstep with the compiler (GEP-0010-R001)
     let pyproject = format!(
-        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.12\"\ndependencies = [\"gandora-std>={}\"]\n",
+        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={}\"]\n",
         env!("CARGO_PKG_VERSION")
     );
     write_if_absent(&path.join("pyproject.toml"), &pyproject)?;
@@ -170,7 +170,7 @@ fn cmd_init_package(args: &[String]) -> Result<(), Diagnostic> {
   // gandora.toml marker and ships .gan sources for macro consumers.
   "source": ["src"],
   "outDir": "pkg",
-  "targetPython": "3.12",
+  "targetPython": "3.11",
   "package": true,
 }
 "#;
@@ -180,7 +180,7 @@ fn cmd_init_package(args: &[String]) -> Result<(), Diagnostic> {
 name = "{dist_name}"
 version = "0.1.0"
 description = "A Gandora package"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = []
 
 [build-system]
@@ -206,7 +206,7 @@ packages = ["pkg/{py_pkg}"]
         format!("{INIT_GITIGNORE}pkg/\n"),
     )
     .map_err(io_err(&path))?;
-    std::fs::write(path.join(".python-version"), "3.12\n").map_err(io_err(&path))?;
+    std::fs::write(path.join(".python-version"), "3.11\n").map_err(io_err(&path))?;
     let starter = format!(
         r#"defmodule {module}.Core do
   @moduledoc "Public surface of {dist_name}: functions run anywhere, macros expand in consumers."

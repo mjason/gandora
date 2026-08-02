@@ -1,7 +1,6 @@
-"""
-  GEP-0008 metaprogramming: declaration macros generate defs, `use`
-  injects an API, and defattr + @on_definition build a route table —
-  an annotation system in userland, the way @doc itself works.
+"""GEP-0008 metaprogramming: declaration macros generate defs, `use`
+injects an API, and defattr + @on_definition build a route table —
+an annotation system in userland, the way @doc itself works.
 """
 
 

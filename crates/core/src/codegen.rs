@@ -3205,7 +3205,7 @@ mod doc_merge_tests {
             "defmodule M do\n  @doc since: \"1.3.0\"\n  @doc \"Adds one.\"\n  @doc_trans zh_CN: \"加一。\"\n  @example \"\"\"\n      gan> inc(1)\n      2\n  \"\"\"\n  def inc(x), do: x + 1\nend",
         );
         assert!(py.contains("Adds one."), "{py}");
-        assert!(py.contains(">>> inc(1)\n      2"), "{py}");
+        assert!(py.contains(">>> inc(1)\n    2"), "{py}");
         assert!(py.contains("Since: 1.3.0"), "{py}");
         assert!(!py.contains("加一"), "{py}");
         // assembly order: text, examples, trailer

@@ -2,7 +2,7 @@
   // The Gandora standard library (GEP-0010): an ordinary Gandora package.
   "source": ["src"],
   "outDir": "pkg",
-  "targetPython": "3.12",
+  "targetPython": "3.11",
   "package": true,
   "pyPackage": "gandora_std",
 }

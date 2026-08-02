@@ -144,22 +144,51 @@ defmodule Main do
     end
   end
 
+  @gandora_jsonc """
+  {
+    "source": ["src"],
+    "outDir": "dist",
+    "targetPython": "3.11",
+  }
+  """
+
+  @gitignore """
+  __pycache__/
+  *.py[oc]
+  dist/
+  .gandora/
+  .venv/
+  """
+
+  @hello_gan """
+  defmodule Main do
+    def main(), do: IO.puts("Hello from Gandora!")
+  end
+  """
+
+  defp pyproject_toml(name) do
+    """
+    [project]
+    name = "#{name}"
+    version = "0.1.0"
+    requires-python = ">=3.11"
+    dependencies = ["gandora-std>=#{core.version()}"]
+    """
+  end
+
   def init(path) do
     p = :pathlib.Path(path)
-    if to_string(:builtins.bool(p.exists())) == "True" do
+    if p.exists() do
       IO.puts("gan: #{path} already exists")
       :sys.exit(1)
     end
     (p / "src").mkdir(parents: true)
     name = to_string(p.resolve().name)
-    (p / "gandora.jsonc").write_text(
-      "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.12\",\n}\n")
-    (p / "pyproject.toml").write_text(
-      "[project]\nname = \"" <> name <> "\"\nversion = \"0.1.0\"\nrequires-python = \">=3.12\"\ndependencies = [\"gandora-std>=" <> core.version() <> "\"]\n")
-    (p / ".gitignore").write_text("__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n")
-    (p / ".python-version").write_text("3.12\n")
-    (p / "src" / "main.gan").write_text(
-      "defmodule Main do\n  def main(), do: IO.puts(\"Hello from Gandora!\")\nend\n")
+    (p / "gandora.jsonc").write_text(@gandora_jsonc)
+    (p / "pyproject.toml").write_text(pyproject_toml(name))
+    (p / ".gitignore").write_text(@gitignore)
+    (p / ".python-version").write_text("3.11\n")
+    (p / "src" / "main.gan").write_text(@hello_gan)
     IO.puts("Initialized Gandora project in #{path}")
   end
 

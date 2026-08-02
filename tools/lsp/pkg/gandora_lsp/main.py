@@ -1,6 +1,5 @@
-"""
-  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 2).
-  pygls owns protocol machinery; this module owns language logic.
+"""gan-lsp: the Gandora language server on pygls (GEP-0015 rev 2).
+pygls owns protocol machinery; this module owns language logic.
 """
 
 import builtins
@@ -16,7 +15,7 @@ import gandora_std.string
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.2.0")
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.2.1")
 
 
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_DID_OPEN)

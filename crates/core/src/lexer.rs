@@ -385,6 +385,9 @@ impl<'a> Lexer<'a> {
         if !text.is_empty() || parts.is_empty() {
             parts.push(LexStrPart::Text(text));
         }
+        if heredoc {
+            dedent_heredoc(&mut parts);
+        }
         Ok(Tok::Str(parts))
     }
 
@@ -695,6 +698,42 @@ mod sigil_tests {
     }
 }
 
+/// Elixir heredoc semantics (GEP-0001-R026): the newline after the opening
+/// `"""` is not part of the value, and the indentation of the closing
+/// delimiter's line is stripped from every content line. Heredocs whose
+/// content starts on the opening line, or whose closing delimiter is not
+/// alone on its line, are taken verbatim.
+fn dedent_heredoc(parts: &mut [LexStrPart]) {
+    let starts_on_newline =
+        matches!(parts.first(), Some(LexStrPart::Text(t)) if t.starts_with('\n'));
+    if !starts_on_newline {
+        return;
+    }
+    let indent = match parts.last() {
+        Some(LexStrPart::Text(t)) => match t.rfind('\n') {
+            Some(pos) if t[pos + 1..].chars().all(|c| c == ' ' || c == '\t') => {
+                t[pos + 1..].to_string()
+            }
+            _ => return,
+        },
+        _ => return,
+    };
+    if let Some(LexStrPart::Text(t)) = parts.last_mut() {
+        t.truncate(t.rfind('\n').unwrap() + 1);
+    }
+    if !indent.is_empty() {
+        let marker = format!("\n{indent}");
+        for part in parts.iter_mut() {
+            if let LexStrPart::Text(t) = part {
+                *t = t.replace(&marker, "\n");
+            }
+        }
+    }
+    if let Some(LexStrPart::Text(t)) = parts.first_mut() {
+        t.remove(0);
+    }
+}
+
 #[cfg(test)]
 mod heredoc_tests {
     use super::*;
@@ -711,6 +750,56 @@ mod heredoc_tests {
                 }
                 other => panic!("{other:?}"),
             },
+            other => panic!("{other:?}"),
+        }
+    }
+
+    fn only_text(src: &str) -> String {
+        let toks = Lexer::new("<test>", src).tokenize().unwrap();
+        match &toks[0].0 {
+            Tok::Str(parts) => match &parts[..] {
+                [LexStrPart::Text(t)] => t.clone(),
+                other => panic!("{other:?}"),
+            },
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn dedents_by_closing_delimiter_indent() {
+        let t = only_text("\"\"\"\n  hello\n    indented\n  \"\"\"");
+        assert_eq!(t, "hello\n  indented\n");
+    }
+
+    #[test]
+    fn strips_opening_newline_when_closing_at_column_zero() {
+        let t = only_text("\"\"\"\n  kept indent\n\"\"\"");
+        assert_eq!(t, "  kept indent\n");
+    }
+
+    #[test]
+    fn empty_heredoc_is_empty() {
+        let t = only_text("\"\"\"\n\"\"\"");
+        assert_eq!(t, "");
+    }
+
+    #[test]
+    fn verbatim_when_content_on_opening_line() {
+        let t = only_text("\"\"\"x\ny\"\"\"");
+        assert_eq!(t, "x\ny");
+    }
+
+    #[test]
+    fn dedents_around_interpolation() {
+        let toks = Lexer::new("<test>", "\"\"\"\n  a #{x}\n  b\n  \"\"\"")
+            .tokenize()
+            .unwrap();
+        match &toks[0].0 {
+            Tok::Str(parts) => {
+                assert!(matches!(&parts[0], LexStrPart::Text(t) if t == "a "), "{parts:?}");
+                assert!(matches!(&parts[1], LexStrPart::Interp(_)), "{parts:?}");
+                assert!(matches!(&parts[2], LexStrPart::Text(t) if t == "\nb\n"), "{parts:?}");
+            }
             other => panic!("{other:?}"),
         }
     }

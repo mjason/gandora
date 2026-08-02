@@ -2,7 +2,7 @@
 name = "gandora-tour"
 version = "0.1.0"
 description = "A tour of the Gandora language"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = []
 
 # Third-party packages are ordinary uv dependencies; the compiler never

@@ -1,6 +1,5 @@
-"""
-  gan-lsc: the Language Server Console (GEP-0015-R001A) — language
-  intelligence as one JSON value per query, for AI agents and shells.
+"""gan-lsc: the Language Server Console (GEP-0015-R001A) — language
+intelligence as one JSON value per query, for AI agents and shells.
 """
 
 import builtins
@@ -15,7 +14,7 @@ import gandora_std.enum
 class GanMatchError(Exception):
     pass
 
-usage = "\n  gan lsc <query> — one JSON value on stdout\n\n  Queries (each accepts --root <dir>, default: cwd):\n    version                     compiler/library version\n    diagnostics <file>          full-pipeline diagnostics\n    ast <file>                  quoted term of the source\n    expand <file>               quoted term after macro expansion\n    compile <file>              generated Python source (plain text)\n    resolve <module>            how a module reference resolves\n  "
+usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n"
 
 
 def main():
