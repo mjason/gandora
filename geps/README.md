@@ -25,3 +25,5 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0010](0010-standard-library.md) | The Standard Library | Standards Track | Accepted | 2 | [zh](local/zh/0010-standard-library.md) |
 | [0011](0011-multi-arity-functions.md) | Multi-Arity Functions | Standards Track | Accepted | 1 | [zh](local/zh/0011-multi-arity-functions.md) |
 | [0012](0012-compiler-as-a-library.md) | The Compiler as a Library | Standards Track | Accepted | 1 | [zh](local/zh/0012-compiler-as-a-library.md) |
+| [0013](0013-the-gan-task-runner.md) | The gan Task Runner | Standards Track | Accepted | 1 | [zh](local/zh/0013-the-gan-task-runner.md) |
+| [0014](0014-control-flow-completion.md) | Control-Flow Completion | Standards Track | Accepted | 1 | [zh](local/zh/0014-control-flow-completion.md) |

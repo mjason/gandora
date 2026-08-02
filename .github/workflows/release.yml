@@ -58,13 +58,37 @@ jobs:
       - name: compile and doctest the stdlib with gan itself
         run: |
           cd std
-          ../target/release/gan build
-          ../target/release/gan test
+          ../target/release/ganc build
+          ../target/release/ganc test
       - run: cd std && uv build --out-dir ../dist-std
       - uses: actions/upload-artifact@v4
         with:
           name: dist-std
           path: dist-std
+
+  # gandora-tool: the gan task runner, written in Gandora (GEP-0013)
+  build-tool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out target/wheels --manifest-path crates/core-py/Cargo.toml
+          manylinux: auto
+      - run: cargo build --release
+      - name: compile the runner with ganc, then package
+        run: |
+          cd tools/gan
+          uv sync
+          ../../target/release/ganc build
+          uv build --out-dir ../../dist-tool
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-tool
+          path: dist-tool
 
   # Trusted Publishing (OIDC): no tokens anywhere.
   # PyPI side: two pending publishers — gandora-lang uses environment
@@ -93,6 +117,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist-core
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-tool:
+    needs: [build-tool]
+    runs-on: ubuntu-latest
+    environment: pypi-tool
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-tool
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 

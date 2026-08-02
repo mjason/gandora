@@ -1,0 +1,181 @@
+defmodule Main do
+  @moduledoc """
+  gan — the Gandora task runner (GEP-0013), written in Gandora.
+  Native commands drive gandora-core in-process; unknown subcommands
+  delegate to gan-<name> plugins, then to the stage-0 compiler ganc.
+  """
+
+  pyimport gandora_core, as: core
+  pyimport subprocess
+  pyimport shutil
+  pyimport pathlib
+
+  @usage """
+  gan - the Gandora task runner
+
+  Usage:
+    gan build | check | run <file> [args...] | exec <code> | repl
+    gan init <path> | version
+    gan <plugin> ...        delegates to gan-<plugin>, then to ganc
+  """
+
+  def main() do
+    args = :builtins.list(:sys.argv) |> Enum.drop(1)
+    case args do
+      [] ->
+        IO.puts(@usage)
+        :sys.exit(2)
+      ["version" | _] -> version()
+      ["build" | _] -> build()
+      ["check" | _] -> check()
+      ["run", file | rest] -> run(file, rest)
+      ["run"] -> die_usage("run requires a file")
+      ["exec", code | _] -> exec_code(code)
+      ["exec"] -> die_usage("exec requires code")
+      ["repl" | _] -> repl()
+      ["init", path | _] -> init(path)
+      ["init"] -> die_usage("init requires a path")
+      [cmd | rest] -> delegate(cmd, rest)
+    end
+  end
+
+  defp die_usage(msg) do
+    IO.puts("gan: " <> msg)
+    IO.puts(@usage)
+    :sys.exit(2)
+  end
+
+  defp root(), do: :os.getcwd()
+
+  def version() do
+    IO.puts("gan #{runner_version()} (runner) / gandora-core #{core.version()}")
+    if runner_version() != core.version() do
+      IO.puts("warning: runner and gandora-core versions differ (GEP-0012-R007)")
+    end
+  end
+
+  defp runner_version(), do: :"importlib.metadata".version("gandora-tool")
+
+  def build() do
+    try do
+      modules = core.build(root())
+      IO.puts("compiled #{Enum.count(modules)} module(s)")
+    rescue
+      e in core.CompileError -> compile_error(e)
+    end
+  end
+
+  def check() do
+    diags = core.check(root())
+    Enum.each(diags, fn d ->
+      IO.puts("#{Map.get(d, "severity")}: #{Map.get(d, "path")}:#{Map.get(d, "line")}: #{Map.get(d, "message")}")
+    end)
+    errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+    if Enum.empty?(errors) do
+      IO.puts("check passed")
+    else
+      :sys.exit(1)
+    end
+  end
+
+  def run(file, args) do
+    cache = root() <> "/.gandora/cache"
+    try do
+      modules = core.build(root(), cache)
+      abs = to_string(:pathlib.Path(file).resolve())
+      target = Enum.find(modules, fn m -> Map.get(m, "source") == abs end)
+      cond do
+        is_nil(target) ->
+          IO.puts("gan: #{file} is not a module of this project")
+          :sys.exit(1)
+        is_nil(Map.get(target, "python")) ->
+          IO.puts("gan: #{Map.get(target, "module")} defines only macros; nothing to run")
+          :sys.exit(1)
+        true ->
+          code = subprocess.call(
+            [:sys.executable, "-P", Map.get(target, "python")] ++ args,
+            env: Map.put(:builtins.dict(:os.environ), "PYTHONPATH", cache)
+          )
+          :sys.exit(code)
+      end
+    rescue
+      e in core.CompileError -> compile_error(e)
+    end
+  end
+
+  def exec_code(code) do
+    eval_line(code, :builtins.dict())
+  end
+
+  def repl() do
+    IO.puts("gan repl (gandora-core #{core.version()}) — Ctrl-D to exit")
+    ns = :builtins.dict()
+    loop n = 0 do
+      line = try do
+        :builtins.input("gan> ")
+      rescue
+        _e in :builtins.EOFError -> :eof
+        _e in :builtins.KeyboardInterrupt -> :eof
+      end
+      cond do
+        line == :eof -> break(n)
+        String.trim(line) == "" -> recur(n)
+        true ->
+          eval_line(line, ns)
+          recur(n + 1)
+      end
+    end
+    IO.puts("")
+  end
+
+  defp eval_line(code, ns) do
+    try do
+      compiled = core.compile_snippet(code, root())
+      :builtins.exec(compiled, ns)
+      result = Map.get(ns, "_")
+      if not is_nil(result) do
+        IO.puts(inspect(result))
+      end
+    rescue
+      e in core.CompileError ->
+        IO.puts("error: #{Enum.at(:builtins.list(e.args), 0)}")
+      e ->
+        IO.puts("#{:builtins.type(e).__name__}: #{to_string(e)}")
+    end
+  end
+
+  def init(path) do
+    p = :pathlib.Path(path)
+    if to_string(:builtins.bool(p.exists())) == "True" do
+      IO.puts("gan: #{path} already exists")
+      :sys.exit(1)
+    end
+    (p / "src").mkdir(parents: true)
+    name = to_string(p.resolve().name)
+    (p / "gandora.jsonc").write_text(
+      "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.12\",\n}\n")
+    (p / "pyproject.toml").write_text(
+      "[project]\nname = \"" <> name <> "\"\nversion = \"0.1.0\"\nrequires-python = \">=3.12\"\ndependencies = [\"gandora-std>=" <> core.version() <> "\"]\n")
+    (p / ".gitignore").write_text("__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n")
+    (p / ".python-version").write_text("3.12\n")
+    (p / "src" / "main.gan").write_text(
+      "defmodule Main do\n  def main(), do: IO.puts(\"Hello from Gandora!\")\nend\n")
+    IO.puts("Initialized Gandora project in #{path}")
+  end
+
+  defp delegate(cmd, rest) do
+    plugin = shutil.which("gan-" <> cmd)
+    ganc = shutil.which("ganc")
+    cond do
+      not is_nil(plugin) -> :sys.exit(subprocess.call([plugin] ++ rest))
+      not is_nil(ganc) -> :sys.exit(subprocess.call([ganc, cmd] ++ rest))
+      true -> die_usage("unknown command '#{cmd}' (no gan-#{cmd} plugin, no ganc)")
+    end
+  end
+
+  defp compile_error(e) do
+    args = :builtins.list(e.args)
+    IO.puts("#{Enum.at(args, 1)}:#{Enum.at(args, 2)}:#{Enum.at(args, 3)}: error: #{Enum.at(args, 0)}")
+    :sys.exit(1)
+  end
+end

@@ -1,0 +1,8 @@
+{
+  // The gan task runner (GEP-0013): a Gandora program over gandora-core.
+  "source": ["src"],
+  "outDir": "pkg",
+  "targetPython": "3.12",
+  "package": true,
+  "pyPackage": "gandora_tool",
+}

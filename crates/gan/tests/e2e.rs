@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn gan() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_gan"))
+    Command::new(env!("CARGO_BIN_EXE_ganc"))
 }
 
 fn temp_dir(name: &str) -> PathBuf {

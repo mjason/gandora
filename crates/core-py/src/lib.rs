@@ -293,5 +293,75 @@ fn gandora_core(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(diagnostics, m)?)?;
     m.add_function(wrap_pyfunction!(compile_snippet, m)?)?;
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
+    m.add_function(wrap_pyfunction!(build, m)?)?;
+    m.add_function(wrap_pyfunction!(check, m)?)?;
     Ok(())
+}
+
+#[pyfunction]
+#[pyo3(signature = (root, out = None))]
+fn build(py: Python, root: &str, out: Option<&str>) -> PyResult<PyObject> {
+    let config = match project::find_config(Path::new(root)) {
+        Ok(Some(c)) => c,
+        _ => project::Config::default_at(Path::new(root).to_path_buf()),
+    };
+    let modules = project::compile_project(&config).map_err(raise)?;
+    let out_root = match out {
+        Some(o) => Path::new(o).to_path_buf(),
+        None => config.root.join(&config.out_dir),
+    };
+    project::write_outputs(&modules, &out_root).map_err(raise)?;
+    if config.package && out.is_none() {
+        project::write_package_artifacts(&modules, &out_root).map_err(raise)?;
+    }
+    let list = PyList::empty_bound(py);
+    for m in &modules {
+        let e = PyDict::new_bound(py);
+        e.set_item("source", m.source.display().to_string())?;
+        e.set_item("module", m.module.join("."))?;
+        e.set_item(
+            "python",
+            if m.compile_time_only {
+                None
+            } else {
+                Some(out_root.join(&m.py_path).display().to_string())
+            },
+        )?;
+        let _ = list.append(e);
+    }
+    Ok(list.into_py(py))
+}
+
+#[pyfunction]
+fn check(py: Python, root: &str) -> PyResult<PyObject> {
+    let config = match project::find_config(Path::new(root)) {
+        Ok(Some(c)) => c,
+        _ => project::Config::default_at(Path::new(root).to_path_buf()),
+    };
+    let out = PyList::empty_bound(py);
+    match project::compile_project(&config) {
+        Err(d) => {
+            let e = PyDict::new_bound(py);
+            e.set_item("message", &d.message)?;
+            e.set_item("path", &d.file)?;
+            e.set_item("line", d.span.line)?;
+            e.set_item("col", d.span.col)?;
+            e.set_item("severity", "error")?;
+            let _ = out.append(e);
+        }
+        Ok(modules) => {
+            for m in &modules {
+                for w in &m.warnings {
+                    let e = PyDict::new_bound(py);
+                    e.set_item("message", w)?;
+                    e.set_item("path", m.source.display().to_string())?;
+                    e.set_item("line", 0u32)?;
+                    e.set_item("col", 0u32)?;
+                    e.set_item("severity", "warning")?;
+                    let _ = out.append(e);
+                }
+            }
+        }
+    }
+    Ok(out.into_py(py))
 }

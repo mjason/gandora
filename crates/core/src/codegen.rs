@@ -1769,7 +1769,17 @@ impl Codegen {
                     // expr.name / expr.name(...) — postfix access (GEP-0003-R004)
                     other => {
                         let b = self.emit_expr(other, pre)?;
-                        let needs_paren = matches!(other, Term::Int(_) | Term::Float(_));
+                        let needs_paren = match other {
+                            Term::Int(_) | Term::Float(_) => true,
+                            // binary operations bind looser than attribute access
+                            Term::Call(c) => matches!(&c.callee, Callee::Name(n)
+                                if c.args.len() == 2
+                                    && matches!(n.as_str(),
+                                        "+" | "-" | "*" | "/" | "//" | "++" | "<>" | ".."
+                                        | "==" | "!=" | "<" | ">" | "<=" | ">=" | "and"
+                                        | "or" | "in")),
+                            _ => false,
+                        };
                         let b = if needs_paren { format!("({b})") } else { b };
                         let f = map_ident(name);
                         if *is_call {

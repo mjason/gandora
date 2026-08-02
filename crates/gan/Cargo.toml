@@ -6,7 +6,7 @@ license.workspace = true
 description = "The gan compiler CLI"
 
 [[bin]]
-name = "gan"
+name = "ganc"
 path = "src/main.rs"
 
 [dependencies]
