@@ -2,9 +2,13 @@ defmodule Map do
   @moduledoc "Data-first dict functions; all updates return new maps (GEP-0010)."
   @moduledoc_trans zh_CN: "数据优先的 dict 函数；所有更新都返回新映射（GEP-0010）。"
 
-  @doc "The value for `key`, or nil when absent."
-  @doc_trans zh_CN: "键 `key` 的值，不存在时为 nil。"
-  def get(m, key), do: m.get(key)
+  @doc "The value for `key`, or `default` (nil unless given) when absent."
+  @doc_trans zh_CN: "键 `key` 的值；不存在时为 `default`（未给出则为 nil）。"
+  @example """
+      gan> Map.get(%{a: 1}, :b, 0)
+      0
+  """
+  def get(m, key, default \\ nil), do: m.get(key, default)
 
   @doc "A new map with `key` set to `value`."
   @doc_trans zh_CN: "设置 `key` 为 `value` 后的新映射。"

@@ -284,6 +284,7 @@ pub struct Codegen {
     aliases: BTreeMap<String, Vec<String>>,
     helpers: BTreeSet<&'static str>,
     local_funs: BTreeSet<(String, usize)>,
+    defaulted_funs: BTreeSet<String>,
     private_funs: BTreeSet<(String, usize)>,
     attr_names: BTreeSet<String>,
     /// python package prefix for this build's own modules (pyPackage)
@@ -314,6 +315,7 @@ impl Codegen {
             aliases: BTreeMap::new(),
             helpers: BTreeSet::new(),
             local_funs: BTreeSet::new(),
+            defaulted_funs: BTreeSet::new(),
             private_funs: BTreeSet::new(),
             attr_names: BTreeSet::new(),
             py_prefix: None,
@@ -475,11 +477,49 @@ impl Codegen {
                     self.struct_fields = Some(self.parse_defstruct(call)?);
                 }
                 "def" | "defp" => {
-                    let (fname, params, guard, fbody) = self.parse_def(call)?;
-                    let key = format!("{fname}/{}", params.len());
-                    self.local_funs.insert((fname.clone(), params.len()));
-                    if name == "defp" {
-                        self.private_funs.insert((fname.clone(), params.len()));
+                    let (fname, raw_params, guard, fbody) = self.parse_def(call)?;
+                    // default parameters: `p \\ expr` (GEP-0011-R002)
+                    let mut params: Vec<Term> = Vec::new();
+                    let mut defaults: Vec<Term> = Vec::new();
+                    for p in &raw_params {
+                        match p {
+                            Term::Call(c)
+                                if matches!(&c.callee, Callee::Name(n) if n == "\\\\") =>
+                            {
+                                params.push(c.args[0].clone());
+                                defaults.push(c.args[1].clone());
+                            }
+                            other => {
+                                if !defaults.is_empty() {
+                                    return Err(self.err(
+                                        call.span,
+                                        format!(
+                                            "default parameters of {fname} must be \
+                                             trailing (GEP-0011-R003)"
+                                        ),
+                                    ));
+                                }
+                                params.push(other.clone());
+                            }
+                        }
+                    }
+                    let key = fname.clone();
+                    if !defaults.is_empty() {
+                        if !self.defaulted_funs.insert(fname.clone()) {
+                            return Err(self.err(
+                                call.span,
+                                format!(
+                                    "only one definition of {fname} may declare \
+                                     defaults (GEP-0011-R003)"
+                                ),
+                            ));
+                        }
+                    }
+                    for arity in (params.len() - defaults.len())..=params.len() {
+                        self.local_funs.insert((fname.clone(), arity));
+                        if name == "defp" {
+                            self.private_funs.insert((fname.clone(), arity));
+                        }
                     }
                     let idx = if let Some(&i) = order.get(&key) {
                         if pending_doc.is_some() || !pending_decorators.is_empty() {
@@ -507,7 +547,21 @@ impl Codegen {
                             format!("clauses of {fname} mix def and defp"),
                         ));
                     }
-                    funs[idx].clauses.push((params, guard, fbody));
+                    let arity = params.len();
+                    funs[idx].clauses.push((params.clone(), guard, fbody));
+                    // each omitted default suffix becomes a delegating clause
+                    for j in 1..=defaults.len() {
+                        let keep = arity - j;
+                        let synth_params: Vec<Term> = params[..keep].to_vec();
+                        let mut args: Vec<Term> = synth_params.clone();
+                        args.extend(defaults[defaults.len() - j..].iter().cloned());
+                        let body = Term::Call(Box::new(Call {
+                            callee: Callee::Name(fname.clone()),
+                            args,
+                            span: call.span,
+                        }));
+                        funs[idx].clauses.push((synth_params, None, body));
+                    }
                 }
                 other if other.starts_with('@') => {
                     // a module attribute declaration: `@name expr` (GEP-0004-R009)
@@ -777,15 +831,14 @@ impl Codegen {
     }
 
     fn compile_fun(&mut self, f: &FnDef) -> Result<String> {
-        let arity = f.clauses[0].0.len();
-        for (params, _, _) in &f.clauses {
-            if params.len() != arity {
-                return Err(self.err(
-                    f.span,
-                    format!("clauses of {} have different arities", f.name),
-                ));
-            }
-        }
+        let mut arities: Vec<usize> = f.clauses.iter().map(|(p, _, _)| p.len()).collect();
+        arities.sort_unstable();
+        arities.dedup();
+        let arity_label = arities
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let mut py_name = map_ident(&f.name);
         if f.private {
             py_name.insert(0, '_');
@@ -876,7 +929,7 @@ impl Codegen {
             self.helpers.insert("match_error");
             let n = &f.name;
             body_lines.push(format!(
-                "raise GanMatchError(\"no clause of {n}/{arity} matched \" + repr(_gan_args))"
+                "raise GanMatchError(\"no clause of {n}/{arity_label} matched \" + repr(_gan_args))"
             ));
             push_indented(&mut lines, &body_lines);
         }
@@ -3135,5 +3188,49 @@ mod gep0008_tests {
             "defmodule M do\n  defattr :owner\n  @owner :a\n  @owner :b\n  def f(), do: nil\nend",
         );
         assert!(err.contains("GEP-0008-R004"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod gep0011_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn two_arities_share_one_function() {
+        let py = compile(
+            "defmodule M do\n  def get(m, k), do: m.get(k)\n  def get(m, k, d), do: m.get(k, d)\nend",
+        );
+        assert_eq!(py.matches("def get(").count(), 1, "{py}");
+        assert!(py.contains("case (m, k,):"), "{py}");
+        assert!(py.contains("case (m, k, d,):"), "{py}");
+        assert!(py.contains("get/2,3 matched"), "{py}");
+    }
+
+    #[test]
+    fn defaults_synthesize_delegating_clauses() {
+        let py = compile(
+            "defmodule M do\n  def greet(name, greeting \\\\ \"hello\", mark \\\\ \"!\") do\n    greeting <> \", \" <> name <> mark\n  end\nend",
+        );
+        assert!(py.contains("case (name, greeting, mark,):"), "{py}");
+        assert!(py.contains("case (name, greeting,):"), "{py}");
+        assert!(py.contains("case (name,):"), "{py}");
+        assert!(py.contains("return greet(name, greeting, \"!\")"), "{py}");
+        assert!(py.contains("return greet(name, \"hello\", \"!\")"), "{py}");
+    }
+
+    #[test]
+    fn non_trailing_default_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  def f(a \\\\ 1, b), do: a + b\nend",
+        );
+        assert!(err.contains("trailing"), "{err}");
+    }
+
+    #[test]
+    fn two_defaulted_definitions_are_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  def f(a, b \\\\ 1), do: a + b\n  def f(a, b \\\\ 2, c \\\\ 3), do: a + b + c\nend",
+        );
+        assert!(err.contains("GEP-0011-R003"), "{err}");
     }
 }

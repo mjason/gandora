@@ -67,6 +67,8 @@ The practical guide is the [language manual](docs/syntax.md)
   ([std/](std/)): `Enum`, `String`,
   `Map`, `List`, `Keyword` as an ordinary package
   ([中文](geps/local/zh/0010-standard-library.md))
+- [GEP-0011](geps/0011-multi-arity-functions.md) — multi-arity name groups
+  and `\\` default parameters ([中文](geps/local/zh/0011-multi-arity-functions.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator

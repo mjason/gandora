@@ -6,10 +6,23 @@ import builtins
 def _gan_truthy(value):
     return value is not None and value is not False
 
+class GanMatchError(Exception):
+    pass
 
-def get(m, key):
-    """The value for `key`, or nil when absent."""
-    return m.get(key)
+
+def get(*_gan_args):
+    """The value for `key`, or `default` (nil unless given) when absent.
+
+
+      >>> get({"a": 1}, "b", 0)
+      0
+"""
+    match _gan_args:
+        case (m, key, default,):
+            return m.get(key, default)
+        case (m, key,):
+            return get(m, key, None)
+    raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
 
 
 def put(m, key, value):
