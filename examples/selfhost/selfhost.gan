@@ -47,7 +47,7 @@ defmodule Selfhost do
     IO.puts("diagnostics  : #{inspect(core.diagnostics("defmodule B do\ndef f(x) do receive(x) end\nend"))}")
     code = core.compile_snippet("[1, 2, 3] |> Enum.map(fn x -> x * x end)", ".")
     ns = %{}
-    :builtins.exec(code, ns)
+    $builtins.exec(code, ns)
     IO.puts("snippet _    : #{inspect(Map.get(ns, "_"))}")
   end
 end

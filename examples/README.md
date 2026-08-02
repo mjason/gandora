@@ -19,7 +19,7 @@ a `main`, or inspect it with `gan expand` / `gan build`.
 | [`src/main.gan`](tour/src/main.gan) | `Main` | aliases, captures of module functions, private helpers |
 | [`src/tour/basics.gan`](tour/src/tour/basics.gan) | `Tour.Basics` | every literal, operator precedence, `//`·`div`·`rem` truncation, `<>`, `#{}` interpolation, Elixir truthiness, ranges |
 | [`src/tour/patterns.gan`](tour/src/tour/patterns.gan) | `Tour.Patterns` | multi-clause `def` + `when` guards, `=` destructuring, `[h \| t]`, map patterns, pin `^x`, `case`/`cond`/`with`-`else` |
-| [`src/tour/functions.gan`](tour/src/tour/functions.gan) | `Tour.Functions` | `fn` (incl. multi-clause + guards), `&(&1 + &2)`, `&:math.sqrt/1`, multi-line `\|>` pipelines |
+| [`src/tour/functions.gan`](tour/src/tour/functions.gan) | `Tour.Functions` | `fn` (incl. multi-clause + guards), `&(&1 + &2)`, `&$math.sqrt/1`, multi-line `\|>` pipelines |
 | [`src/tour/interop.gan`](tour/src/tour/interop.gan) | `Tour.Interop` | `:module` atom calls, `pyimport ... as:`, dotted `:"os.path"`, postfix chains, kwargs, `@decorate`, attribute-held Python state |
 | [`src/app/macros.gan`](tour/src/app/macros.gan) | `App.Macros` | `defmacro`, `quote`/`unquote`/`unquote_splicing`, hygiene, `var!` capture |
 | [`src/app/mathy.gan`](tour/src/app/mathy.gan) | `App.Mathy` | recursion, `defp`, pipelines over interop |
