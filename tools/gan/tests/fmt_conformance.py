@@ -62,9 +62,9 @@ with tempfile.TemporaryDirectory() as tmp:
 if PY:
     code = (
         "import gandora_tool.fmt as f\n"
-        "ok = f._verify('x = 1  # keep\\n', 'x = 1  # keep\\n')\n"
-        "bad_comment = f._verify('x = 1  # keep\\n', 'x = 1  # changed\\n')\n"
-        "bad_term = f._verify('x = 1\\n', 'x = 2\\n')\n"
+        "ok = f.verify('x = 1  # keep\\n', 'x = 1  # keep\\n')\n"
+        "bad_comment = f.verify('x = 1  # keep\\n', 'x = 1  # changed\\n')\n"
+        "bad_term = f.verify('x = 1\\n', 'x = 2\\n')\n"
         "print(ok == 'ok' and bad_comment != 'ok' and bad_term != 'ok')\n"
     )
     r = subprocess.run([PY, "-c", code], capture_output=True, text=True)
