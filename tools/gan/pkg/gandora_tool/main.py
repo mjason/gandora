@@ -7,6 +7,7 @@ import builtins
 import gandora_core as core
 import importlib.metadata
 import os
+import os.path
 import pathlib
 import shutil
 import subprocess
@@ -74,6 +75,14 @@ def _root():
     return os.getcwd()
 
 
+def _project_python():
+    venv = _root() + "/.venv/bin/python"
+    if _gan_truthy(os.path.exists(venv)):
+        return venv
+    else:
+        return sys.executable
+
+
 def version():
     print(f"gan {_runner_version()} (runner) / gandora-core {core.version()}")
     if _runner_version() != core.version():
@@ -96,7 +105,13 @@ def build():
 
 def check():
     diags = core.check(_root())
-    gandora_std.enum.each(diags, lambda d: print(f"{gandora_std.map.get(d, "severity")}: {gandora_std.map.get(d, "path")}:{gandora_std.map.get(d, "line")}: {gandora_std.map.get(d, "message")}"))
+    def _gan_fn0(d):
+        _gan_fstr17 = gandora_std.map.get(d, "severity")
+        _gan_fstr18 = gandora_std.map.get(d, "path")
+        _gan_fstr19 = gandora_std.map.get(d, "line")
+        _gan_fstr20 = gandora_std.map.get(d, "message")
+        return print(f"{_gan_fstr17}: {_gan_fstr18}:{_gan_fstr19}: {_gan_fstr20}")
+    gandora_std.enum.each(diags, _gan_fn0)
     errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
     if _gan_truthy(gandora_std.enum.empty_p(errors)):
         return print("check passed")
@@ -114,10 +129,11 @@ def run(file, args):
             print(f"gan: {file} is not a module of this project")
             return sys.exit(1)
         elif _gan_truthy((gandora_std.map.get(target, "python") is None)):
-            print(f"gan: {gandora_std.map.get(target, "module")} defines only macros; nothing to run")
+            _gan_fstr21 = gandora_std.map.get(target, "module")
+            print(f"gan: {_gan_fstr21} defines only macros; nothing to run")
             return sys.exit(1)
         else:
-            code = subprocess.call([sys.executable, "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
+            code = subprocess.call([_project_python(), "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
             return sys.exit(code)
     except core.CompileError as e:
         return _compile_error(e)
@@ -130,26 +146,26 @@ def exec_code(code):
 def repl():
     print(f"gan repl (gandora-core {core.version()}) — Ctrl-D to exit")
     ns = builtins.dict()
-    _gan_loop13 = 0
-    _gan_res14 = None
+    _gan_loop22 = 0
+    _gan_res23 = None
     while True:
-        n = _gan_loop13
+        n = _gan_loop22
         try:
-            _gan_tmp15 = builtins.input("gan> ")
+            _gan_tmp24 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp15 = "eof"
+            _gan_tmp24 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp15 = "eof"
-        line = _gan_tmp15
+            _gan_tmp24 = "eof"
+        line = _gan_tmp24
         if line == "eof":
-            _gan_res14 = n
+            _gan_res23 = n
             break
         elif gandora_std.string.trim(line) == "":
-            _gan_loop13 = n
+            _gan_loop22 = n
             continue
         else:
             _eval_line(line, ns)
-            _gan_loop13 = n + 1
+            _gan_loop22 = n + 1
             continue
         break
     return print("")

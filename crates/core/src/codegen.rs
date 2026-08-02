@@ -1657,6 +1657,17 @@ impl Codegen {
                 StrPart::Text(t) => body.push_str(&escape_py_str(t, true)),
                 StrPart::Interp(e) => {
                     let ee = self.emit_expr(e, pre)?;
+                    // f-string expressions may not contain quotes matching the
+                    // delimiter, backslashes, or `#` before Python 3.12; hoist
+                    // such expressions so the output runs on targetPython 3.11
+                    let ee = if ee.contains(['"', '\\', '#', '\n']) {
+                        let idx = self.fresh_tmp("fstr");
+                        let name = self.tmp(idx).to_string();
+                        pre.push(format!("{name} = {ee}"));
+                        name
+                    } else {
+                        ee
+                    };
                     let _ = write!(body, "{{{ee}}}");
                 }
             }
@@ -2013,6 +2024,15 @@ impl Codegen {
                                     d
                                 })?;
                             let e = self.emit_expr(&term, pre)?;
+                            // same targetPython 3.11 restriction as emit_string
+                            let e = if e.contains(['"', '\\', '#', '\n']) {
+                                let idx = self.fresh_tmp("fstr");
+                                let name = self.tmp(idx).to_string();
+                                pre.push(format!("{name} = {e}"));
+                                name
+                            } else {
+                                e
+                            };
                             let _ = write!(out, "{{{e}}}");
                         }
                     }
@@ -3298,6 +3318,17 @@ mod gep0009_tests {
             "defmodule M do\n  def q(), do: ~sql(SELECT * FROM users WHERE age > 30)\nend",
         );
         assert!(py.contains("return \"SELECT * FROM users WHERE age > 30\""), "{py}");
+    }
+
+    #[test]
+    fn fstring_interp_with_quotes_hoists_for_py311() {
+        // f-string expressions may not contain the delimiter quote before
+        // Python 3.12; the compiler hoists such expressions (targetPython 3.11)
+        let py = compile(
+            "defmodule M do\n  def f(), do: \"v #{:builtins.len(\"ab\")}\"\nend",
+        );
+        assert!(py.contains("_gan_fstr0 = builtins.len(\"ab\")"), "{py}");
+        assert!(py.contains("f\"v {_gan_fstr0}\""), "{py}");
     }
 
     #[test]

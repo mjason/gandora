@@ -46,7 +46,8 @@ def truthiness(x):
 def demo():
     print(f"literals:   {repr(literals())}")
     print(f"arithmetic: {repr(arithmetic())}")
-    print(f"strings:    {repr(strings("gandora"))}")
+    _gan_fstr0 = repr(strings("gandora"))
+    print(f"strings:    {_gan_fstr0}")
     print(truthiness(0))
     print(truthiness(None))
     total = builtins.sum(builtins.list(range(1, (10) + 1)))

@@ -16,8 +16,11 @@ def cached_add(a, b):
 
 def demo():
     print(f":math.pi           = {math.pi}")
-    print(f"json with kwargs   = {j.dumps({"lang": "gandora", "year": 2026}, sort_keys=True)}")
+    _gan_fstr0 = j.dumps({"lang": "gandora", "year": 2026}, sort_keys=True)
+    print(f"json with kwargs   = {_gan_fstr0}")
     print(f"counter.most_common = {repr(counter.most_common(2))}")
-    print(f"dotted module      = {os.path.join("a", "b")}")
-    print(f"postfix chain      = {" gandora ".strip().upper()}")
+    _gan_fstr1 = os.path.join("a", "b")
+    print(f"dotted module      = {_gan_fstr1}")
+    _gan_fstr2 = " gandora ".strip().upper()
+    print(f"postfix chain      = {_gan_fstr2}")
     return print(f"cached_add(20, 22) = {cached_add(20, 22)}")

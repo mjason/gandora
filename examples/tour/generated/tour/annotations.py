@@ -23,7 +23,8 @@ def plain(x):
 def main():
     print(f"fib(60) = {fib(60)}")
     print(f"cache   = {fib.cache_info()}")
-    return print(f"plain has no cache_info: {repr(builtins.hasattr(plain, "cache_info"))}")
+    _gan_fstr0 = repr(builtins.hasattr(plain, "cache_info"))
+    return print(f"plain has no cache_info: {_gan_fstr0}")
 
 
 if __name__ == "__main__":

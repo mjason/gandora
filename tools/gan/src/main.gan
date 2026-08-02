@@ -47,6 +47,17 @@ defmodule Main do
 
   defp root(), do: :os.getcwd()
 
+  # "execute with the project Python" (GEP-0013-R002): the venv
+  # interpreter when the project has one, else the runner's own
+  defp project_python() do
+    venv = root() <> "/.venv/bin/python"
+    if :"os.path".exists(venv) do
+      venv
+    else
+      :sys.executable
+    end
+  end
+
   def version() do
     IO.puts("gan #{runner_version()} (runner) / gandora-core #{core.version()}")
     if runner_version() != core.version() do
@@ -93,7 +104,7 @@ defmodule Main do
           :sys.exit(1)
         true ->
           code = subprocess.call(
-            [:sys.executable, "-P", Map.get(target, "python")] ++ args,
+            [project_python(), "-P", Map.get(target, "python")] ++ args,
             env: Map.put(:builtins.dict(:os.environ), "PYTHONPATH", cache)
           )
           :sys.exit(code)

@@ -7,7 +7,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server :"pygls.lsp.server".LanguageServer("gan-lsp", "0.2.2",
+  @server :"pygls.lsp.server".LanguageServer("gan-lsp", "0.2.3",
     text_document_sync_kind: :"lsprotocol.types".TextDocumentSyncKind.Full)
 
   @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)

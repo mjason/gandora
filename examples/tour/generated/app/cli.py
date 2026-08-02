@@ -35,12 +35,14 @@ def main():
         case _:
             raise GanMatchError("no match of right-hand side value: " + repr(_gan_val4))
     print(f"destructured: {a} {b} {h} {repr(t)}")
-    print(f"json: {json.dumps({"lang": "gandora"}, indent=0)}")
+    _gan_fstr6 = json.dumps({"lang": "gandora"}, indent=0)
+    print(f"json: {_gan_fstr6}")
     print(f"sum_all([1, 2, 3, 4]) = {builtins.sum([1, 2, 3, 4])}")
     start__gan3 = time.perf_counter()
     timer_result = app.mathy.fact(200)
     elapsed__gan3 = time.perf_counter() - start__gan3
-    print(f"{"fact(200)"} took {builtins.round(elapsed__gan3 * 1000, 3)} ms")
+    _gan_fstr7 = "fact(200)"
+    print(f"{_gan_fstr7} took {builtins.round(elapsed__gan3 * 1000, 3)} ms")
     return print(f"timer_result has {builtins.len(str(timer_result))} digits")
 
 

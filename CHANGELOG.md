@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.3 — 2026-08-02
+
+- **Codegen: f-string interpolations are hoisted when they contain
+  quotes/backslashes/`#`** — Python only allows those inside f-string
+  expressions from 3.12, and the target default is 3.11. Applies to
+  `#{}` interpolation and `<%= %>` value splices alike.
+- **`gan run` uses the project's `.venv` interpreter** when present
+  (GEP-0013-R002 "execute with the project Python"), not the runner's
+  own; `ganc` already did.
+- `ganc --version` reports its own name.
+
 ## v0.2.2 — 2026-08-02
 
 - **Heredoc dedent (GEP-0001-R026)**: `"""` strings follow Elixir's

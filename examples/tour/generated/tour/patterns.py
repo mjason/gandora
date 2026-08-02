@@ -119,4 +119,5 @@ def demo():
     print(handle(("ok", "other"), 42))
     print(handle(("error", {"reason": "boom"}), 42))
     print(f"buckets:     {repr([bucket(95), bucket(70), bucket(10)])}")
-    return print(f"parse_pair:  {repr([parse_pair("3,4"), parse_pair("nope")])}")
+    _gan_fstr19 = repr([parse_pair("3,4"), parse_pair("nope")])
+    return print(f"parse_pair:  {_gan_fstr19}")
