@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.1 — 2026-08-03
+
+- **`$(a.b)` replaces `$"a.b"`** (GEP-0003 rev 4): the explicit module
+  boundary now uses the sigil family's parenthesized delimiter instead
+  of string quotes — `$(PIL.Image).open(f)`, `$(importlib.metadata)`,
+  `$(os.path).sep`. Segments after `)` are always attributes; the
+  boundary a quote used to blur is locked by construction. The old
+  quoted spelling is a compile error naming the rule. Also fixed: a
+  quoted/bounded boundary is no longer extended by the chain
+  heuristic (`$(a.b).c` imports `a.b`, never `a.b.c`).
+
 ## v0.7.0 — 2026-08-02
 
 **The type language, tidied (GEP-0017 rev 3, GEP-0003 rev 3).**

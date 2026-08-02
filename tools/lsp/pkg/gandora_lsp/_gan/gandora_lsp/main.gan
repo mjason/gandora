@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.7.0",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.7.1",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -147,7 +147,12 @@ defmodule Main do
     else
       {token, start} = hit
       pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
-      py = PyIntel.target(doc.source, token, pyref)
+      bounded = start > 1 and String.slice(line, start - 2, 2) == "$("
+      py = if bounded do
+        {"import " <> token, token}
+      else
+        PyIntel.target(doc.source, token, pyref)
+      end
       cond do
         not is_nil(py) ->
           {import_line, expr} = py
@@ -275,7 +280,12 @@ defmodule Main do
     else
       {token, start} = hit
       pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
-      py = PyIntel.target(doc.source, token, pyref)
+      bounded = start > 1 and String.slice(line, start - 2, 2) == "$("
+      py = if bounded do
+        {"import " <> token, token}
+      else
+        PyIntel.target(doc.source, token, pyref)
+      end
       if not is_nil(py) do
         {import_line, expr} = py
         loc = PyIntel.goto(root_path(), import_line, expr)

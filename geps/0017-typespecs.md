@@ -114,8 +114,8 @@ Compositions and the boundary:
 
 `$mod.Type` is for host-*specific* types (`$np.ndarray`,
 `$re.Pattern`, `$decimal.Decimal`); the standard abstractions above
-are built in precisely so idiomatic specs never need a quoted module
-reference. Any other expression is a compile error naming this rule.
+are built in precisely so idiomatic specs never need an explicit
+module boundary. Any other expression is a compile error naming this rule.
 
 **GEP-0017-R003:** Compilation annotates the generated Python
 function: a single plain-parameter clause receives parameter hints in

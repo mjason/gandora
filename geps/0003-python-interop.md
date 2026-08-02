@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 3
+revision: 4
 requires: [1]
 replaces: []
 superseded-by: null
@@ -59,9 +59,10 @@ signatures are deferred to a future GEP.
 **GEP-0003-R001:** `$name` is a remote reference to the Python module
 `name` — any identifier, including uppercase (`$PIL`). A call through
 it compiles to a module-level import plus the direct expression:
-`$math.sqrt(x)` becomes `import math` and `math.sqrt(x)`. A dotted
-module uses the quoted form: `$"os.path".join(a, b)` compiles to
-`import os.path` and `os.path.join(a, b)`.
+`$math.sqrt(x)` becomes `import math` and `math.sqrt(x)`. An explicit
+module boundary uses the parenthesized form: `$(os.path).join(a, b)`
+compiles to `import os.path` and `os.path.join(a, b)` — the delimiter
+family of the sigils, not a string.
 
 **GEP-0003-R002:** `$module.name` without a call is an attribute read
 (`sys.argv` for `$sys.argv`). `$module` alone evaluates to the module
@@ -78,9 +79,14 @@ before the final segment — is the module path, imported whole
 `$os.path.join(a, b)` imports `os.path`; `$math.pi` imports `math`.
 Dotted imports are always safe, so the rule is deterministic and
 independent of whether a parent package re-exports its submodules.
-The quoted form `$"a.b"` remains as the explicit override for the one
-ambiguous residue: a bare reference whose final lowercase segment is
-itself a submodule needing an explicit import.
+The parenthesized form `$(a.b)` is the explicit override for the
+cases the heuristic cannot see: a bare reference whose final
+lowercase segment is itself a submodule (`$(importlib.metadata)` as a
+value), an uppercase-named submodule (`$(PIL.Image).open(f)`), and a
+lowercase attribute continuing past the module (`$(os.path).sep`).
+The boundary is locked: segments after `)` are always attribute
+access. The former quoted spelling `$"a.b"` is a compile error naming
+this rule.
 
 **GEP-0003-R009:** Atoms are pure data (GEP-0001-R010) and never name
 modules. An atom followed by `.` and an identifier is a compile error
@@ -189,6 +195,10 @@ decorator stacking order, and the absence of compile-time imports (compiling
 a file referencing a nonexistent module succeeds).
 
 ## Change History
+
+- Revision 4, 2026-08-03: The explicit module boundary is the
+  parenthesized `$(a.b)` (sigil-delimiter semantics); the quoted
+  spelling is retired with a directed error.
 
 - Revision 3, 2026-08-02: Added R010 — dotted `$` chains resolve by
   the lowercase-prefix import rule; quoting becomes a rare explicit

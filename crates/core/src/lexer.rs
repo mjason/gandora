@@ -213,24 +213,38 @@ impl<'a> Lexer<'a> {
             return Err(self.err("expected an atom after ':'"));
         }
         if c == '$' {
-            // Python module reference: $name or $"dotted.name" (GEP-0003-R001)
-            if self.peek_at(1) == Some('"') {
+            // Python module reference: $name, or $(dotted.name) as the
+            // explicit module boundary (GEP-0003-R001/R010)
+            if self.peek_at(1) == Some('(') {
                 self.bump();
-                let tok = self.lex_string()?;
-                if let Tok::Str(parts) = tok {
-                    let mut text = String::new();
-                    for p in parts {
-                        match p {
-                            LexStrPart::Text(t) => text.push_str(&t),
-                            LexStrPart::Interp(_) => {
-                                return Err(self
-                                    .err("interpolation is not allowed in module references"))
-                            }
+                self.bump();
+                let mut text = String::new();
+                loop {
+                    match self.peek() {
+                        Some(')') => {
+                            self.bump();
+                            break;
+                        }
+                        Some(ch) if ch.is_alphanumeric() || ch == '_' || ch == '.' => {
+                            text.push(ch);
+                            self.bump();
+                        }
+                        _ => {
+                            return Err(self.err(
+                                "$(...) takes a dotted module name (GEP-0003-R010)",
+                            ))
                         }
                     }
-                    return Ok((Tok::PyRef(text), span));
                 }
-                unreachable!();
+                if text.is_empty() {
+                    return Err(self.err("$(...) takes a dotted module name (GEP-0003-R010)"));
+                }
+                return Ok((Tok::PyRef(text), span));
+            }
+            if self.peek_at(1) == Some('"') {
+                return Err(self.err(
+                    "quoted module references were replaced: write $(a.b) (GEP-0003-R010)",
+                ));
             }
             if matches!(self.peek_at(1), Some(c2) if is_ident_start(c2) || c2.is_uppercase()) {
                 self.bump();

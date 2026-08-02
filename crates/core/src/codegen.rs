@@ -3367,7 +3367,7 @@ mod tests {
         // `$"a.b".c` — the quote is an explicit boundary the chain rule
         // must not extend (GEP-0003-R010)
         let py = compile(
-            "defmodule M do\n  def f(), do: $\"os.path\".sep.join([\"a\"])\nend",
+            "defmodule M do\n  def f(), do: $(os.path).sep.join([\"a\"])\nend",
         );
         assert!(py.contains("import os.path"), "{py}");
         assert!(!py.contains("import os.path.sep"), "{py}");
@@ -3378,7 +3378,7 @@ mod tests {
     fn parametrized_host_types() {
         // GEP-0017-R002 rev 2: $mod.Type(t) -> mod.Type[t]
         let py = compile(
-            "defmodule M do\n  @spec total($\"collections.abc\".Sequence(number())) :: float()\n  def total(xs), do: xs\nend",
+            "defmodule M do\n  @spec total($(collections.abc).Sequence(number())) :: float()\n  def total(xs), do: xs\nend",
         );
         assert!(
             py.contains("def total(xs: collections.abc.Sequence[int | float]) -> float:"),

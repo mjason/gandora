@@ -905,7 +905,7 @@ mod tests {
     #[test]
     fn bare_pyref_and_quoted_pyref() {
         assert_eq!(parse("$math"), Term::PyRef("math".into()));
-        let t = parse("$\"os.path\".join(a, b)");
+        let t = parse("$(os.path).join(a, b)");
         match &t {
             Term::Call(c) => match &c.callee {
                 Callee::Dot { base, .. } => {

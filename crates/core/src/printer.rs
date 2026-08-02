@@ -163,7 +163,7 @@ fn print_term(term: &Term, level: usize, out: &mut String) {
                 out.push('$');
                 out.push_str(m);
             } else {
-                out.push_str(&format!("$\"{m}\""));
+                out.push_str(&format!("$({m})"));
             }
         }
         Term::Pair(k, v) => {
