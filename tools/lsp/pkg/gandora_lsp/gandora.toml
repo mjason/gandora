@@ -1,0 +1,7 @@
+schema = 1
+compiler = "0.1.0"
+
+[[modules]]
+name = "Main"
+python = "gandora_lsp/main.py"
+source = "gandora_lsp/_gan/gandora_lsp/main.gan"

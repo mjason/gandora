@@ -85,6 +85,16 @@ jobs:
           uv sync
           ../../target/release/ganc build
           uv build --out-dir ../../dist-tool
+      - name: compile gan-lsp with ganc, then package
+        run: |
+          cd tools/lsp
+          uv sync
+          ../../target/release/ganc build
+          uv build --out-dir ../../dist-lsp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-lsp
+          path: dist-lsp
       - uses: actions/upload-artifact@v4
         with:
           name: dist-tool
@@ -130,6 +140,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist-tool
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-lsp:
+    needs: [build-tool]
+    runs-on: ubuntu-latest
+    environment: pypi-lsp
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-lsp
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 

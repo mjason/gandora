@@ -20,5 +20,6 @@
     "0012-compiler-as-a-library.md",
     "0013-the-gan-task-runner.md",
     "0014-control-flow-completion.md",
+    "0015-the-language-server.md",
   ],
 }

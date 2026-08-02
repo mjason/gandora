@@ -27,3 +27,4 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0012](0012-compiler-as-a-library.md) | The Compiler as a Library | Standards Track | Accepted | 1 | [zh](local/zh/0012-compiler-as-a-library.md) |
 | [0013](0013-the-gan-task-runner.md) | The gan Task Runner | Standards Track | Accepted | 1 | [zh](local/zh/0013-the-gan-task-runner.md) |
 | [0014](0014-control-flow-completion.md) | Control-Flow Completion | Standards Track | Accepted | 1 | [zh](local/zh/0014-control-flow-completion.md) |
+| [0015](0015-the-language-server.md) | The Language Server | Standards Track | Accepted | 1 | [zh](local/zh/0015-the-language-server.md) |

@@ -1,0 +1,21 @@
+{
+  "name": "gandora",
+  "displayName": "Gandora",
+  "description": "Gandora language support via gan lsp",
+  "version": "0.1.0",
+  "publisher": "mjason",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:gandora"],
+  "main": "./src/extension.js",
+  "contributes": {
+    "languages": [{
+      "id": "gandora",
+      "extensions": [".gan"],
+      "aliases": ["Gandora"],
+      "configuration": "./language-configuration.json"
+    }]
+  },
+  "dependencies": { "vscode-languageclient": "^9.0.1" }
+}
