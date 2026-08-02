@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.2 — 2026-08-02
+
+- **Parametrized host types in specs** (GEP-0017 rev 2):
+  `$mod.Type(t, ...)` compiles to the subscripted hint
+  `mod.Type[t, ...]` — `$"collections.abc".Sequence(number())`
+  becomes `collections.abc.Sequence[int | float]`. Covariant
+  containers for parameter positions, straight from the host.
+
 ## v0.6.1 — 2026-08-02
 
 - **201 `@param` docs across the ecosystem**: every std parameter

@@ -29,5 +29,5 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0014](0014-control-flow-completion.md) | Control-Flow Completion | Standards Track | Accepted | 2 | [zh](local/zh/0014-control-flow-completion.md) |
 | [0015](0015-the-language-server.md) | The Language Server | Standards Track | Accepted | 6 | [zh](local/zh/0015-the-language-server.md) |
 | [0016](0016-the-formatter.md) | The Formatter | Standards Track | Accepted | 1 | [zh](local/zh/0016-the-formatter.md) |
-| [0017](0017-typespecs.md) | Typespecs and the Typed Boundary | Standards Track | Accepted | 1 | [zh](local/zh/0017-typespecs.md) |
+| [0017](0017-typespecs.md) | Typespecs and the Typed Boundary | Standards Track | Accepted | 2 | [zh](local/zh/0017-typespecs.md) |
 | [0018](0018-parameter-documentation.md) | Parameter Documentation | Standards Track | Accepted | 1 | [zh](local/zh/0018-parameter-documentation.md) |
