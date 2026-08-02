@@ -22,6 +22,15 @@
       "include": "#sigil-html"
     },
     {
+      "include": "#sigil-gan"
+    },
+    {
+      "include": "#sigil-toml"
+    },
+    {
+      "include": "#sigil-jsonc"
+    },
+    {
       "include": "#sigil-json"
     },
     {
@@ -875,6 +884,165 @@
     "variable": {
       "match": "\\b[a-z_][a-zA-Z0-9_]*[?!]?\\b",
       "name": "variable.other.gandora"
+    },
+    "sigil-gan": {
+      "patterns": [
+        {
+          "begin": "~gan(?:dora)?\"\"\"",
+          "end": "(^\\s*)?\"\"\"",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "contentName": "meta.embedded.block.gandora source.gandora",
+          "patterns": [
+            {
+              "include": "#splice"
+            },
+            {
+              "include": "source.gandora"
+            }
+          ]
+        },
+        {
+          "begin": "~gan(?:dora)?\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "contentName": "meta.embedded.block.gandora source.gandora",
+          "patterns": [
+            {
+              "include": "#splice"
+            },
+            {
+              "include": "#nest-paren"
+            },
+            {
+              "include": "source.gandora"
+            }
+          ]
+        }
+      ]
+    },
+    "sigil-toml": {
+      "patterns": [
+        {
+          "begin": "~toml\"\"\"",
+          "end": "(^\\s*)?\"\"\"",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "contentName": "meta.embedded.block.toml source.toml",
+          "patterns": [
+            {
+              "include": "#splice"
+            },
+            {
+              "include": "source.toml"
+            }
+          ]
+        },
+        {
+          "begin": "~toml\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "contentName": "meta.embedded.block.toml source.toml",
+          "patterns": [
+            {
+              "include": "#splice"
+            },
+            {
+              "include": "#nest-paren"
+            },
+            {
+              "include": "source.toml"
+            }
+          ]
+        }
+      ]
+    },
+    "sigil-jsonc": {
+      "patterns": [
+        {
+          "begin": "~jsonc\"\"\"",
+          "end": "(^\\s*)?\"\"\"",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "contentName": "meta.embedded.block.jsonc source.json.comments",
+          "patterns": [
+            {
+              "include": "#splice"
+            },
+            {
+              "include": "source.json.comments"
+            }
+          ]
+        },
+        {
+          "begin": "~jsonc\\(",
+          "end": "\\)",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "keyword.other.sigil.gandora"
+            }
+          },
+          "contentName": "meta.embedded.block.jsonc source.json.comments",
+          "patterns": [
+            {
+              "include": "#splice"
+            },
+            {
+              "include": "#nest-paren"
+            },
+            {
+              "include": "source.json.comments"
+            }
+          ]
+        }
+      ]
     }
   }
 }

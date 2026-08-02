@@ -2,7 +2,7 @@
   "name": "gandora",
   "displayName": "Gandora",
   "description": "Gandora language support via gan lsp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {
@@ -40,7 +40,10 @@
           "meta.embedded.block.html": "html",
           "meta.embedded.block.json": "json",
           "meta.embedded.splice.gandora": "gandora",
-          "meta.embedded.interpolation.gandora": "gandora"
+          "meta.embedded.interpolation.gandora": "gandora",
+          "meta.embedded.block.gandora": "gandora",
+          "meta.embedded.block.toml": "toml",
+          "meta.embedded.block.jsonc": "jsonc"
         }
       }
     ]

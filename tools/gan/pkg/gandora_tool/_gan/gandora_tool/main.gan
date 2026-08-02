@@ -144,7 +144,7 @@ defmodule Main do
     end
   end
 
-  @gandora_jsonc """
+  @gandora_jsonc ~jsonc"""
   {
     "source": ["src"],
     "outDir": "dist",
@@ -160,19 +160,19 @@ defmodule Main do
   .venv/
   """
 
-  @hello_gan """
+  @hello_gan ~gan"""
   defmodule Main do
     def main(), do: IO.puts("Hello from Gandora!")
   end
   """
 
   defp pyproject_toml(name) do
-    """
+    ~toml"""
     [project]
-    name = "#{name}"
+    name = "<%= name %>"
     version = "0.1.0"
     requires-python = ">=3.11"
-    dependencies = ["gandora-std>=#{core.version()}"]
+    dependencies = ["gandora-std>=<%= core.version() %>"]
     """
   end
 

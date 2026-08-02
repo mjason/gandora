@@ -8,11 +8,11 @@ import builtins
 
 
 def sales_query(min_units):
-    return f"\n    SELECT product, SUM(units) AS total\n    FROM sales\n    WHERE units >= {min_units}\n    GROUP BY product\n    "
+    return f"SELECT product, SUM(units) AS total\nFROM sales\nWHERE units >= {min_units}\nGROUP BY product\n"
 
 
 def report(name, xs):
-    return f"\n    # Sales report for {name.upper()}\n\n    | metric | value |\n    | --- | --- |\n    | count | {builtins.len(xs)} |\n    | total | {builtins.sum(xs)} |\n    | best  | {builtins.max(xs)} |\n    "
+    return f"# Sales report for {name.upper()}\n\n| metric | value |\n| --- | --- |\n| count | {builtins.len(xs)} |\n| total | {builtins.sum(xs)} |\n| best  | {builtins.max(xs)} |\n"
 
 
 def evens_capped(xs, limit):

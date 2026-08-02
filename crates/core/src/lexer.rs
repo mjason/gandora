@@ -505,6 +505,9 @@ impl<'a> Lexer<'a> {
         if !text.is_empty() || parts.is_empty() {
             parts.push(LexStrPart::Text(text));
         }
+        if triple {
+            dedent_heredoc(&mut parts);
+        }
         if matches!(self.peek(), Some(m) if m.is_alphabetic()) {
             return Err(self.err("sigil modifiers are not supported (GEP-0005-R003)"));
         }

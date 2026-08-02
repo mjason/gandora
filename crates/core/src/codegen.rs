@@ -3305,7 +3305,7 @@ mod gep0009_tests {
         let py = compile(
             "defmodule M do\n  def report(name, xs) do\n    ~markdown\"\"\"\n# Report for <%= name.upper() %>\n\nTotal: <%= xs |> :builtins.sum() %>\n\"\"\"\n  end\nend",
         );
-        assert!(py.contains("f\"\\n# Report for {name.upper()}\\n\\nTotal: {builtins.sum(xs)}\\n\""), "{py}");
+        assert!(py.contains("f\"# Report for {name.upper()}\\n\\nTotal: {builtins.sum(xs)}\\n\""), "{py}");
     }
 
     #[test]

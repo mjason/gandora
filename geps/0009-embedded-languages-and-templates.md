@@ -9,8 +9,8 @@ areas:
   - Language
   - Interop
 created: 2026-08-01
-updated: 2026-08-01
-revision: 1
+updated: 2026-08-02
+revision: 2
 requires: [5]
 replaces: []
 superseded-by: null
@@ -81,7 +81,11 @@ expression, formatted as by `#{}` interpolation (compiling to an
 f-string when splices are present, a plain literal otherwise).
 
 **GEP-0009-R005:** Multi-line embedded bodies use the GEP-0005
-delimiters including `"""`; splicing works identically. Generated
+delimiters including `"""`; splicing works identically. A `"""` body
+follows the heredoc dedent semantics of GEP-0001-R026 — the opening
+newline is dropped and the closing delimiter's indentation is stripped
+from every line — so templates indent naturally inside modules while
+producing flush-left values. Outside that lexical trim, generated
 output MUST preserve body text byte-for-byte outside splices.
 
 ## Rationale
@@ -138,5 +142,8 @@ escape; multi-line `"""` bodies; the single-expression diagnostic; and
 byte preservation outside splices.
 
 ## Change History
+
+- Revision 2, 2026-08-02: R005 — `"""` sigil bodies follow the
+  GEP-0001-R026 heredoc dedent.
 
 - Revision 1, 2026-08-01: Initial version.
