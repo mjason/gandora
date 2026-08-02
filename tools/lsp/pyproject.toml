@@ -1,10 +1,10 @@
 [project]
 name = "gandora-lsp"
-version = "0.4.1"
+version = "0.4.2"
 description = "gan-lsp — the Gandora language server, written in Gandora (GEP-0015)"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0", "pygls>=2"]
+dependencies = ["gandora-core>=0.4.2", "gandora-std>=0.2.0", "gandora-tool>=0.4.2", "pygls>=2"]
 
 [project.scripts]
 gan-lsp = "gandora_lsp.main:main"
@@ -24,5 +24,6 @@ include = ["pkg", "src", "gandora.jsonc"]
 packages = ["pkg/gandora_lsp"]
 
 [tool.uv.sources]
+gandora-tool = { path = "../gan" }
 gandora-core = { path = "../../crates/core-py" }
 gandora-std = { path = "../../std" }

@@ -481,6 +481,144 @@ const PY_STDLIB_MODULES: &[&str] = &[
 /// Locate a module's source (project first, then installed packages) and
 /// extract the documentation of the module or one of its functions
 /// (GEP-0007). Returns Ok(None) when the module or doc is absent.
+
+/// The function name of a def head, looking through a `when` guard.
+fn def_head_name(head: &crate::ast::Term) -> Option<String> {
+    use crate::ast::{Callee, Term};
+    match head {
+        Term::Call(hc) => match &hc.callee {
+            Callee::Name(n) if n == "when" => hc.args.first().and_then(def_head_name),
+            Callee::Name(n) => Some(n.clone()),
+            _ => None,
+        },
+        Term::Var(n, _) => Some(n.clone()),
+        _ => None,
+    }
+}
+
+pub struct SymbolInfo {
+    pub name: String,
+    pub kind: String,
+    pub line: u32,
+    pub head: String,
+    pub doc_head: Option<String>,
+}
+
+/// Every definition of a module, in source order, with rendered heads and
+/// the first line of each `@doc` (GEP-0015-R008).
+pub fn module_symbols(
+    config: &Config,
+    module_name: &str,
+) -> crate::diag::Result<Vec<SymbolInfo>> {
+    let Some((_, term)) = load_module_term(config, module_name)? else {
+        return Ok(Vec::new());
+    };
+    use crate::ast::{Callee, Term};
+    let mut out = Vec::new();
+    let mut pending_doc: Option<String> = None;
+    for stmt in term.as_block() {
+        if !stmt.is_call_named("defmodule") {
+            continue;
+        }
+        let Term::Call(dm) = &stmt else { continue };
+        let Some(body) = Term::keyword_arg(&dm.args, "do") else { continue };
+        for inner in body.as_block() {
+            let Term::Call(c) = &inner else { continue };
+            let Callee::Name(name) = &c.callee else { continue };
+            match name.as_str() {
+                "@doc" => {
+                    if let Some(Term::Str(_)) = c.args.first() {
+                        if let Some(Term::Str(parts)) = c.args.first() {
+                            if let Some(crate::ast::StrPart::Text(t)) = parts.first() {
+                                pending_doc =
+                                    t.lines().find(|l| !l.trim().is_empty()).map(String::from);
+                            }
+                        }
+                    }
+                }
+                "def" | "defp" | "defmacro" => {
+                    if let Some(head) = c.args.first() {
+                        let head_name = def_head_name(head);
+                        if let Some(h) = head_name {
+                            out.push(SymbolInfo {
+                                name: h,
+                                kind: name.to_string(),
+                                line: c.span.line,
+                                head: format!("{name} {}", crate::printer::print_expr(head)),
+                                doc_head: pending_doc.take(),
+                            });
+                        }
+                    }
+                    pending_doc = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Where a module or one of its functions is defined: (path, line, col)
+/// of the `defmodule` or the first matching clause (GEP-0015-R006).
+pub fn find_definition(
+    config: &Config,
+    module_name: &str,
+    fun: Option<&str>,
+) -> crate::diag::Result<Option<(String, u32, u32)>> {
+    let Some((file, term)) = load_module_term(config, module_name)? else {
+        return Ok(None);
+    };
+    use crate::ast::{Callee, Term};
+    for stmt in term.as_block() {
+        if !stmt.is_call_named("defmodule") {
+            continue;
+        }
+        let Term::Call(dm) = &stmt else { continue };
+        let Some(f) = fun else {
+            return Ok(Some((file, dm.span.line, dm.span.col)));
+        };
+        let Some(body) = Term::keyword_arg(&dm.args, "do") else { continue };
+        for inner in body.as_block() {
+            let Term::Call(c) = &inner else { continue };
+            let Callee::Name(name) = &c.callee else { continue };
+            if !matches!(name.as_str(), "def" | "defp" | "defmacro") {
+                continue;
+            }
+            let head_name = c.args.first().and_then(def_head_name);
+            if head_name.as_deref() == Some(f) {
+                return Ok(Some((file, c.span.line, c.span.col)));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Locate and parse a module's source: project first, then installed.
+fn load_module_term(
+    config: &Config,
+    module_name: &str,
+) -> crate::diag::Result<Option<(String, crate::ast::Term)>> {
+    let mut source: Option<std::path::PathBuf> = None;
+    for (path, module) in discover_sources(config)? {
+        if module.join(".") == module_name {
+            source = Some(path);
+            break;
+        }
+    }
+    if source.is_none() {
+        source = find_installed_source(config, module_name);
+    }
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    let file = source.display().to_string();
+    let text = std::fs::read_to_string(&source).map_err(|e| {
+        crate::diag::Diagnostic::new(&file, crate::diag::Span::default(), e.to_string())
+    })?;
+    let term = crate::parser::parse_file(&file, &text)?;
+    Ok(Some((file, term)))
+}
+
 pub fn find_doc(
     config: &Config,
     module_name: &str,
@@ -545,14 +683,7 @@ pub fn find_doc(
                     }
                 }
                 "def" | "defp" | "defmacro" => {
-                    let head_name = c.args.first().and_then(|h| match h {
-                        Term::Call(hc) => match &hc.callee {
-                            Callee::Name(n) => Some(n.clone()),
-                            _ => None,
-                        },
-                        Term::Var(n, _) => Some(n.clone()),
-                        _ => None,
-                    });
+                    let head_name = c.args.first().and_then(def_head_name);
                     if let (Some(f), Some(h)) = (&fun, &head_name) {
                         if *f == h.as_str() && fun_doc.is_none() {
                             fun_doc = pending.take();

@@ -1,6 +1,6 @@
 [project]
 name = "gandora-tool"
-version = "0.4.1"
+version = "0.4.2"
 description = "gan — the Gandora task runner (mix/cargo role), written in Gandora"
 readme = "README.md"
 license = "MIT"
@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0"]
 
 [project.optional-dependencies]
-dev = ["gandora-lsp>=0.4.1"]
+dev = ["gandora-lsp>=0.4.2"]
 
 [project.scripts]
 gan = "gandora_tool.main:main"

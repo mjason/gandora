@@ -1,7 +1,7 @@
 ---
 gep: 15
 title: The Language Server
-description: gan-lsp — an LSP server written in Gandora on pygls, plus gan-lsc, the isomorphic JSON command line for AI agents; both in one gan-plugin package.
+description: gan-lsp — diagnostics, documentation hover, definition, symbols, completion, and formatting, written in Gandora on pygls; plus gan-lsc, the isomorphic JSON command line for AI agents.
 author: MJ
 status: Accepted
 type: Standards Track
@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 3
+revision: 4
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -41,10 +41,10 @@ first long-running process.
 
 ## Scope
 
-Protocol framing, lifecycle, diagnostics, and documentation hover.
-Completion, definition, and symbols are later revisions once
-span-range enrichment lands; they MUST reuse the same library
-queries.
+Protocol framing, lifecycle, diagnostics, documentation hover,
+go-to-definition, document symbols, `Module.` completion, and
+whole-document formatting. Rename and find-references await
+span-range enrichment; they MUST reuse the same library queries.
 
 ## Specification
 
@@ -83,9 +83,30 @@ LSP ranges. A request that raises is answered with an error response
 documentation channel: the reference under the cursor (a
 `Module.function` chain, a module name, or a bare local name resolved
 against the file's own module) is looked up through
-`gandora_core.doc`, and the hover renders the default-locale prose,
-every available translation, metadata, and `@example` blocks as
-Markdown. Undocumented or `@doc false` targets produce no hover.
+`gandora_core.doc`, and the hover renders the clause signatures
+(rendered heads, guards and defaults included), the default-locale
+prose, every available translation, metadata, and `@example` blocks
+as Markdown. A `$module` reference shows the module's spec origin
+(never importing it); language constructs (`def`, `loop`, `quote`,
+...) show embedded one-paragraph reference cards. Undocumented or
+`@doc false` targets produce no hover.
+
+**GEP-0015-R006:** `textDocument/definition` resolves the same cursor
+targets through `gandora_core.definition` to the defining source —
+the `defmodule` line for modules, the first matching clause for
+functions — across project sources and installed packages' shipped
+`.gan` sources.
+
+**GEP-0015-R007:** `textDocument/formatting` runs the GEP-0016 engine
+(`Fmt.format_text`) over the buffer and returns one whole-document
+edit, guarded by the same GEP-0016-R006 verification; an unformattable
+or unchanged buffer yields no edits.
+
+**GEP-0015-R008:** `textDocument/documentSymbol` lists the module and
+its definitions (rendered heads as detail); `textDocument/completion`
+triggered on `.` after a module path completes its public functions
+and macros with signatures and doc summaries, via
+`gandora_core.symbols`.
 
 **GEP-0015-R004:** The repository ships a minimal VS Code client in
 `editors/vscode` that spawns `gan lsp` for `.gan` files; it contains
@@ -136,6 +157,11 @@ the right span, a didChange that fixes it producing an empty list,
 didClose clearing, and shutdown/exit terminating with code 0.
 
 ## Change History
+
+- Revision 4, 2026-08-02: Hover gained signatures, `$module` and
+  construct cards (R005 expanded); added definition (R006),
+  formatting through GEP-0016 (R007), and symbols/completion (R008),
+  over new `gandora_core.definition`/`symbols` APIs.
 
 - Revision 3, 2026-08-02: Added R005 — documentation hover over the
   `gandora_core.doc` lookup (new core API).

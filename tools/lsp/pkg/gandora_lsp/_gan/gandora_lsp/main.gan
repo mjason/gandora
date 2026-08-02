@@ -1,18 +1,22 @@
 defmodule Main do
   @moduledoc """
-  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 3).
+  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 4).
   pygls owns protocol machinery; this module owns language logic:
-  push diagnostics on every edit, and hover serving the GEP-0007
-  documentation channel (default locale plus available translations).
+  push diagnostics on every edit, documentation hover (signatures,
+  translations, examples, `$module` references, language constructs),
+  go-to-definition, document symbols, `Module.` completion, and
+  whole-document formatting through the GEP-0016 engine.
   """
 
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.4.1",
+  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.4.2",
     text_document_sync_kind: $"lsprotocol.types".TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
+
+  # ---- lifecycle + diagnostics (GEP-0015-R002/R003) ------------------------
 
   @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)
   def did_open(params) do
@@ -61,38 +65,15 @@ defmodule Main do
   defp severity("error"), do: $"lsprotocol.types".DiagnosticSeverity.Error
   defp severity(_), do: $"lsprotocol.types".DiagnosticSeverity.Warning
 
-  # ---- hover: the GEP-0007 doc channel at the cursor (GEP-0015-R005) ------
+  # ---- shared cursor resolution --------------------------------------------
 
-  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_HOVER)
-  def hover(params) do
+  defp doc_and_line(params) do
     doc = @server.workspace.get_text_document(params.text_document.uri)
     line = Enum.at(doc.source.split("\n"), params.position.line)
-    token = word_at(line, params.position.character)
-    target = cond do
-      is_nil(token) -> nil
-      String.match?(token, ~r/^[A-Z]/) -> token
-      true ->
-        # a bare lowercase name resolves against the file's own module
-        mod = module_of(doc.source)
-        if is_nil(mod) do
-          nil
-        else
-          "#{mod}.#{token}"
-        end
-    end
-    if is_nil(target) do
-      nil
-    else
-      info = try do
-        core.doc(target, @server.workspace.root_path)
-      rescue
-        _e -> nil
-      end
-      render_hover(target, info)
-    end
+    {doc, line}
   end
 
-  # the reference whose span covers the column
+  # the reference whose span covers the column, with its start column
   defp word_at(line, character) do
     hit = Enum.find(@word_re.finditer(line), fn m ->
       {s, e} = m.span()
@@ -101,7 +82,8 @@ defmodule Main do
     if is_nil(hit) do
       nil
     else
-      hit.group(0).rstrip(".")
+      {s, _e} = hit.span()
+      {hit.group(0).rstrip("."), s}
     end
   end
 
@@ -114,32 +96,287 @@ defmodule Main do
     end
   end
 
+  # "Stats.mean" as written; bare lowercase names resolve in-module
+  defp target_of(source, token) do
+    cond do
+      String.match?(token, ~r/^[A-Z]/) -> token
+      true ->
+        mod = module_of(source)
+        if is_nil(mod) do
+          nil
+        else
+          "#{mod}.#{token}"
+        end
+    end
+  end
+
+  # ---- hover (GEP-0015-R005) -----------------------------------------------
+
+  @construct_docs %{
+    "def" => "Defines a public function. `def f(x), do: expr` or a `do ... end` body. Multi-clause heads dispatch by pattern, top to bottom (GEP-0001).",
+    "defp" => "Defines a private function — callable only inside its module; compiled with a leading underscore (GEP-0001).",
+    "defmodule" => "Declares the module for this file. One `defmodule` per file; the name maps to the generated Python module path (GEP-0001-R013).",
+    "defmacro" => "Defines a compile-time macro: it receives quoted arguments and returns quoted code (GEP-0002).",
+    "defstruct" => "Declares the module's struct with defaulted fields; literals `%Mod{...}`, updates `%Mod{s | ...}` and patterns work on it (GEP-0004).",
+    "defattr" => "Registers a custom annotation attribute handled by the module's `@on_definition` hook (GEP-0008).",
+    "quote" => "Returns the quoted AST of its block instead of evaluating it; `unquote` splices values back in (GEP-0002).",
+    "unquote" => "Inside `quote`, splices an evaluated value into the quoted code (GEP-0002).",
+    "case" => "Pattern-matches a value against clauses, top to bottom; the whole form is an expression (GEP-0001).",
+    "cond" => "Evaluates conditions top to bottom and takes the first truthy branch (GEP-0001).",
+    "with" => "Chains `pattern <- expr` matches; the first failure falls to `else` (GEP-0001).",
+    "try" => "Runs a body with `rescue` clauses matching Python exception types and an always-run `after` (GEP-0014).",
+    "rescue" => "Clauses of a `try`: `e in $mod.Type -> ...` matches by exception class; a bare variable catches every Exception (GEP-0014).",
+    "after" => "The cleanup section of `try`: always runs, contributes no value (GEP-0014).",
+    "loop" => "Binds a state pattern and repeats its body: `recur(new_state)` restarts, `break(value)` finishes — constant stack depth (GEP-0014).",
+    "recur" => "Rebinds the enclosing `loop` state and restarts its body (GEP-0014).",
+    "break" => "Ends the enclosing `loop` with the given value (GEP-0014).",
+    "fn" => "An anonymous function: `fn x -> x * 2 end`, called with `f.(x)`; supports multiple clauses and guards (GEP-0001).",
+    "pyimport" => "Declares a Python import at module top: `pyimport numpy, as: np` (GEP-0003).",
+    "use" => "Invokes the target module's `__using__` macro to inject code here (GEP-0008).",
+    "require" => "Makes the target module's macros available in this file (GEP-0002).",
+    "unless" => "`if` with the condition negated (GEP-0001).",
+    "when" => "A guard on a clause head or case pattern (GEP-0001)."
+  }
+
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_HOVER)
+  def hover(params) do
+    {doc, line} = doc_and_line(params)
+    hit = word_at(line, params.position.character)
+    if is_nil(hit) do
+      nil
+    else
+      {token, start} = hit
+      cond do
+        start > 0 and String.slice(line, start - 1, 1) == "$" ->
+          pyref_hover(token)
+        Map.has_key?(@construct_docs, token) ->
+          markdown_hover("`#{token}`\n\n#{Map.get(@construct_docs, token)}")
+        true ->
+          target = target_of(doc.source, token)
+          info = lookup_doc(target)
+          render_hover(target, info)
+      end
+    end
+  end
+
+  defp lookup_doc(target) do
+    if is_nil(target) do
+      nil
+    else
+      try do
+        core.doc(target, @server.workspace.root_path)
+      rescue
+        _e -> nil
+      end
+    end
+  end
+
+  defp pyref_hover(token) do
+    mod = Enum.at(token.split("."), 0)
+    spec = try do
+      $"importlib.util".find_spec(mod)
+    rescue
+      _e -> nil
+    end
+    if is_nil(spec) do
+      markdown_hover("`$#{mod}` — Python module (not found in this environment)")
+    else
+      markdown_hover("`$#{mod}` — Python module\n\n`#{spec.origin}`")
+    end
+  end
+
+  defp markdown_hover(md) do
+    types.Hover(
+      contents: types.MarkupContent(
+        kind: $"lsprotocol.types".MarkupKind.Markdown,
+        value: md
+      )
+    )
+  end
+
   defp render_hover(target, info) do
     if is_nil(info) or info.get("hidden") do
       nil
     else
+      sigs = Map.get(info, "signatures", [])
+      |> Enum.uniq()
+      |> Enum.join("\n")
+      header = if sigs == "" do
+        "### #{target}"
+      else
+        "```elixir\n#{sigs}\n```"
+      end
       entries = Map.get(info, "entries", %{})
       prose = Map.get(entries, "default")
       translations = entries.items()
       |> Enum.filter(fn {loc, _} -> loc != "default" end)
-      |> Enum.map(fn {loc, text} -> "\n---\n**#{loc}**\n\n#{text}" end)
+      |> Enum.map(fn {loc, text} -> "\n---\n**#{loc}**\n\n#{text.strip()}" end)
       meta = Map.get(info, "meta", [])
-      |> Enum.map(fn {k, v} -> "\n*#{k}*: #{v}" end)
+      |> Enum.map(fn {k, v} -> "\n`#{k}`: #{v}" end)
       examples = Map.get(info, "examples", [])
       |> Enum.map(fn ex -> "\n```elixir\n#{ex.strip()}\n```" end)
       body = [prose] ++ translations ++ meta ++ examples
       |> Enum.reject(fn part -> is_nil(part) end)
       |> Enum.join("\n")
-      if String.trim(body) == "" do
+      if String.trim(body) == "" and sigs == "" do
         nil
       else
-        types.Hover(
-          contents: types.MarkupContent(
-            kind: $"lsprotocol.types".MarkupKind.Markdown,
-            value: "### #{target}\n\n#{body}"
-          )
+        markdown_hover("#{header}\n\n#{body}")
+      end
+    end
+  end
+
+  # ---- go to definition (GEP-0015-R006) ------------------------------------
+
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DEFINITION)
+  def definition(params) do
+    {doc, line} = doc_and_line(params)
+    hit = word_at(line, params.position.character)
+    if is_nil(hit) do
+      nil
+    else
+      {token, start} = hit
+      is_pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
+      target = if is_pyref do
+        nil
+      else
+        target_of(doc.source, token)
+      end
+      loc = if is_nil(target) do
+        nil
+      else
+        try do
+          core.definition(target, @server.workspace.root_path)
+        rescue
+          _e -> nil
+        end
+      end
+      if is_nil(loc) do
+        nil
+      else
+        pos = types.Position(
+          line: Enum.max([Map.get(loc, "line") - 1, 0]),
+          character: Enum.max([Map.get(loc, "col") - 1, 0])
+        )
+        types.Location(
+          uri: "file://" <> Map.get(loc, "path"),
+          range: types.Range(pos, pos)
         )
       end
+    end
+  end
+
+  # ---- document symbols (GEP-0015-R008) ------------------------------------
+
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DOCUMENT_SYMBOL)
+  def document_symbol(params) do
+    doc = @server.workspace.get_text_document(params.text_document.uri)
+    mod = module_of(doc.source)
+    syms = if is_nil(mod) do
+      []
+    else
+      try do
+        core.symbols(mod, @server.workspace.root_path)
+      rescue
+        _e -> []
+      end
+    end
+    children = Enum.map(syms, fn s ->
+      line = Enum.max([Map.get(s, "line") - 1, 0])
+      pos = types.Position(line: line, character: 0)
+      rng = types.Range(pos, pos)
+      types.DocumentSymbol(
+        name: Map.get(s, "name"),
+        detail: Map.get(s, "head"),
+        kind: symbol_kind(Map.get(s, "kind")),
+        range: rng,
+        selection_range: rng
+      )
+    end)
+    if is_nil(mod) do
+      []
+    else
+      zero = types.Position(line: 0, character: 0)
+      [types.DocumentSymbol(
+        name: mod,
+        kind: $"lsprotocol.types".SymbolKind.Module,
+        range: types.Range(zero, zero),
+        selection_range: types.Range(zero, zero),
+        children: children
+      )]
+    end
+  end
+
+  defp symbol_kind("defmacro"), do: $"lsprotocol.types".SymbolKind.Constructor
+  defp symbol_kind("defp"), do: $"lsprotocol.types".SymbolKind.Method
+  defp symbol_kind(_), do: $"lsprotocol.types".SymbolKind.Function
+
+  # ---- completion: `Module.` members (GEP-0015-R008) -----------------------
+
+  @decorate @server.feature(
+    $"lsprotocol.types".TEXT_DOCUMENT_COMPLETION,
+    $"lsprotocol.types".CompletionOptions(trigger_characters: ["."])
+  )
+  def completion(params) do
+    {_doc, line} = doc_and_line(params)
+    prefix = String.slice(line, 0, params.position.character)
+    m = ~r/([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)\.([a-z_][A-Za-z0-9_]*)?$/.search(prefix)
+    if is_nil(m) do
+      []
+    else
+      mod = m.group(1)
+      partial = if is_nil(m.group(2)) do
+        ""
+      else
+        m.group(2)
+      end
+      syms = try do
+        core.symbols(mod, @server.workspace.root_path)
+      rescue
+        _e -> []
+      end
+      syms
+      |> Enum.filter(fn s -> Map.get(s, "kind") != "defp" end)
+      |> Enum.filter(fn s -> Map.get(s, "name").startswith(partial) end)
+      |> Enum.reduce([], fn s, acc ->
+        if Enum.any?(acc, fn a -> Map.get(a, "name") == Map.get(s, "name") end) do
+          acc
+        else
+          acc ++ [s]
+        end
+      end)
+      |> Enum.map(fn s ->
+        types.CompletionItem(
+          label: Map.get(s, "name"),
+          kind: $"lsprotocol.types".CompletionItemKind.Function,
+          detail: Map.get(s, "head"),
+          documentation: Map.get(s, "doc")
+        )
+      end)
+    end
+  end
+
+  # ---- formatting through the GEP-0016 engine (GEP-0015-R007) --------------
+
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_FORMATTING)
+  def formatting(params) do
+    doc = @server.workspace.get_text_document(params.text_document.uri)
+    result = Fmt.format_text(doc.source)
+    case result do
+      {:ok, new} ->
+        if new == doc.source or Fmt.verify(doc.source, new) != :ok do
+          []
+        else
+          line_count = Enum.count(doc.source.split("\n"))
+          [types.TextEdit(
+            range: types.Range(
+              types.Position(line: 0, character: 0),
+              types.Position(line: line_count, character: 0)
+            ),
+            new_text: new
+          )]
+        end
+      _ -> []
     end
   end
 

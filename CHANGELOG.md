@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.4.2 — 2026-08-02
+
+**The language server grows up (GEP-0015 rev 4).** gan-lsp now serves:
+
+- **Hover v2**: clause signatures (guards and `\\` defaults rendered),
+  bilingual prose, metadata, examples; `$module` references show their
+  spec origin without importing; language constructs (`def`, `loop`,
+  `quote`, ...) have embedded reference cards.
+- **Go to definition**: modules and functions, across project sources
+  and installed packages' shipped `.gan` sources.
+- **Document symbols**: module outline with rendered heads.
+- **Completion**: `Module.` members (public functions and macros) with
+  signatures and doc summaries, dot-triggered.
+- **Formatting**: the GEP-0016 engine as `textDocument/formatting`,
+  verification included.
+
+New `gandora_core` APIs: `definition`, `symbols`, and `doc` gained
+`signatures`. Fixed along the way: guard heads (`def f(x) when ...`)
+no longer read as a function named `when` in doc/symbol lookup, and
+the printer renders `\\` defaults infix.
+
 ## v0.4.1 — 2026-08-02
 
 - **LSP hover (GEP-0015 rev 3)**: hovering a `Module.function`

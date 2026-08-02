@@ -281,7 +281,70 @@ fn doc(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
         let _ = meta.append(PyTuple::new_bound(py, [k, v]));
     }
     let _ = out.set_item("meta", meta);
+    let sigs: Vec<String> = match &fun {
+        Some(f) => compiler::project::module_symbols(&config, &module_name)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| s.name == *f)
+            .map(|s| s.head)
+            .collect(),
+        None => vec![format!("defmodule {module_name}")],
+    };
+    let _ = out.set_item("signatures", PyList::new_bound(py, sigs));
     Ok(out.into_py(py))
+}
+
+/// Where a module or function is defined (GEP-0015-R006):
+/// {"path", "line", "col"} or None.
+#[pyfunction]
+#[pyo3(signature = (target, root = None))]
+fn definition(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
+    let segs: Vec<&str> = target.split('.').collect();
+    let (module_name, fun) = match segs.last() {
+        Some(last) if last.chars().next().is_some_and(|c| c.is_lowercase()) => {
+            (segs[..segs.len() - 1].join("."), Some((*last).to_string()))
+        }
+        _ => (target.to_string(), None),
+    };
+    if module_name.is_empty() {
+        return Ok(py.None());
+    }
+    let root_dir = std::path::Path::new(root.unwrap_or("."));
+    let config =
+        compiler::project::load_config(&root_dir.join("gandora.jsonc")).map_err(raise)?;
+    match compiler::project::find_definition(&config, &module_name, fun.as_deref())
+        .map_err(raise)?
+    {
+        None => Ok(py.None()),
+        Some((path, line, col)) => {
+            let out = PyDict::new_bound(py);
+            let _ = out.set_item("path", path);
+            let _ = out.set_item("line", line);
+            let _ = out.set_item("col", col);
+            Ok(out.into_py(py))
+        }
+    }
+}
+
+/// Every definition of a module, for outlines and completion
+/// (GEP-0015-R008): [{"name","kind","line","head","doc"}].
+#[pyfunction]
+#[pyo3(signature = (module, root = None))]
+fn symbols(py: Python, module: &str, root: Option<&str>) -> PyResult<PyObject> {
+    let root_dir = std::path::Path::new(root.unwrap_or("."));
+    let config =
+        compiler::project::load_config(&root_dir.join("gandora.jsonc")).map_err(raise)?;
+    let list = PyList::empty_bound(py);
+    for s in compiler::project::module_symbols(&config, module).map_err(raise)? {
+        let e = PyDict::new_bound(py);
+        let _ = e.set_item("name", s.name);
+        let _ = e.set_item("kind", s.kind);
+        let _ = e.set_item("line", s.line);
+        let _ = e.set_item("head", s.head);
+        let _ = e.set_item("doc", s.doc_head);
+        let _ = list.append(e);
+    }
+    Ok(list.into_py(py))
 }
 
 #[pyfunction]
@@ -381,6 +444,8 @@ fn gandora_core(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(diagnostics, m)?)?;
     m.add_function(wrap_pyfunction!(tokens, m)?)?;
     m.add_function(wrap_pyfunction!(doc, m)?)?;
+    m.add_function(wrap_pyfunction!(definition, m)?)?;
+    m.add_function(wrap_pyfunction!(symbols, m)?)?;
     m.add_function(wrap_pyfunction!(compile_snippet, m)?)?;
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
     m.add_function(wrap_pyfunction!(build, m)?)?;

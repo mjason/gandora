@@ -26,16 +26,17 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.4.1"
+version = "0.4.2"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lsp"
-version = "0.4.1"
+version = "0.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
     { name = "gandora-std" },
+    { name = "gandora-tool" },
     { name = "pygls" },
 ]
 
@@ -43,13 +44,31 @@ dependencies = [
 requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
     { name = "gandora-std", directory = "../../std" },
+    { name = "gandora-tool", directory = "../gan" },
     { name = "pygls", specifier = ">=2" },
 ]
 
 [[package]]
 name = "gandora-std"
-version = "0.4.1"
+version = "0.4.2"
 source = { directory = "../../std" }
+
+[[package]]
+name = "gandora-tool"
+version = "0.4.2"
+source = { directory = "../gan" }
+dependencies = [
+    { name = "gandora-core" },
+    { name = "gandora-std" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gandora-core", directory = "../../crates/core-py" },
+    { name = "gandora-lsp", marker = "extra == 'dev'", directory = "." },
+    { name = "gandora-std", directory = "../../std" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "lsprotocol"

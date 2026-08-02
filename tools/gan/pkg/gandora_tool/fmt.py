@@ -94,7 +94,7 @@ def _format_file(file, check):
             elif _gan_truthy(check):
                 return (file, "changed")
             else:
-                _gan_case6 = _verify(text, new)
+                _gan_case6 = verify(text, new)
                 match _gan_case6:
                     case "ok":
                         pathlib.Path(file).write_text(new)
@@ -112,7 +112,7 @@ def _format_file(file, check):
             raise GanMatchError("no case clause matched: " + repr(_gan_case4))
 
 
-def _verify(old_text, new_text):
+def verify(old_text, new_text):
     if _comments_of(old_text) != _comments_of(new_text):
         return ("error", "comment sequence changed")
     elif _strip_meta(core.parse(old_text)) != _strip_meta(core.parse(new_text)):

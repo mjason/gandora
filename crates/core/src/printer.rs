@@ -2,6 +2,13 @@
 
 use crate::ast::{Call, Callee, StrPart, Term};
 
+/// Render a single expression (function heads for LSP signatures, etc.).
+pub fn print_expr(term: &Term) -> String {
+    let mut out = String::new();
+    print_term(term, 0, &mut out);
+    out
+}
+
 pub fn print_module(term: &Term) -> String {
     let mut out = String::new();
     for stmt in term.as_block() {
@@ -34,6 +41,7 @@ fn is_operator(name: &str) -> bool {
             | "*"
             | "/"
             | "//"
+            | "\\\\"
             | "=="
             | "!="
             | "<"

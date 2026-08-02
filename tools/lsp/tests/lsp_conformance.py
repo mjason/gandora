@@ -94,10 +94,15 @@ def main():
             isinstance(sync, dict) and sync.get("change") == 1,
             f"announces full text sync (GEP-0015-R002), got {sync!r}",
         )
-        check(
-            bool(resp["result"]["capabilities"].get("hoverProvider")),
-            "announces hoverProvider (GEP-0015-R005)",
-        )
+        caps = resp["result"]["capabilities"]
+        for cap, rule in [
+            ("hoverProvider", "R005"),
+            ("definitionProvider", "R006"),
+            ("documentFormattingProvider", "R007"),
+            ("documentSymbolProvider", "R008"),
+            ("completionProvider", "R008"),
+        ]:
+            check(bool(caps.get(cap)), f"announces {cap} (GEP-0015-{rule})")
         s.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
 
         bad = "defmodule Main do\n  def broken( do\nend\n"
@@ -141,6 +146,35 @@ def main():
             lambda m: m.get("method") == "textDocument/publishDiagnostics"
         )
         check(diag2["params"]["diagnostics"] == [], "diagnostics clear after the fix")
+
+        messy = 'defmodule Main do\n      def main(), do: IO.puts("ok")\nend\n'
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": {"uri": uri, "version": 3},
+                    "contentChanges": [{"text": messy}],
+                },
+            }
+        )
+        s.wait_for(lambda m: m.get("method") == "textDocument/publishDiagnostics")
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "textDocument/formatting",
+                "params": {
+                    "textDocument": {"uri": uri},
+                    "options": {"tabSize": 2, "insertSpaces": True},
+                },
+            }
+        )
+        fmt = s.wait_for(lambda m: m.get("id") == 4).get("result")
+        check(
+            bool(fmt) and fmt[0]["newText"] == good,
+            "formatting returns the canonical document (GEP-0015-R007)",
+        )
 
         s.send(
             {

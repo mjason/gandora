@@ -76,7 +76,7 @@ defmodule Fmt do
 
   # ---- verification (R006) -------------------------------------------------
 
-  defp verify(old_text, new_text) do
+  def verify(old_text, new_text) do
     cond do
       comments_of(old_text) != comments_of(new_text) ->
         {:error, "comment sequence changed"}
