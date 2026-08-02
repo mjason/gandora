@@ -24,7 +24,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = match args.first().map(String::as_str) {
         Some("--version") | Some("-V") => {
-            println!("gan {}", env!("CARGO_PKG_VERSION"));
+            println!("ganc {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
         }
         Some("--help") | Some("-h") | None => {
