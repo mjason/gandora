@@ -2,7 +2,7 @@
   "name": "gandora",
   "displayName": "Gandora",
   "description": "Gandora language support via gan lsp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {
@@ -46,7 +46,17 @@
           "meta.embedded.block.jsonc": "jsonc"
         }
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Gandora",
+      "properties": {
+        "gandora.gan.path": {
+          "type": "string",
+          "default": "gan",
+          "description": "Path to the gan task runner used to start the language server (gan lsp)."
+        }
+      }
+    }
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

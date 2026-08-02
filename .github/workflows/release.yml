@@ -111,6 +111,8 @@ jobs:
           name: dist-lang
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
   publish-core:
     needs: [build-core]
@@ -124,6 +126,8 @@ jobs:
           name: dist-core
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
   publish-tool:
     needs: [build-tool]
@@ -137,6 +141,8 @@ jobs:
           name: dist-tool
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
   publish-lsp:
     needs: [build-tool]
@@ -150,6 +156,8 @@ jobs:
           name: dist-lsp
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
   publish-std:
     needs: [build-std]
@@ -163,3 +171,5 @@ jobs:
           name: dist-std
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
