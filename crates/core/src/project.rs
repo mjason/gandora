@@ -665,6 +665,33 @@ pub fn find_doc(
                     let info = pending.get_or_insert_with(codegen::DocInfo::default);
                     codegen::merge_doc_value(&file, c, info, "@doc")?;
                 }
+                "@param" => {
+                    if let (Some(Term::Var(n, _)), Some(t)) = (c.args.first(), c.args.get(1)) {
+                        if let Some(text) = t.as_plain_str() {
+                            pending
+                                .get_or_insert_with(codegen::DocInfo::default)
+                                .params
+                                .push((n.clone(), vec![("default".to_string(), text)]));
+                        }
+                    }
+                }
+                "@param_trans" => {
+                    if let Some(Term::Var(n, _)) = c.args.first() {
+                        if let Some(info) = pending.as_mut() {
+                            if let Some(entry) =
+                                info.params.iter_mut().find(|(pn, _)| pn == n)
+                            {
+                                for arg in c.args.iter().skip(1) {
+                                    if let Term::Pair(locale, value) = arg {
+                                        if let Some(text) = value.as_plain_str() {
+                                            entry.1.push((locale.replace('_', "-"), text));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 "@spec" => {
                     if let Some(v) = c.args.first() {
                         pending

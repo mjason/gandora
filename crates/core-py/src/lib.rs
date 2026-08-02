@@ -282,6 +282,18 @@ fn doc(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
     }
     let _ = out.set_item("meta", meta);
     let _ = out.set_item("specs", PyList::new_bound(py, &info.specs));
+    let params = PyList::empty_bound(py);
+    for (name, entries) in &info.params {
+        let e = PyDict::new_bound(py);
+        let _ = e.set_item("name", name);
+        let locs = PyDict::new_bound(py);
+        for (loc, text) in entries {
+            let _ = locs.set_item(loc, text);
+        }
+        let _ = e.set_item("entries", locs);
+        let _ = params.append(e);
+    }
+    let _ = out.set_item("params", params);
     let sigs: Vec<String> = match &fun {
         Some(f) => compiler::project::module_symbols(&config, &module_name)
             .unwrap_or_default()

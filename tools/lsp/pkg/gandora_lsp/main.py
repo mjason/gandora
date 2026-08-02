@@ -1,4 +1,4 @@
-"""gan-lsp: the Gandora language server on pygls (GEP-0015 rev 4).
+"""gan-lsp: the Gandora language server on pygls (GEP-0015).
 pygls owns protocol machinery; this module owns language logic:
 push diagnostics on every edit, documentation hover (signatures,
 translations, examples, `$module` references, language constructs),
@@ -29,7 +29,7 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.5.2", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.6.0", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
 
@@ -206,6 +206,7 @@ def _render_hover(target, info):
     if _gan_truthy(_gan_or((info is None), lambda: info.get("hidden"))):
         return None
     else:
+        params = _param_lines(info)
         sigs = gandora_std.enum.join(gandora_std.enum.uniq(gandora_std.map.get(info, "signatures", [])), "\n")
         if sigs == "":
             _gan_tmp12 = f"### {target}"
@@ -232,40 +233,62 @@ def _render_hover(target, info):
             raise GanMatchError("no clause of _gan_fn4/1 matched " + repr(_gan_args))
         meta = gandora_std.enum.map(gandora_std.map.get(info, "meta", []), _gan_fn4)
         examples = gandora_std.enum.map(gandora_std.map.get(info, "examples", []), lambda ex: f"\n```elixir\n{ex.strip()}\n```")
-        body = gandora_std.enum.join(gandora_std.enum.reject([prose] + (translations + (meta + examples)), lambda part: (part is None)), "\n")
+        body = gandora_std.enum.join(gandora_std.enum.reject([prose] + (params + (translations + (meta + examples))), lambda part: (part is None)), "\n")
         if (gandora_std.string.trim(body) == "") and (sigs == ""):
             return None
         else:
             return _markdown_hover(f"{header}\n\n{body}")
 
 
+def _param_lines(info):
+    entries = gandora_std.map.get(info, "params", [])
+    if _gan_truthy(gandora_std.enum.empty_p(entries)):
+        return []
+    else:
+        def _gan_fn5(p):
+            _gan_fstr18 = gandora_std.map.get(p, "name")
+            _gan_fstr19 = gandora_std.map.get(gandora_std.map.get(p, "entries", {}), "default", "")
+            return f"  - {_gan_fstr18}: {_gan_fstr19}"
+        lines = gandora_std.enum.join(gandora_std.enum.map(entries, _gan_fn5), "\n")
+        return ["\n**Parameters**\n\n" + lines]
+
+
+def _param_doc(info, label):
+    name = (lambda s: s.rstrip(","))(builtins.str(gandora_std.enum.at(label.split(" "), 0)))
+    entry = gandora_std.enum.find(gandora_std.map.get(info, "params", []), lambda p: gandora_std.map.get(p, "name") == name)
+    if (entry is None):
+        return None
+    else:
+        return gandora_std.map.get(gandora_std.map.get(entry, "entries", {}), "default")
+
+
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_DEFINITION)
 def definition(params):
-    _gan_val16 = _doc_and_line(params)
-    match _gan_val16:
-        case (doc, line) as _gan_t17 if isinstance(_gan_t17, tuple):
+    _gan_val20 = _doc_and_line(params)
+    match _gan_val20:
+        case (doc, line) as _gan_t21 if isinstance(_gan_t21, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val16))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val20))
     hit = _word_at(line, params.position.character)
     if (hit is None):
         return None
     else:
-        _gan_val18 = hit
-        match _gan_val18:
-            case (token, start) as _gan_t19 if isinstance(_gan_t19, tuple):
+        _gan_val22 = hit
+        match _gan_val22:
+            case (token, start) as _gan_t23 if isinstance(_gan_t23, tuple):
                 pass
             case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val18))
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val22))
         pyref = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == "$")
         py = gandora_lsp.py_intel.target(doc.source, token, pyref)
         if not ((py is None)):
-            _gan_val20 = py
-            match _gan_val20:
-                case (import_line, expr) as _gan_t21 if isinstance(_gan_t21, tuple):
+            _gan_val24 = py
+            match _gan_val24:
+                case (import_line, expr) as _gan_t25 if isinstance(_gan_t25, tuple):
                     pass
                 case _:
-                    raise GanMatchError("no match of right-hand side value: " + repr(_gan_val20))
+                    raise GanMatchError("no match of right-hand side value: " + repr(_gan_val24))
             loc = gandora_lsp.py_intel.goto(_root_path(), import_line, expr)
             if (loc is None):
                 return None
@@ -275,13 +298,13 @@ def definition(params):
         else:
             target = _target_of(doc.source, token)
             if (target is None):
-                _gan_tmp22 = None
+                _gan_tmp26 = None
             else:
                 try:
-                    _gan_tmp22 = core.definition(target, _root_path())
+                    _gan_tmp26 = core.definition(target, _root_path())
                 except Exception as _e:
-                    _gan_tmp22 = None
-            loc = _gan_tmp22
+                    _gan_tmp26 = None
+            loc = _gan_tmp26
             if (loc is None):
                 return None
             else:
@@ -294,19 +317,19 @@ def document_symbol(params):
     doc = server.workspace.get_text_document(params.text_document.uri)
     mod = _module_of(doc.source)
     if (mod is None):
-        _gan_tmp23 = []
+        _gan_tmp27 = []
     else:
         try:
-            _gan_tmp23 = core.symbols(mod, server.workspace.root_path)
+            _gan_tmp27 = core.symbols(mod, server.workspace.root_path)
         except Exception as _e:
-            _gan_tmp23 = []
-    syms = _gan_tmp23
-    def _gan_fn5(s):
+            _gan_tmp27 = []
+    syms = _gan_tmp27
+    def _gan_fn6(s):
         line = gandora_std.enum.max([gandora_std.map.get(s, "line") - 1, 0])
         pos = types.Position(line=line, character=0)
         rng = types.Range(pos, pos)
         return types.DocumentSymbol(name=gandora_std.map.get(s, "name"), detail=gandora_std.map.get(s, "head"), kind=_symbol_kind(gandora_std.map.get(s, "kind")), range=rng, selection_range=rng)
-    children = gandora_std.enum.map(syms, _gan_fn5)
+    children = gandora_std.enum.map(syms, _gan_fn6)
     if (mod is None):
         return []
     else:
@@ -327,26 +350,26 @@ def _symbol_kind(*_gan_args):
 
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_COMPLETION, lsprotocol.types.CompletionOptions(trigger_characters=["."]))
 def completion(params):
-    _gan_val24 = _doc_and_line(params)
-    match _gan_val24:
-        case (doc, line) as _gan_t25 if isinstance(_gan_t25, tuple):
+    _gan_val28 = _doc_and_line(params)
+    match _gan_val28:
+        case (doc, line) as _gan_t29 if isinstance(_gan_t29, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val24))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val28))
     prefix = gandora_std.string.slice(line, 0, params.position.character)
     pym = re.compile("(\\$?)([A-Za-z_][A-Za-z0-9_.]*)\\.([A-Za-z0-9_]*)$").search(prefix)
     if (pym is None):
-        _gan_tmp26 = None
+        _gan_tmp30 = None
     else:
-        _gan_tmp26 = gandora_lsp.py_intel.target(doc.source, pym.group(2) + ("." + pym.group(3)), pym.group(1) == "$")
-    py = _gan_tmp26
+        _gan_tmp30 = gandora_lsp.py_intel.target(doc.source, pym.group(2) + ("." + pym.group(3)), pym.group(1) == "$")
+    py = _gan_tmp30
     if not ((py is None)):
-        _gan_val27 = py
-        match _gan_val27:
-            case (import_line, expr) as _gan_t28 if isinstance(_gan_t28, tuple):
+        _gan_val31 = py
+        match _gan_val31:
+            case (import_line, expr) as _gan_t32 if isinstance(_gan_t32, tuple):
                 pass
             case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val27))
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val31))
         return gandora_std.enum.map(gandora_lsp.py_intel.complete(_root_path(), import_line, expr), lambda c: types.CompletionItem(label=gandora_std.map.get(c, "name"), kind=_py_completion_kind(gandora_std.map.get(c, "kind"))))
     else:
         return _gandora_completion(prefix)
@@ -374,30 +397,30 @@ def _gandora_completion(prefix):
     else:
         mod = m.group(1)
         if (m.group(2) is None):
-            _gan_tmp29 = ""
+            _gan_tmp33 = ""
         else:
-            _gan_tmp29 = m.group(2)
-        partial = _gan_tmp29
+            _gan_tmp33 = m.group(2)
+        partial = _gan_tmp33
         try:
-            _gan_tmp30 = core.symbols(mod, server.workspace.root_path)
+            _gan_tmp34 = core.symbols(mod, server.workspace.root_path)
         except Exception as _e:
-            _gan_tmp30 = []
-        syms = _gan_tmp30
-        def _gan_fn6(s, acc):
+            _gan_tmp34 = []
+        syms = _gan_tmp34
+        def _gan_fn7(s, acc):
             if _gan_truthy(gandora_std.enum.any_p(acc, lambda a: gandora_std.map.get(a, "name") == gandora_std.map.get(s, "name"))):
                 return acc
             else:
                 return acc + [s]
-        return gandora_std.enum.map(gandora_std.enum.reduce(gandora_std.enum.filter(gandora_std.enum.filter(syms, lambda s: gandora_std.map.get(s, "kind") != "defp"), lambda s: gandora_std.map.get(s, "name").startswith(partial)), [], _gan_fn6), lambda s: types.CompletionItem(label=gandora_std.map.get(s, "name"), kind=lsprotocol.types.CompletionItemKind.Function, detail=gandora_std.map.get(s, "head"), documentation=gandora_std.map.get(s, "doc")))
+        return gandora_std.enum.map(gandora_std.enum.reduce(gandora_std.enum.filter(gandora_std.enum.filter(syms, lambda s: gandora_std.map.get(s, "kind") != "defp"), lambda s: gandora_std.map.get(s, "name").startswith(partial)), [], _gan_fn7), lambda s: types.CompletionItem(label=gandora_std.map.get(s, "name"), kind=lsprotocol.types.CompletionItemKind.Function, detail=gandora_std.map.get(s, "head"), documentation=gandora_std.map.get(s, "doc")))
 
 
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_FORMATTING)
 def formatting(params):
     doc = server.workspace.get_text_document(params.text_document.uri)
     result = gandora_tool.fmt.format_text(doc.source)
-    _gan_case32 = result
-    match _gan_case32:
-        case ("ok", new) as _gan_t33 if isinstance(_gan_t33, tuple):
+    _gan_case36 = result
+    match _gan_case36:
+        case ("ok", new) as _gan_t37 if isinstance(_gan_t37, tuple):
             if (new == doc.source) or (gandora_tool.fmt.verify(doc.source, new) != "ok"):
                 return []
             else:
@@ -409,39 +432,39 @@ def formatting(params):
 
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_SIGNATURE_HELP, lsprotocol.types.SignatureHelpOptions(trigger_characters=["(", ","]))
 def signature_help(params):
-    _gan_val34 = _doc_and_line(params)
-    match _gan_val34:
-        case (doc, line) as _gan_t35 if isinstance(_gan_t35, tuple):
+    _gan_val38 = _doc_and_line(params)
+    match _gan_val38:
+        case (doc, line) as _gan_t39 if isinstance(_gan_t39, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val34))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val38))
     prefix = gandora_std.string.slice(line, 0, params.position.character)
     call = _open_call(prefix)
     if (call is None):
         return None
     else:
-        _gan_val36 = call
-        match _gan_val36:
-            case (callee, active) as _gan_t37 if isinstance(_gan_t37, tuple):
+        _gan_val40 = call
+        match _gan_val40:
+            case (callee, active) as _gan_t41 if isinstance(_gan_t41, tuple):
                 pass
             case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val36))
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val40))
         pyref = gandora_std.string.starts_with_p(callee, "$")
         token = callee.lstrip("$")
         py = gandora_lsp.py_intel.target(doc.source, token, pyref)
         if not ((py is None)):
-            _gan_val39 = py
-            match _gan_val39:
-                case (import_line, expr) as _gan_t40 if isinstance(_gan_t40, tuple):
+            _gan_val43 = py
+            match _gan_val43:
+                case (import_line, expr) as _gan_t44 if isinstance(_gan_t44, tuple):
                     pass
                 case _:
-                    raise GanMatchError("no match of right-hand side value: " + repr(_gan_val39))
-            _gan_tmp38 = gandora_std.enum.map(gandora_lsp.py_intel.signatures(_root_path(), import_line, expr), lambda s: _build_signature(gandora_std.map.get(s, "label"), gandora_std.map.get(s, "params"), gandora_std.map.get(s, "doc")))
+                    raise GanMatchError("no match of right-hand side value: " + repr(_gan_val43))
+            _gan_tmp42 = gandora_std.enum.map(gandora_lsp.py_intel.signatures(_root_path(), import_line, expr), lambda s: _build_signature(gandora_std.map.get(s, "label"), gandora_std.map.get(s, "params"), gandora_std.map.get(s, "doc")))
         else:
             target = _target_of(doc.source, token)
             info = _lookup_doc(target)
-            _gan_tmp38 = _gandora_signatures(info)
-        sigs = _gan_tmp38
+            _gan_tmp42 = _gandora_signatures(info)
+        sigs = _gan_tmp42
         if _gan_truthy(gandora_std.enum.empty_p(sigs)):
             return None
         else:
@@ -449,49 +472,49 @@ def signature_help(params):
 
 
 def _open_call(prefix):
-    _gan_loop42 = (gandora_std.string.length(prefix) - 1, 0, 0)
-    _gan_res43 = None
+    _gan_loop46 = (gandora_std.string.length(prefix) - 1, 0, 0)
+    _gan_res47 = None
     while True:
-        match _gan_loop42:
-            case (i, depth, commas) as _gan_t44 if isinstance(_gan_t44, tuple):
+        match _gan_loop46:
+            case (i, depth, commas) as _gan_t48 if isinstance(_gan_t48, tuple):
                 pass
             case _:
-                raise GanMatchError("loop state did not match: " + repr(_gan_loop42))
+                raise GanMatchError("loop state did not match: " + repr(_gan_loop46))
         if i < 0:
-            _gan_res43 = None
+            _gan_res47 = None
             break
         else:
             ch = gandora_std.string.slice(prefix, i, 1)
             if (ch == ")") or (ch == "]") or (ch == "}"):
-                _gan_loop42 = (i - 1, depth + 1, commas)
+                _gan_loop46 = (i - 1, depth + 1, commas)
                 continue
             elif (ch == "[") or (ch == "{"):
-                _gan_loop42 = (i - 1, gandora_std.enum.max([depth - 1, 0]), commas)
+                _gan_loop46 = (i - 1, gandora_std.enum.max([depth - 1, 0]), commas)
                 continue
             elif (ch == ",") and (depth == 0):
-                _gan_loop42 = (i - 1, depth, commas + 1)
+                _gan_loop46 = (i - 1, depth, commas + 1)
                 continue
             elif (ch == "(") and (depth == 0):
-                _gan_res43 = (i, commas)
+                _gan_res47 = (i, commas)
                 break
             elif ch == "(":
-                _gan_loop42 = (i - 1, depth - 1, commas)
+                _gan_loop46 = (i - 1, depth - 1, commas)
                 continue
             else:
-                _gan_loop42 = (i - 1, depth, commas)
+                _gan_loop46 = (i - 1, depth, commas)
                 continue
         break
-    _gan_tmp41 = _gan_res43
-    found = _gan_tmp41
+    _gan_tmp45 = _gan_res47
+    found = _gan_tmp45
     if (found is None):
         return None
     else:
-        _gan_val45 = found
-        match _gan_val45:
-            case (open_at, commas) as _gan_t46 if isinstance(_gan_t46, tuple):
+        _gan_val49 = found
+        match _gan_val49:
+            case (open_at, commas) as _gan_t50 if isinstance(_gan_t50, tuple):
                 pass
             case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val45))
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val49))
         head = gandora_std.string.slice(prefix, 0, open_at)
         m = re.compile("(\\$?[A-Za-z_][A-Za-z0-9_.!?]*)\\s*$").search(head)
         if (m is None):
@@ -510,18 +533,21 @@ def _gandora_signatures(info):
     else:
         prose = gandora_std.map.get(gandora_std.map.get(info, "entries", {}), "default")
         if (prose is None):
-            _gan_tmp47 = None
+            _gan_tmp51 = None
         else:
-            _gan_tmp47 = gandora_std.enum.at(prose.strip().split("\n"), 0)
-        docline = _gan_tmp47
+            _gan_tmp51 = gandora_std.enum.at(prose.strip().split("\n"), 0)
+        docline = _gan_tmp51
         specs = gandora_std.map.get(info, "specs", [])
         heads = gandora_std.enum.uniq(gandora_std.map.get(info, "signatures", []))
         if _gan_truthy(gandora_std.enum.empty_p(specs)):
-            _gan_tmp48 = docline
+            _gan_tmp52 = docline
         else:
-            _gan_tmp48 = gandora_std.enum.join(specs, "\n")
-        label_doc = _gan_tmp48
-        return gandora_std.enum.map(heads, lambda head: _build_signature(head, _head_params(head), label_doc))
+            _gan_tmp52 = gandora_std.enum.join(specs, "\n")
+        label_doc = _gan_tmp52
+        def _gan_fn8(head):
+            params = _head_params(head)
+            return types.SignatureInformation(label=head, documentation=label_doc, parameters=gandora_std.enum.map(params, lambda p: types.ParameterInformation(label=p, documentation=_param_doc(info, p))))
+        return gandora_std.enum.map(heads, _gan_fn8)
 
 
 def _head_params(head):
@@ -534,34 +560,34 @@ def _head_params(head):
 
 
 def _split_top(inner):
-    _gan_loop50 = (0, 0, "", [])
-    _gan_res51 = None
+    _gan_loop54 = (0, 0, "", [])
+    _gan_res55 = None
     while True:
-        match _gan_loop50:
-            case (i, depth, cur, acc) as _gan_t52 if isinstance(_gan_t52, tuple):
+        match _gan_loop54:
+            case (i, depth, cur, acc) as _gan_t56 if isinstance(_gan_t56, tuple):
                 pass
             case _:
-                raise GanMatchError("loop state did not match: " + repr(_gan_loop50))
+                raise GanMatchError("loop state did not match: " + repr(_gan_loop54))
         if i >= gandora_std.string.length(inner):
-            _gan_res51 = acc + [cur]
+            _gan_res55 = acc + [cur]
             break
         else:
             ch = gandora_std.string.slice(inner, i, 1)
             if (ch == "(") or (ch == "[") or (ch == "{"):
-                _gan_loop50 = (i + 1, depth + 1, cur + ch, acc)
+                _gan_loop54 = (i + 1, depth + 1, cur + ch, acc)
                 continue
             elif (ch == ")") or (ch == "]") or (ch == "}"):
-                _gan_loop50 = (i + 1, depth - 1, cur + ch, acc)
+                _gan_loop54 = (i + 1, depth - 1, cur + ch, acc)
                 continue
             elif (ch == ",") and (depth == 0):
-                _gan_loop50 = (i + 1, depth, "", acc + [cur])
+                _gan_loop54 = (i + 1, depth, "", acc + [cur])
                 continue
             else:
-                _gan_loop50 = (i + 1, depth, cur + ch, acc)
+                _gan_loop54 = (i + 1, depth, cur + ch, acc)
                 continue
         break
-    _gan_tmp49 = _gan_res51
-    parts = _gan_tmp49
+    _gan_tmp53 = _gan_res55
+    parts = _gan_tmp53
     return gandora_std.enum.reject(gandora_std.enum.map(parts, lambda p: p.strip()), lambda p: p == "")
 
 

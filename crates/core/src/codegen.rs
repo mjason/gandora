@@ -62,6 +62,9 @@ pub fn camel_to_snake(s: &str) -> String {
 /// A parsed `@doc`/`@moduledoc` value (GEP-0007-R001).
 #[derive(Debug, Clone, Default)]
 pub struct DocInfo {
+    /// `@param` docs in declaration order: (name, [(locale, text)])
+    /// with "default" first (GEP-0018)
+    pub params: Vec<(String, Vec<(String, String)>)>,
     /// rendered `@spec` lines for this definition (GEP-0017-R004)
     pub specs: Vec<String>,
     /// locale tag -> markdown text; "default" is the fallback
@@ -391,6 +394,7 @@ impl Codegen {
         let mut moduledoc: Option<DocInfo> = None;
         let mut pending_doc: Option<DocInfo> = None;
         let mut pending_spec: Option<Term> = None;
+        let mut pending_params: Vec<(String, Vec<(String, String)>)> = Vec::new();
         let mut pending_decorators: Vec<Term> = Vec::new();
         let mut funs: Vec<FnDef> = Vec::new();
         let mut order: BTreeMap<String, usize> = BTreeMap::new();
@@ -445,6 +449,74 @@ impl Codegen {
                         )
                     })?;
                     merge_doc_trans(&self.file, call, info, "@moduledoc_trans")?;
+                }
+                "@param" => {
+                    let (name_t, text_t) = match (call.args.first(), call.args.get(1)) {
+                        (Some(n), Some(t)) => (n, t),
+                        _ => {
+                            return Err(self.err(
+                                call.span,
+                                "@param requires `name, \"text\"` (GEP-0018-R001)",
+                            ))
+                        }
+                    };
+                    let pname = match name_t {
+                        Term::Var(n, _) => n.clone(),
+                        _ => {
+                            return Err(self.err(
+                                call.span,
+                                "@param requires a parameter name (GEP-0018-R001)",
+                            ))
+                        }
+                    };
+                    let text = text_t.as_plain_str().ok_or_else(|| {
+                        self.err(call.span, "@param text must be a plain string (GEP-0018-R001)")
+                    })?;
+                    if pending_params.iter().any(|(n, _)| *n == pname) {
+                        return Err(self.err(
+                            call.span,
+                            format!("duplicate @param for {pname} (GEP-0018-R001)"),
+                        ));
+                    }
+                    pending_params.push((pname, vec![("default".to_string(), text)]));
+                }
+                "@param_trans" => {
+                    let pname = match call.args.first() {
+                        Some(Term::Var(n, _)) => n.clone(),
+                        _ => {
+                            return Err(self.err(
+                                call.span,
+                                "@param_trans requires `name, locale: \"text\"` (GEP-0018-R003)",
+                            ))
+                        }
+                    };
+                    let entry = pending_params
+                        .iter_mut()
+                        .find(|(n, _)| *n == pname)
+                        .ok_or_else(|| {
+                            self.err(
+                                call.span,
+                                format!(
+                                    "@param_trans {pname} has no preceding @param \
+                                     (GEP-0018-R003)"
+                                ),
+                            )
+                        })?;
+                    for arg in call.args.iter().skip(1) {
+                        let Term::Pair(locale, value) = arg else {
+                            return Err(self.err(
+                                call.span,
+                                "@param_trans takes `locale: \"text\"` pairs (GEP-0018-R003)",
+                            ));
+                        };
+                        let text = value.as_plain_str().ok_or_else(|| {
+                            self.err(
+                                call.span,
+                                "@param_trans text must be a plain string (GEP-0018-R003)",
+                            )
+                        })?;
+                        entry.1.push((locale.replace('_', "-"), text));
+                    }
                 }
                 "@spec" => {
                     let value = call.args.first().ok_or_else(|| {
@@ -551,6 +623,7 @@ impl Codegen {
                     let idx = if let Some(&i) = order.get(&key) {
                         if pending_doc.is_some()
                             || pending_spec.is_some()
+                            || !pending_params.is_empty()
                             || !pending_decorators.is_empty()
                         {
                             return Err(self.err(
@@ -564,7 +637,14 @@ impl Codegen {
                             name: fname.clone(),
                             private: name == "defp",
                             spec: pending_spec.take(),
-                            doc: pending_doc.take(),
+                            doc: {
+                                let mut d = pending_doc.take();
+                                if !pending_params.is_empty() {
+                                    d.get_or_insert_with(DocInfo::default).params =
+                                        std::mem::take(&mut pending_params);
+                                }
+                                d
+                            },
                             decorators: std::mem::take(&mut pending_decorators),
                             clauses: Vec::new(),
                             span: call.span,
@@ -867,6 +947,9 @@ impl Codegen {
         match t {
             Term::Nil => Ok("None".to_string()),
             Term::Call(c) => match &c.callee {
+                // a named argument `name :: type` contributes its type
+                // (GEP-0018-R006)
+                Callee::Name(n) if n == "::" => self.spec_hint(&c.args[1]),
                 Callee::Name(n) if n == "|" => {
                     let a = self.spec_hint(&c.args[0])?;
                     let b = self.spec_hint(&c.args[1])?;
@@ -978,6 +1061,27 @@ impl Codegen {
                 ));
             }
             lines.push(format!("@{e}"));
+        }
+        if let Some(doc) = &f.doc {
+            if !doc.params.is_empty() {
+                let mut head_vars: BTreeSet<String> = BTreeSet::new();
+                for (params, _, _) in &f.clauses {
+                    for p in params {
+                        collect_vars(p, &mut head_vars);
+                    }
+                }
+                for (pname, _) in &doc.params {
+                    if !head_vars.contains(pname) {
+                        return Err(self.err(
+                            f.span,
+                            format!(
+                                "@param {pname} names no parameter of {} (GEP-0018-R002)",
+                                f.name
+                            ),
+                        ));
+                    }
+                }
+            }
         }
         let spec_info = match &f.spec {
             None => None,
@@ -1131,6 +1235,9 @@ impl Codegen {
                 ));
             }
             parts.push(text.trim_end().to_string());
+        }
+        if let Some(section) = params_section(info, "default", "## Parameters") {
+            parts.push(section);
         }
         for ex in &info.examples {
             parts.push(self.compile_doctests(ex.trim_end(), span)?);
@@ -2939,6 +3046,52 @@ fn dotted_name(t: &Term) -> Option<String> {
     }
 }
 
+/// Every variable bound in a parameter pattern (GEP-0018-R002).
+fn collect_vars(term: &Term, out: &mut BTreeSet<String>) {
+    match term {
+        Term::Var(n, _) => {
+            if !n.starts_with('_') {
+                out.insert(n.clone());
+            }
+        }
+        Term::List(items) | Term::Tuple(items) => {
+            for i in items {
+                collect_vars(i, out);
+            }
+        }
+        Term::Map(entries) => {
+            for (_, v) in entries {
+                collect_vars(v, out);
+            }
+        }
+        Term::Call(c) => {
+            for a in &c.args {
+                collect_vars(a, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The generated `## Parameters` section for one locale, or None when the
+/// definition has no @param docs (GEP-0018-R004).
+pub fn params_section(info: &DocInfo, locale: &str, heading: &str) -> Option<String> {
+    if info.params.is_empty() {
+        return None;
+    }
+    let mut lines = vec![heading.to_string(), String::new()];
+    for (name, entries) in &info.params {
+        let text = entries
+            .iter()
+            .find(|(l, _)| l == locale)
+            .or_else(|| entries.iter().find(|(l, _)| l == "default"))
+            .map(|(_, t)| t.as_str())
+            .unwrap_or("");
+        lines.push(format!("  - {name}: {text}"));
+    }
+    Some(lines.join("\n"))
+}
+
 fn push_indented(out: &mut Vec<String>, lines: &[String]) {
     for l in lines {
         if l.is_empty() {
@@ -3006,6 +3159,45 @@ mod tests {
         assert!(py.contains("def main():"), "{py}");
         assert!(py.contains("return print(\"Hello, world!\")"), "{py}");
         assert!(py.contains("if __name__ == \"__main__\":"), "{py}");
+    }
+
+    #[test]
+    fn params_render_into_the_docstring() {
+        // GEP-0018-R001/R004
+        let py = compile(
+            "defmodule M do\n  @param a, \"the left side\"\n  @param b, \"the right side\"\n  @doc \"Adds.\"\n  def add(a, b), do: a + b\nend",
+        );
+        assert!(py.contains("## Parameters"), "{py}");
+        assert!(py.contains("- a: the left side"), "{py}");
+        assert!(py.contains("- b: the right side"), "{py}");
+    }
+
+    #[test]
+    fn param_validation_errors() {
+        // unknown name (GEP-0018-R002)
+        let err = compile_err(
+            "defmodule M do\n  @param nope, \"x\"\n  def f(a), do: a\nend",
+        );
+        assert!(err.contains("GEP-0018-R002"), "{err}");
+        // duplicate (R001)
+        let err2 = compile_err(
+            "defmodule M do\n  @param a, \"x\"\n  @param a, \"y\"\n  def f(a), do: a\nend",
+        );
+        assert!(err2.contains("GEP-0018-R001"), "{err2}");
+        // orphan translation (R003)
+        let err3 = compile_err(
+            "defmodule M do\n  @param_trans a, zh_CN: \"x\"\n  def f(a), do: a\nend",
+        );
+        assert!(err3.contains("GEP-0018-R003"), "{err3}");
+    }
+
+    #[test]
+    fn named_spec_args_compile_like_unnamed() {
+        // GEP-0018-R006
+        let py = compile(
+            "defmodule M do\n  @spec add(a :: integer(), b :: integer()) :: integer()\n  def add(a, b), do: a + b\nend",
+        );
+        assert!(py.contains("def add(a: int, b: int) -> int:"), "{py}");
     }
 
     #[test]

@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.6.0 — 2026-08-02
+
+**Parameter documentation (GEP-0018).** `@param name, "text"`
+documents one parameter of the next definition, validated against the
+clause heads at compile time — renamed parameters break the build
+instead of orphaning their docs. `@param_trans` carries translations
+(GEP-0007 locale rules). Renderers generate the Elixir-style
+`## Parameters` section (localized headings in `gan doc`), the
+generated docstring carries it, hover shows it, and signature help
+attaches each parameter's own description to its
+`ParameterInformation` — the active argument's doc follows the
+cursor. `@spec` heads may name arguments Elixir-style
+(`name :: type`), shown in rendered specs. Hand-written
+`## Parameters` sections remain valid and unparsed.
+
 ## v0.5.2 — 2026-08-02
 
 - **The standard library is fully spec'd**: all 94 public functions

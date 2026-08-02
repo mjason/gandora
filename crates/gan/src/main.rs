@@ -610,6 +610,33 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
                     let info = pending.get_or_insert_with(codegen::DocInfo::default);
                     codegen::merge_doc_value(&file, c, info, "@doc")?;
                 }
+                "@param" => {
+                    if let (Some(ast::Term::Var(n, _)), Some(t)) = (c.args.first(), c.args.get(1)) {
+                        if let Some(text) = t.as_plain_str() {
+                            pending
+                                .get_or_insert_with(codegen::DocInfo::default)
+                                .params
+                                .push((n.clone(), vec![("default".to_string(), text)]));
+                        }
+                    }
+                }
+                "@param_trans" => {
+                    if let Some(ast::Term::Var(n, _)) = c.args.first() {
+                        if let Some(info) = pending.as_mut() {
+                            if let Some(entry) =
+                                info.params.iter_mut().find(|(pn, _)| pn == n)
+                            {
+                                for arg in c.args.iter().skip(1) {
+                                    if let ast::Term::Pair(locale, value) = arg {
+                                        if let Some(text) = value.as_plain_str() {
+                                            entry.1.push((locale.replace('_', "-"), text));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 "@spec" => {
                     if let Some(v) = c.args.first() {
                         pending
@@ -671,6 +698,15 @@ fn print_doc(label: &str, info: Option<codegen::DocInfo>, locale: Option<&str>) 
                 println!("{spec}");
             }
             let prose = lookup_locale(&info, locale);
+            let heading = match locale {
+                Some(l) if l.starts_with("zh") => "## 参数",
+                _ => "## Parameters",
+            };
+            let params = codegen::params_section(
+                &info,
+                locale.unwrap_or("default"),
+                heading,
+            );
             if prose.is_none() && info.meta.is_empty() && info.examples.is_empty() {
                 println!("{label} has no documentation");
             } else {
@@ -691,6 +727,10 @@ fn print_doc(label: &str, info: Option<codegen::DocInfo>, locale: Option<&str>) 
                         "{}",
                         ensure_trailing_newline(text.trim_start_matches('\n').trim_end())
                     );
+                }
+                if let Some(section) = &params {
+                    println!();
+                    print!("{}", ensure_trailing_newline(section));
                 }
                 // example blocks render in every locale (GEP-0007-R009)
                 for ex in &info.examples {

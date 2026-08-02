@@ -1,6 +1,6 @@
 defmodule Main do
   @moduledoc """
-  gan-lsp: the Gandora language server on pygls (GEP-0015 rev 4).
+  gan-lsp: the Gandora language server on pygls (GEP-0015).
   pygls owns protocol machinery; this module owns language logic:
   push diagnostics on every edit, documentation hover (signatures,
   translations, examples, `$module` references, language constructs),
@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.5.2",
+  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.6.0",
     text_document_sync_kind: $"lsprotocol.types".TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -210,6 +210,7 @@ defmodule Main do
     if is_nil(info) or info.get("hidden") do
       nil
     else
+      params = param_lines(info)
       sigs = Map.get(info, "signatures", [])
       |> Enum.uniq()
       |> Enum.join("\n")
@@ -227,7 +228,7 @@ defmodule Main do
       |> Enum.map(fn {k, v} -> "\n`#{k}`: #{v}" end)
       examples = Map.get(info, "examples", [])
       |> Enum.map(fn ex -> "\n```elixir\n#{ex.strip()}\n```" end)
-      body = [prose] ++ translations ++ meta ++ examples
+      body = [prose] ++ params ++ translations ++ meta ++ examples
       |> Enum.reject(fn part -> is_nil(part) end)
       |> Enum.join("\n")
       if String.trim(body) == "" and sigs == "" do
@@ -235,6 +236,31 @@ defmodule Main do
       else
         markdown_hover("#{header}\n\n#{body}")
       end
+    end
+  end
+
+  defp param_lines(info) do
+    entries = Map.get(info, "params", [])
+    if Enum.empty?(entries) do
+      []
+    else
+      lines = entries
+      |> Enum.map(fn p ->
+        "  - #{Map.get(p, "name")}: #{Map.get(Map.get(p, "entries", %{}), "default", "")}"
+      end)
+      |> Enum.join("\n")
+      ["\n**Parameters**\n\n" <> lines]
+    end
+  end
+
+  defp param_doc(info, label) do
+    name = Enum.at(label.split(" "), 0) |> $builtins.str() |> (fn s -> s.rstrip(",") end).()
+    entry = Map.get(info, "params", [])
+    |> Enum.find(fn p -> Map.get(p, "name") == name end)
+    if is_nil(entry) do
+      nil
+    else
+      Map.get(Map.get(entry, "entries", %{}), "default")
     end
   end
 
@@ -533,7 +559,14 @@ defmodule Main do
         specs |> Enum.join("\n")
       end
       Enum.map(heads, fn head ->
-        build_signature(head, head_params(head), label_doc)
+        params = head_params(head)
+        types.SignatureInformation(
+          label: head,
+          documentation: label_doc,
+          parameters: Enum.map(params, fn p ->
+            types.ParameterInformation(label: p, documentation: param_doc(info, p))
+          end)
+        )
       end)
     end
   end
