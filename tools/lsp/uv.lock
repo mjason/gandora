@@ -65,7 +65,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
-    { name = "gandora-lsp", marker = "extra == 'dev'", directory = "." },
+    { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.4.1" },
     { name = "gandora-std", directory = "../../std" },
 ]
 provides-extras = ["dev"]

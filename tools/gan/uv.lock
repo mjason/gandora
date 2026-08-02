@@ -26,34 +26,31 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.4.1"
+version = "0.4.2"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lsp"
 version = "0.4.1"
-source = { directory = "../lsp" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gandora-core" },
     { name = "gandora-std" },
     { name = "pygls" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "gandora-core", directory = "../../crates/core-py" },
-    { name = "gandora-std", directory = "../../std" },
-    { name = "pygls", specifier = ">=2" },
+sdist = { url = "https://files.pythonhosted.org/packages/91/12/423aeada80c3ada132153a5f1e78d7ec0c85ed221b0bcd12bec0a5923f1e/gandora_lsp-0.4.1.tar.gz", hash = "sha256:38963c1923062f7ce53ce846b5eae7cc56a55a6282c46441fd5f2ea80975617c", size = 5071, upload-time = "2026-08-02T12:21:19.074Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/db/db7a83fbf3f31ac0c88b257aa8773a19f5cbcb951a4dbe859881148c10d7/gandora_lsp-0.4.1-py3-none-any.whl", hash = "sha256:6dbd440cf0e53492968e7ea19e4ee348f7e18f68975b97e83bd4aa6c9faa4bb8", size = 7522, upload-time = "2026-08-02T12:21:18.105Z" },
 ]
 
 [[package]]
 name = "gandora-std"
-version = "0.4.1"
+version = "0.4.2"
 source = { directory = "../../std" }
 
 [[package]]
 name = "gandora-tool"
-version = "0.4.1"
+version = "0.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
@@ -68,7 +65,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
-    { name = "gandora-lsp", marker = "extra == 'dev'", directory = "../lsp" },
+    { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.4.1" },
     { name = "gandora-std", directory = "../../std" },
 ]
 provides-extras = ["dev"]
