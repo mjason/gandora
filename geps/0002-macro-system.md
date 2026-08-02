@@ -26,9 +26,8 @@ translations:
 Gandora macros are compile-time functions from syntax to syntax, written
 with `defmacro`, `quote`, `unquote`, and `unquote_splicing` in Elixir's
 spelling. Expansion is hygienic by default, runs in a deterministic sandbox
-inside the compiler, and completes before Python code generation. This
-follows the macro model of the Osiris project (phase-separated, hygienic,
-data-driven) while keeping Elixir's authoring surface.
+inside the compiler, and completes before Python code generation. The model is phase-separated, hygienic, and data-driven, with Elixir's
+authoring surface.
 
 ## Motivation
 
@@ -108,12 +107,10 @@ module MUST fail with a diagnostic naming the module.
 
 Interpreting macro bodies inside the compiler (rather than compiling them
 to Python and importing them) keeps compilation free of user code execution
-and keeps builds deterministic — the same decision Osiris made with its
-phase-1 evaluator. Elixir's `{name, meta, args}` quoted shape is kept so
+and keeps builds deterministic. Elixir's `{name, meta, args}` quoted shape is kept so
 that documentation and intuition transfer directly.
 
-Hygiene-by-default with an explicit `var!` escape matches both Elixir and
-Osiris; unhygienic-by-default systems make composed macros fail in ways
+Hygiene-by-default with an explicit `var!` escape matches Elixir; unhygienic-by-default systems make composed macros fail in ways
 users cannot debug.
 
 ## Backwards Compatibility

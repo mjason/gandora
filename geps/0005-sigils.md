@@ -27,8 +27,7 @@ Sigils are Elixir's `~name<delimiter>body<delimiter>` literal family. This
 proposal adds four to the v0 surface: `~w` (word lists), `~s` (strings with
 free delimiter choice), `~r` (compiled regular expressions), and `~python` — a
 raw sigil that splices a verbatim Python expression into the generated
-code. `~python` keeps the name of the Osiris embedded-language sigil it
-descends from: the escape hatch that keeps the compiler small when the
+code. `~python` is the escape hatch that keeps the compiler small when the
 host language can already say something directly. Being an expression, a
 `~python` value binds and returns like any other value.
 
@@ -39,15 +38,13 @@ are noisy (`["a", "b", "c"]`, escaped backslashes in patterns). More
 importantly, a compile-to-Python language needs a principled escape hatch:
 when a Python expression has no Gandora spelling (a comprehension, a
 `yield`, an exotic operator), authors should embed that one expression
-verbatim rather than wrap it in a Python helper module. Osiris proved this
-design with its `~lang` embedded-language sigils; Gandora adopts the same
-idea in Elixir's sigil syntax.
+verbatim rather than wrap it in a Python helper module. Embedded-language bodies with a language tag solve this cleanly, in
+Elixir's sigil syntax.
 
 ## Scope
 
 The four sigils above, their delimiter set, and their raw/interpolating
-split. Custom user-defined sigils, sigil modifiers (`~r/x/i`), the Osiris
-linkable-provider machinery (`extern python` handles, `py/embed` files),
+split. Custom user-defined sigils, sigil modifiers (`~r/x/i`), typed `extern` handles, file-based embeds,
 and additional sigils (`~D` dates, `~U` timestamps) are deferred.
 
 ## Terminology
@@ -56,7 +53,7 @@ and additional sigils (`~D` dates, `~U` timestamps) are deferred.
 - **Interpolating sigil**: a lowercase-named sigil whose body supports
   `#{...}` interpolation.
 - **Raw sigil**: a sigil whose body is taken verbatim: every
-  uppercase-named sigil, and the embedded-language sigil `~python`.
+  uppercase-named sigil and the embedded-language sigil `~python`.
 
 ## Specification
 
@@ -69,7 +66,7 @@ name and a delimited body. Supported delimiter pairs are `( )`, `[ ]`,
 except that a backslash may escape the closing delimiter (and `\\` spells
 a literal backslash before a closing delimiter). Interpolating sigils
 additionally support `#{expr}`; raw sigils treat `#{` as text. Lowercase
-names interpolate except `~python`, which is raw like its Osiris namesake.
+names interpolate except `~python`, whose body is raw host code.
 
 **GEP-0005-R003:** A letter immediately following the closing delimiter
 (an Elixir sigil modifier) MUST produce a diagnostic saying modifiers are
@@ -112,8 +109,7 @@ Elixir treats sigil bodies.
 `~python` deliberately compiles to a parenthesized verbatim splice rather
 than an `eval` or a helper call: the output stays readable, has zero
 runtime cost, and behaves exactly like the hand-written Python it is.
-This is the same judgment Osiris made with `~python` embedded bodies —
-the host language is a feature, not a failure mode — restricted here to
+The host language is a feature, not a failure mode — restricted here to
 single expressions so the splice cannot break the surrounding statement
 structure. Statement-level embedding (functions, classes) remains the job
 of ordinary Python modules plus `pyimport`.

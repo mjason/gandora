@@ -346,10 +346,9 @@ marked Current keeps quality accountable to a person rather than a model.
 Accepted and Final are separate because approval must precede implementation.
 This prevents existing code from being treated as an accidental specification.
 
-This process is adapted from the Osiris Enhancement Proposal process
-(OEP-0000), simplified for a young repository: embedded documentation
-snapshots and publication channels are out of scope until a corresponding
-Standards Track GEP defines them.
+The process is deliberately small for a young repository: embedded
+documentation snapshots and publication channels are out of scope until
+a corresponding Standards Track GEP defines them.
 
 ## Backwards Compatibility
 

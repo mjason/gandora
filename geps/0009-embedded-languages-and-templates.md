@@ -29,9 +29,8 @@ tagged with its language. Every embedded body supports EEx-style
 splicing: `<%= expr %>` inserts a Gandora expression. For `~python`
 the splice is code (compiled expression text, as before, now
 parameterizable); for every other language the sigil evaluates to a
-string with spliced runtime values. This adopts osiris's
-embedded-language sigil family and EEx's template marker in one
-mechanism.
+string with spliced runtime values. One mechanism covers the embedded-language family and EEx's template
+marker.
 
 ## Motivation
 
@@ -91,8 +90,7 @@ One marker for all languages beats per-language interpolation rules,
 and `<%= %>` is the established Elixir spelling (EEx). Code-splice for
 `~python` versus value-splice for everything else matches what each
 body *is*: `~python` bodies execute, other bodies are data. Language
-tags without validation keep the compiler small while giving tooling
-the hook osiris designed sigils for.
+tags without validation keep the compiler small while giving tooling a stable hook.
 
 ## Backwards Compatibility
 

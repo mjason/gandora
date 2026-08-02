@@ -37,10 +37,9 @@ macros from the shipped sources during the consumer's own compilation.
 Distribution must not fork the ecosystem: a data-science team should be
 able to `uv add` a Gandora-authored package without knowing Gandora
 exists, and a Gandora consumer should get the full surface — functions
-*and* macros — from the same artifact. The design follows the Osiris
-package system's core judgment: `pyproject.toml`/`uv` own dependency
-management entirely, and the compiler reads only static files from the
-locked environment.
+*and* macros — from the same artifact. The core judgment: `pyproject.toml`/`uv` own dependency management
+entirely, and the compiler reads only static files from the locked
+environment.
 
 ## Scope
 
@@ -137,14 +136,12 @@ version coupling between the consumer's compiler and the package author's
 — the wheel behaves identically everywhere because it *is* its behavior.
 
 Macros cannot be runtime artifacts (they do not exist at runtime,
-GEP-0002-R009), so the only faithful distribution is their source. Osiris
-ships a compiled macro IR in `.osri` interfaces for the same purpose;
-shipping `.gan` source is the v0-simple equivalent, trading parse time
-for zero new formats, and leaves room for a compiled interface format in
-a future GEP.
+GEP-0002-R009), so the only faithful distribution is their source.
+Shipping `.gan` source trades a little parse time for zero new formats,
+and leaves room for a compiled interface format in a future GEP.
 
-Reading markers from site-packages follows the Osiris rule that discovery
-never executes package code: installation state is data.
+Reading markers from site-packages keeps a hard rule: discovery never
+executes package code — installation state is data.
 
 ## Backwards Compatibility
 

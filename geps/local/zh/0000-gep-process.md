@@ -250,7 +250,7 @@ translation-status: Current | Stale
 
 Accepted和Final是分开的，因为批准必须在实施之前。这可以防止现有代码被当作意外的规范。
 
-此流程改编自Osiris增强提案流程（OEP-0000），并为年轻仓库进行了简化：嵌入式文档快照和发布渠道在当前未纳入范围，直到对应的Standards Track GEP对其作出定义。
+此流程为年轻仓库刻意保持精简：嵌入式文档快照和发布渠道在当前未纳入范围，直到对应的Standards Track GEP对其作出定义。
 
 ## Backwards Compatibility
 

@@ -266,14 +266,13 @@ byte-identical output.
 
 Compiling to readable Python rather than bytecode or an interpreter keeps
 the entire Python ecosystem — debuggers, profilers, `uv`, deployment
-targets — usable without Gandora-specific support, mirroring the Osiris
-project's experience that readable output plus `.venv` compatibility is the
+targets — usable without Gandora-specific support, readable output plus `.venv` compatibility is the
 cheapest possible integration story.
 
 The one-module-per-file rule (unlike Elixir, which allows several) buys a
 direct, predictable mapping from module names to generated Python modules,
 which in turn keeps imports, tooling, and incremental compilation simple.
-It is the same tradeoff Osiris made via path-derived module names.
+Path-derived module names make the mapping mechanical.
 
 Atoms as interned strings, rather than a dedicated atom class, keep the
 interop boundary wrapper-free: `:ok` compares equal to the `"ok"` a Python

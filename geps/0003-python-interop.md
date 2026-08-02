@@ -107,8 +107,7 @@ where atoms would be noisy.
 
 Not checking foreign modules at compile time preserves the guarantee that
 compilation never imports Python — the property that keeps builds
-deterministic and safe (a lesson taken directly from Osiris, whose compiler
-reads only static metadata).
+deterministic and safe (the compiler reads only static metadata).
 
 ## Backwards Compatibility
 
@@ -132,7 +131,7 @@ wrapper modules around Python APIs — the absence of wrappers is the design.
 
 ### A declared FFI with typed signatures (extern blocks)
 
-Osiris-style `extern` declarations give static checking but cost a
+Per-function `extern` declarations would give static checking but cost a
 declaration per function, which contradicts the goal that Python use should
 need near-zero ceremony. Typed declarations remain open as an additive
 future GEP.

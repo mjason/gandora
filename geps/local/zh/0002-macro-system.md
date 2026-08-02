@@ -27,7 +27,7 @@ translation-status: Current
 
 ## 摘要
 
-Gandora 宏是编译时从语法到语法的函数，使用 Elixir 写法的 `defmacro`、`quote`、`unquote` 和 `unquote_splicing` 编写。宏展开默认是卫生的，在编译器内部的确定性沙箱中运行，并在 Python 代码生成之前完成。这遵循了 Osiris 项目的宏模型（阶段分离、卫生、数据驱动），同时保留了 Elixir 的编写界面。
+Gandora 宏是编译时从语法到语法的函数，使用 Elixir 写法的 `defmacro`、`quote`、`unquote` 和 `unquote_splicing` 编写。宏展开默认是卫生的，在编译器内部的确定性沙箱中运行，并在 Python 代码生成之前完成。该模型阶段分离、卫生、数据驱动，同时保留 Elixir 的编写界面。
 
 ## 动机
 
@@ -65,9 +65,9 @@ Gandora 宏是编译时从语法到语法的函数，使用 Elixir 写法的 `de
 
 ## 理由
 
-在编译器内部解释宏体（而不是将其编译为 Python 并导入）使得编译过程不受用户代码执行的影响，并保持构建的可确定性——这与 Osiris 在其第一阶段求值器中的决定相同。Elixir 的 `{name, meta, args}` 引用形式被保留，以便文档和直觉直接传递。
+在编译器内部解释宏体（而不是将其编译为 Python 并导入）使得编译过程不受用户代码执行的影响，并保持构建的可确定性。Elixir 的 `{name, meta, args}` 引用形式被保留，以便文档和直觉直接传递。
 
-默认卫生（hygiene）并带有显式 `var!` 转义的方式与 Elixir 和 Osiris 一致；默认非卫生的系统会使组合宏以用户无法调试的方式失败。
+默认卫生（hygiene）并带有显式 `var!` 转义的方式与 Elixir 一致；默认非卫生的系统会使组合宏以用户无法调试的方式失败。
 
 ## 向后兼容性
 
