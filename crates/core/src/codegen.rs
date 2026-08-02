@@ -3206,6 +3206,11 @@ fn pyref_chain(term: &Term) -> Option<Vec<String>> {
 /// lowercase segments, stopping before the final segment — dotted
 /// submodules import whole, members resolve as attributes.
 fn pyref_import_path(segs: &[String]) -> String {
+    // a dotted first segment comes from the quoted form `$"a.b"`: the
+    // module boundary is explicit and the heuristic must not extend it
+    if segs[0].contains('.') {
+        return segs[0].clone();
+    }
     let mut end = 1;
     while end < segs.len() - 1
         && segs[end]
@@ -3355,6 +3360,18 @@ mod tests {
             "defmodule M do\n  def c(x), do: $builtins.isinstance(x, $collections.abc.Sequence)\nend",
         );
         assert!(py2.contains("import collections.abc"), "{py2}");
+    }
+
+    #[test]
+    fn quoted_pyref_locks_the_module_boundary() {
+        // `$"a.b".c` — the quote is an explicit boundary the chain rule
+        // must not extend (GEP-0003-R010)
+        let py = compile(
+            "defmodule M do\n  def f(), do: $\"os.path\".sep.join([\"a\"])\nend",
+        );
+        assert!(py.contains("import os.path"), "{py}");
+        assert!(!py.contains("import os.path.sep"), "{py}");
+        assert!(py.contains("os.path.sep.join"), "{py}");
     }
 
     #[test]
