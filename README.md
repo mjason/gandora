@@ -184,11 +184,13 @@ cargo test             # unit + end-to-end tests
 
 ## Status
 
-v0: GEP-0001..0009 are implemented and tested — including GEP-0008's
-definition-generating macros, `use`/`__using__`, `def unquote(name)`,
-and the `defattr`/`@on_definition` annotation system, and GEP-0009's
-embedded-language sigils with EEx-style `<%= %>` splices. GEP-0010's gandora-std
-(`uv add "git+https://github.com/mjason/gandora#subdirectory=std"`)
-provides
-Enum/String/Map/List/Keyword. Deferred:
-protocols, comprehensions, `try/rescue`, binaries, a formatter, an LSP.
+v0.1.0: GEP-0001..0011 are implemented and tested — the language and
+CLI, hygienic macros with the full metaprogramming surface
+(definition-generating macros, `use`/`__using__`, `defattr`/
+`@on_definition`), structs, sigils and embedded languages with
+`<%= %>` splices, wheel-based package publication, bilingual docs with
+native doctests, multi-arity functions with `\\` defaults, and the
+standard library ([std/](std/), `uv add
+"git+https://github.com/mjason/gandora#subdirectory=std"`). Deferred:
+protocols, comprehensions, `try/rescue`, binaries, a formatter, an
+LSP.
