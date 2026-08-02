@@ -192,8 +192,20 @@ defmodule Main do
     IO.puts("Initialized Gandora project in #{path}")
   end
 
+  defp find_plugin(cmd) do
+    # project venv first (GEP-0013-R003: installing a plugin is `uv add`),
+    # then the surrounding PATH
+    venv_bin = root() <> "/.venv/bin"
+    local = shutil.which("gan-" <> cmd, path: venv_bin)
+    if is_nil(local) do
+      shutil.which("gan-" <> cmd)
+    else
+      local
+    end
+  end
+
   defp delegate(cmd, rest) do
-    plugin = shutil.which("gan-" <> cmd)
+    plugin = find_plugin(cmd)
     ganc = shutil.which("ganc")
     cond do
       not is_nil(plugin) -> :sys.exit(subprocess.call([plugin] ++ rest))

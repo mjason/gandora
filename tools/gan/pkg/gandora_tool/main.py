@@ -189,8 +189,17 @@ def init(path):
     return print(f"Initialized Gandora project in {path}")
 
 
+def _find_plugin(cmd):
+    venv_bin = _root() + "/.venv/bin"
+    local = shutil.which("gan-" + cmd, path=venv_bin)
+    if _gan_truthy((local is None)):
+        return shutil.which("gan-" + cmd)
+    else:
+        return local
+
+
 def _delegate(cmd, rest):
-    plugin = shutil.which("gan-" + cmd)
+    plugin = _find_plugin(cmd)
     ganc = shutil.which("ganc")
     if not (_gan_truthy((plugin is None))):
         return sys.exit(subprocess.call([plugin] + rest))

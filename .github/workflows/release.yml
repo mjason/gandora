@@ -83,6 +83,8 @@ jobs:
           cd tools/lsp
           uv sync
           ../../target/release/ganc build
+          uv sync --reinstall-package gandora-lsp
+          python tests/lsp_conformance.py .venv/bin/gan-lsp
           uv build --out-dir ../../dist-lsp
       - uses: actions/upload-artifact@v4
         with:

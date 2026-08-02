@@ -15,7 +15,7 @@ import gandora_std.string
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.2.1")
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.2.1", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_DID_OPEN)

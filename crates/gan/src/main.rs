@@ -6,18 +6,18 @@ use std::process::ExitCode;
 use diag::{Diagnostic, Span};
 
 const USAGE: &str = "\
-gan - the Gandora compiler
+ganc - the Gandora stage-0 compiler (GEP-0013; `gan` is the task runner)
 
 Usage:
-  gan init [--existing] [path]   create a new Gandora + uv project
-  gan check [file...]            parse, expand, and analyze without output
-  gan build                      compile the project into outDir
-  gan compile <file...> [--out <dir>]
-  gan run <file> [args...]       compile and execute with the project Python
-  gan expand <file>              print a module after macro expansion
-  gan doc <Mod>[.<fun>] [--locale <tag>]   print documentation
-  gan test                       run doctests of every compiled module
-  gan --version                  print the compiler version
+  ganc init [--existing] [path]   create a new Gandora + uv project
+  ganc check [file...]            parse, expand, and analyze without output
+  ganc build                      compile the project into outDir
+  ganc compile <file...> [--out <dir>]
+  ganc run <file> [args...]       compile and execute with the project Python
+  ganc expand <file>              print a module after macro expansion
+  ganc doc <Mod>[.<fun>] [--locale <tag>]   print documentation
+  ganc test                       run doctests of every compiled module
+  ganc --version                  print the compiler version
 ";
 
 fn main() -> ExitCode {
@@ -48,7 +48,7 @@ fn main() -> ExitCode {
         "doc" => cmd_doc(rest),
         "test" => return cmd_test(),
         other => {
-            eprintln!("gan: unknown command '{other}'\n\n{USAGE}");
+            eprintln!("ganc: unknown command '{other}'\n\n{USAGE}");
             return ExitCode::from(2);
         }
     };
@@ -459,17 +459,17 @@ fn cmd_run(args: &[String]) -> ExitCode {
     let canon = match file_path.canonicalize() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("gan: {e}");
+            eprintln!("ganc: {e}");
             return ExitCode::FAILURE;
         }
     };
     let Some(target) = modules.iter().find(|m| m.source == canon) else {
-        eprintln!("gan: internal error: target module missing from build");
+        eprintln!("ganc: internal error: target module missing from build");
         return ExitCode::FAILURE;
     };
     if target.compile_time_only {
         eprintln!(
-            "gan: {} defines only macros; there is nothing to run (GEP-0002-R009)",
+            "ganc: {} defines only macros; there is nothing to run (GEP-0002-R009)",
             target.module.join(".")
         );
         return ExitCode::FAILURE;
@@ -497,7 +497,7 @@ fn cmd_run(args: &[String]) -> ExitCode {
             None => ExitCode::FAILURE,
         },
         Err(e) => {
-            eprintln!("gan: failed to launch {program}: {e}");
+            eprintln!("ganc: failed to launch {program}: {e}");
             ExitCode::FAILURE
         }
     }
@@ -858,7 +858,7 @@ fn cmd_test() -> ExitCode {
                 failed += 1;
             }
             Err(e) => {
-                eprintln!("gan: failed to launch {program}: {e}");
+                eprintln!("ganc: failed to launch {program}: {e}");
                 return ExitCode::FAILURE;
             }
         }
