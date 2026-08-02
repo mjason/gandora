@@ -47,7 +47,7 @@ defmodule Tour.Patterns do
 
   defp parse_int(s) do
     if s.strip().isdigit() do
-      {:ok, :builtins.int(s)}
+      {:ok, $builtins.int(s)}
     else
       :error
     end

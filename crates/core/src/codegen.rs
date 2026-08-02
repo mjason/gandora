@@ -1587,6 +1587,11 @@ impl Codegen {
             Term::Bool(b) => Ok(if *b { "True" } else { "False" }.to_string()),
             Term::Nil => Ok("None".to_string()),
             Term::Atom(a) => Ok(py_str_lit(a)),
+            Term::PyRef(m) => {
+                // first-class module reference (GEP-0003-R002)
+                self.py_imports.insert(m.clone());
+                Ok(m.clone())
+            }
             Term::Str(parts) => self.emit_string(parts, pre),
             Term::Var(name, ctx) => Ok(hygienic_name(name, *ctx)),
             Term::Alias(segs) => {
@@ -1735,8 +1740,8 @@ impl Codegen {
                 is_call,
             } => {
                 match base.as_ref() {
-                    // :module.fun(...) — remote atom call (GEP-0003-R001/R002)
-                    Term::Atom(module) => {
+                    // $module.fun(...) — remote reference (GEP-0003-R001/R002)
+                    Term::PyRef(module) => {
                         self.py_imports.insert(module.clone());
                         let f = map_ident(name);
                         if *is_call {
@@ -1746,6 +1751,14 @@ impl Codegen {
                             Ok(format!("{module}.{f}"))
                         }
                     }
+                    // revision-1 spelling: atoms are data now (GEP-0003-R009)
+                    Term::Atom(module) => Err(self.err(
+                        span,
+                        format!(
+                            "atoms are data and no longer name Python modules; \
+                             write ${module}.{name} (GEP-0003-R009)"
+                        ),
+                    )),
                     // Mod.fun(...) — Gandora cross-module call (GEP-0001-R017)
                     Term::Alias(segs) => {
                         let resolved = self.resolve_alias(segs);
@@ -2529,6 +2542,10 @@ impl Codegen {
                 Span::default(),
                 "module names are not valid patterns",
             )),
+            Term::PyRef(_) => Err(self.err(
+                Span::default(),
+                "module references are not valid patterns",
+            )),
         }
     }
 
@@ -2807,10 +2824,31 @@ mod tests {
     #[test]
     fn compiles_remote_atom_call() {
         let py = compile(
-            "defmodule M do\n  def f(x) do\n    :math.sqrt(x)\n  end\nend",
+            "defmodule M do\n  def f(x) do\n    $math.sqrt(x)\n  end\nend",
         );
         assert!(py.contains("import math"), "{py}");
         assert!(py.contains("return math.sqrt(x)"), "{py}");
+    }
+
+    #[test]
+    fn bare_module_reference_is_first_class() {
+        // $math alone is the module object (GEP-0003-R002)
+        let py = compile(
+            "defmodule M do\n  def f() do\n    m = $math\n    m.sqrt(4.0)\n  end\nend",
+        );
+        assert!(py.contains("import math"), "{py}");
+        assert!(py.contains("m = math"), "{py}");
+        assert!(py.contains("return m.sqrt(4.0)"), "{py}");
+    }
+
+    #[test]
+    fn atom_dot_is_a_migration_error() {
+        // revision-1 spelling gets the R009 diagnostic
+        let err = compile_err(
+            "defmodule M do\n  def f(x), do: :math.sqrt(x)\nend",
+        );
+        assert!(err.contains("$math.sqrt"), "{err}");
+        assert!(err.contains("GEP-0003-R009"), "{err}");
     }
 
     #[test]
@@ -2855,7 +2893,7 @@ mod tests {
     #[test]
     fn compiles_keyword_args() {
         let py = compile(
-            "defmodule M do\n  def f(data) do\n    :json.dumps(data, indent: 2)\n  end\nend",
+            "defmodule M do\n  def f(data) do\n    $json.dumps(data, indent: 2)\n  end\nend",
         );
         assert!(py.contains("json.dumps(data, indent=2)"), "{py}");
     }
@@ -2898,7 +2936,7 @@ mod tests {
     #[test]
     fn compiles_decorators() {
         let py = compile(
-            "defmodule M do\n  @decorate :functools.cache\n  def f(x) do\n    x\n  end\nend",
+            "defmodule M do\n  @decorate $functools.cache\n  def f(x) do\n    x\n  end\nend",
         );
         assert!(py.contains("@functools.cache"), "{py}");
         assert!(py.contains("import functools"), "{py}");
@@ -3053,7 +3091,7 @@ mod gep0004_tests {
     #[test]
     fn attribute_decorator_chain() {
         let py = compile(
-            "defmodule M do\n  @registry :collections.OrderedDict()\n  @decorate @registry.setdefault\n  def handler(x) do\n    x\n  end\nend",
+            "defmodule M do\n  @registry $collections.OrderedDict()\n  @decorate @registry.setdefault\n  def handler(x) do\n    x\n  end\nend",
         );
         assert!(py.contains("registry = collections.OrderedDict()"), "{py}");
         assert!(py.contains("@registry.setdefault"), "{py}");
@@ -3118,7 +3156,7 @@ mod gep0005_tests {
     #[test]
     fn py_sigil_composes_with_pipes() {
         let py = compile(
-            "defmodule M do\n  def f(xs) do\n    xs |> :builtins.sorted() |> ~python(list)()\n  end\nend",
+            "defmodule M do\n  def f(xs) do\n    xs |> $builtins.sorted() |> ~python(list)()\n  end\nend",
         );
         assert!(py.contains("return (list)(builtins.sorted(xs))"), "{py}");
     }
@@ -3138,7 +3176,7 @@ mod gep0007_tests {
     #[test]
     fn doctests_compile_to_python_doctests() {
         let py = compile(
-            "defmodule M do\n  @doc \"Adds one.\"\n  @example \"\"\"\n    gan> inc(1)\n    2\n    gan> [1, 2] |> :builtins.len()\n    2\n\"\"\"\n  def inc(x), do: x + 1\nend",
+            "defmodule M do\n  @doc \"Adds one.\"\n  @example \"\"\"\n    gan> inc(1)\n    2\n    gan> [1, 2] |> $builtins.len()\n    2\n\"\"\"\n  def inc(x), do: x + 1\nend",
         );
         assert!(py.contains("    >>> inc(1)\n    2"), "{py}");
         assert!(py.contains("    >>> builtins.len([1, 2])\n    2"), "{py}");
@@ -3325,7 +3363,7 @@ mod gep0009_tests {
         // f-string expressions may not contain the delimiter quote before
         // Python 3.12; the compiler hoists such expressions (targetPython 3.11)
         let py = compile(
-            "defmodule M do\n  def f(), do: \"v #{:builtins.len(\"ab\")}\"\nend",
+            "defmodule M do\n  def f(), do: \"v #{$builtins.len(\"ab\")}\"\nend",
         );
         assert!(py.contains("_gan_fstr0 = builtins.len(\"ab\")"), "{py}");
         assert!(py.contains("f\"v {_gan_fstr0}\""), "{py}");
@@ -3334,7 +3372,7 @@ mod gep0009_tests {
     #[test]
     fn value_splices_compile_to_fstrings() {
         let py = compile(
-            "defmodule M do\n  def report(name, xs) do\n    ~markdown\"\"\"\n# Report for <%= name.upper() %>\n\nTotal: <%= xs |> :builtins.sum() %>\n\"\"\"\n  end\nend",
+            "defmodule M do\n  def report(name, xs) do\n    ~markdown\"\"\"\n# Report for <%= name.upper() %>\n\nTotal: <%= xs |> $builtins.sum() %>\n\"\"\"\n  end\nend",
         );
         assert!(py.contains("f\"# Report for {name.upper()}\\n\\nTotal: {builtins.sum(xs)}\\n\""), "{py}");
     }
@@ -3532,7 +3570,7 @@ mod gep0014_tests {
     #[test]
     fn try_rescue_after_compiles_to_python_machinery() {
         let py = compile(
-            "defmodule M do\n  def parse(s) do\n    try do\n      {:ok, :builtins.int(s)}\n    rescue\n      e in :builtins.ValueError -> {:error, to_string(e)}\n      e -> {:error, :unknown}\n    after\n      IO.puts(\"done\")\n    end\n  end\nend",
+            "defmodule M do\n  def parse(s) do\n    try do\n      {:ok, $builtins.int(s)}\n    rescue\n      e in $builtins.ValueError -> {:error, to_string(e)}\n      e -> {:error, :unknown}\n    after\n      IO.puts(\"done\")\n    end\n  end\nend",
         );
         assert!(py.contains("try:"), "{py}");
         assert!(py.contains("except builtins.ValueError as e:"), "{py}");
@@ -3544,7 +3582,7 @@ mod gep0014_tests {
     #[test]
     fn try_is_an_expression() {
         let py = compile(
-            "defmodule M do\n  def f(s) do\n    v = try do\n      :builtins.int(s)\n    rescue\n      _e -> 0\n    end\n    v + 1\n  end\nend",
+            "defmodule M do\n  def f(s) do\n    v = try do\n      $builtins.int(s)\n    rescue\n      _e -> 0\n    end\n    v + 1\n  end\nend",
         );
         assert!(py.contains("return v + 1"), "{py}");
     }

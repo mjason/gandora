@@ -66,10 +66,10 @@ end
 ```elixir
 double = fn x -> x * 2 end
 add = &(&1 + &2)
-sqrt = &:math.sqrt/1
+sqrt = &$math.sqrt/1
 double.(21)
 
-xs |> normalize() |> :builtins.sum()   # first-argument pipe
+xs |> normalize() |> $builtins.sum()   # first-argument pipe
 df |> .groupby("k") |> .agg(spec)      # method pipe: calls ON the piped value
 ```
 
@@ -78,19 +78,19 @@ df |> .groupby("k") |> .agg(spec)      # method pipe: calls ON the piped value
 ## Python 互操作
 
 ```elixir
-:math.sqrt(2.0)                     # import math; math.sqrt(2.0)
-:"os.path".join(a, b)               # dotted modules via quoted atoms
-:sys.argv                           # attribute read
+$math.sqrt(2.0)                     # import math; math.sqrt(2.0)
+$"os.path".join(a, b)               # dotted modules via quoted atoms
+$sys.argv                           # attribute read
 pyimport numpy, as: np              # aliased import
 np.array([1, 2]) * 10               # operators broadcast — it's just Python
 value.method(x).attr                # postfix chains on anything
-:json.dumps(data, indent: 2)        # trailing keywords become kwargs
+$json.dumps(data, indent: 2)        # trailing keywords become kwargs
 ```
 
 装饰器通过 `@decorate` 附加，模块属性持有导入时状态：
 
 ```elixir
-@app :fastapi.FastAPI(title: "API")
+@app $fastapi.FastAPI(title: "API")
 
 @decorate @app.get("/")
 def root(), do: %{hello: "world"}

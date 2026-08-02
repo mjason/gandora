@@ -12,7 +12,7 @@ defmodule Tour.Annotations do
     case attrs do
       [{:cache, maxsize}] ->
         quote do
-          @decorate :functools.lru_cache(maxsize: unquote(maxsize))
+          @decorate $functools.lru_cache(maxsize: unquote(maxsize))
           def unquote(head) do
             unquote(body)
           end
@@ -42,6 +42,6 @@ defmodule Tour.Annotations do
   def main() do
     IO.puts("fib(60) = #{fib(60)}")
     IO.puts("cache   = #{fib.cache_info()}")
-    IO.puts("plain has no cache_info: #{inspect(:builtins.hasattr(plain, "cache_info"))}")
+    IO.puts("plain has no cache_info: #{inspect($builtins.hasattr(plain, "cache_info"))}")
   end
 end

@@ -9,7 +9,7 @@ areas:
   - Standard Library
 created: 2026-08-02
 updated: 2026-08-02
-revision: 2
+revision: 3
 requires: [1, 3, 7]
 replaces: []
 superseded-by: null
@@ -177,7 +177,7 @@ compile time.
 ## Tooling and AI Usage
 
 Agents should prefer stdlib calls over raw interop for list/string/map
-work (`Enum.map(xs, f)` over `:builtins.map`), read semantics with
+work (`Enum.map(xs, f)` over `$builtins.map`), read semantics with
 `gan doc Enum.sort_by`, and treat the stdlib sources as the canonical
 idiom reference.
 
@@ -213,6 +213,8 @@ precedence; pipe usage of each module against an installed
 package's own `gan test` passing every doctest.
 
 ## Change History
+
+- Revision 3, 2026-08-02: Examples updated to the GEP-0003 revision 2 `$` interop syntax.
 
 - Revision 2, 2026-08-02: R005 extended — Enum +14, String +7, Map +5,
   List +4, Keyword +2 functions.

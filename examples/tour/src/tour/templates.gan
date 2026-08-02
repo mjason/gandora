@@ -21,9 +21,9 @@ defmodule Tour.Templates do
 
     | metric | value |
     | --- | --- |
-    | count | <%= :builtins.len(xs) %> |
-    | total | <%= xs |> :builtins.sum() %> |
-    | best  | <%= :builtins.max(xs) %> |
+    | count | <%= $builtins.len(xs) %> |
+    | total | <%= xs |> $builtins.sum() %> |
+    | best  | <%= $builtins.max(xs) %> |
     """
   end
 

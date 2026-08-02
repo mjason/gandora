@@ -145,6 +145,17 @@ fn print_term(term: &Term, level: usize, out: &mut String) {
             }
             out.push('}');
         }
+        Term::PyRef(m) => {
+            let plain = !m.is_empty()
+                && m.chars().all(|c| c.is_alphanumeric() || c == '_')
+                && !m.starts_with(|c: char| c.is_ascii_digit());
+            if plain {
+                out.push('$');
+                out.push_str(m);
+            } else {
+                out.push_str(&format!("$\"{m}\""));
+            }
+        }
         Term::Pair(k, v) => {
             out.push_str(k);
             out.push_str(": ");
@@ -403,7 +414,7 @@ mod tests {
         assert_eq!(roundtrip("1 + 2 * 3"), "1 + 2 * 3");
         assert_eq!(roundtrip("%{a: 1}"), "%{a: 1}");
         assert_eq!(roundtrip("[1, 2, 3]"), "[1, 2, 3]");
-        assert_eq!(roundtrip(":math.sqrt(2.0)"), ":math.sqrt(2.0)");
+        assert_eq!(roundtrip("$math.sqrt(2.0)"), "$math.sqrt(2.0)");
         assert_eq!(roundtrip("\"hi #{name}\""), "\"hi #{name}\"");
     }
 

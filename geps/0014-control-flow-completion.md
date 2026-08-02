@@ -9,7 +9,7 @@ areas:
   - Language
 created: 2026-08-02
 updated: 2026-08-02
-revision: 1
+revision: 2
 requires: [1]
 replaces: []
 superseded-by: null
@@ -60,7 +60,7 @@ deferred.
 try do
   body
 rescue
-  e in :builtins.ValueError -> handled(e)
+  e in $builtins.ValueError -> handled(e)
   e -> fallback(e)
 after
   cleanup()
@@ -74,7 +74,7 @@ the taken branch's value (`after` contributes no value, as in Elixir).
 **GEP-0014-R002:** A rescue pattern `e in Ref` matches when the raised
 Python exception is an instance of `Ref` (any expression evaluating to
 an exception type — typically an interop reference like
-`:builtins.ValueError` or `:json.JSONDecodeError`); bare `e` matches
+`$builtins.ValueError` or `$json.JSONDecodeError`); bare `e` matches
 every `Exception`. The bound variable is the Python exception object,
 whose fields are reachable through ordinary interop
 (`e.args`, `to_string(e)`).
@@ -171,5 +171,7 @@ outside-loop diagnostics; and a million-iteration loop proving
 constant stack.
 
 ## Change History
+
+- Revision 2, 2026-08-02: Examples updated to the GEP-0003 revision 2 `$` interop syntax.
 
 - Revision 1, 2026-08-02: Initial version.

@@ -15,7 +15,7 @@ def cached_add(a, b):
 
 
 def demo():
-    print(f":math.pi           = {math.pi}")
+    print(f"$math.pi           = {math.pi}")
     _gan_fstr0 = j.dumps({"lang": "gandora", "year": 2026}, sort_keys=True)
     print(f"json with kwargs   = {_gan_fstr0}")
     print(f"counter.most_common = {repr(counter.most_common(2))}")

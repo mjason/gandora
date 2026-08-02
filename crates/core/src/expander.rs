@@ -497,6 +497,7 @@ impl Expander {
                 }
                 Ok(Term::Map(out))
             }
+            Term::PyRef(m) => Ok(Term::PyRef(m.clone())),
             Term::Pair(k, v) => Ok(Term::Pair(k.clone(), Box::new(self.eval(v, env, ctx)?))),
             Term::Call(call) => self.eval_call(call, env, ctx),
         }

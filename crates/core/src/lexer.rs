@@ -10,6 +10,8 @@ pub enum Tok {
     /// `~name(body)` — lowercase names interpolate, uppercase are raw
     Sigil(String, Vec<LexStrPart>),
     Atom(String),
+    /// `$module` / `$"dotted.module"` — a Python module reference (GEP-0003)
+    PyRef(String),
     /// lowercase identifier, possibly ending in `?` or `!`
     Ident(String),
     /// Uppercase-leading module segment
@@ -171,6 +173,33 @@ impl<'a> Lexer<'a> {
                 return Ok((Tok::Atom(name), span));
             }
             return Err(self.err("expected an atom after ':'"));
+        }
+        if c == '$' {
+            // Python module reference: $name or $"dotted.name" (GEP-0003-R001)
+            if self.peek_at(1) == Some('"') {
+                self.bump();
+                let tok = self.lex_string()?;
+                if let Tok::Str(parts) = tok {
+                    let mut text = String::new();
+                    for p in parts {
+                        match p {
+                            LexStrPart::Text(t) => text.push_str(&t),
+                            LexStrPart::Interp(_) => {
+                                return Err(self
+                                    .err("interpolation is not allowed in module references"))
+                            }
+                        }
+                    }
+                    return Ok((Tok::PyRef(text), span));
+                }
+                unreachable!();
+            }
+            if matches!(self.peek_at(1), Some(c2) if is_ident_start(c2) || c2.is_uppercase()) {
+                self.bump();
+                let name = self.lex_ident_chars();
+                return Ok((Tok::PyRef(name), span));
+            }
+            return Err(self.err("expected a module name after '$' (GEP-0003-R001)"));
         }
         if is_ident_start(c) {
             let upper = c.is_uppercase();

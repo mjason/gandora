@@ -73,7 +73,7 @@ const INIT_MAIN: &str = r#"defmodule Main do
   def main() do
     IO.puts("Hello from Gandora!")
     IO.puts("2 + 2 * 2 = #{2 + 2 * 2}")
-    IO.puts(":math.sqrt(2.0) = #{:math.sqrt(2.0)}")
+    IO.puts("$math.sqrt(2.0) = #{$math.sqrt(2.0)}")
   end
 end
 "#;

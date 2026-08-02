@@ -20,11 +20,11 @@ defmodule Main do
   """
 
   def main() do
-    args = :builtins.list(:sys.argv) |> Enum.drop(1)
+    args = $builtins.list($sys.argv) |> Enum.drop(1)
     case args do
       [] ->
         IO.puts(@usage)
-        :sys.exit(2)
+        $sys.exit(2)
       ["version" | _] -> version()
       ["build" | _] -> build()
       ["check" | _] -> check()
@@ -42,19 +42,19 @@ defmodule Main do
   defp die_usage(msg) do
     IO.puts("gan: " <> msg)
     IO.puts(@usage)
-    :sys.exit(2)
+    $sys.exit(2)
   end
 
-  defp root(), do: :os.getcwd()
+  defp root(), do: $os.getcwd()
 
   # "execute with the project Python" (GEP-0013-R002): the venv
   # interpreter when the project has one, else the runner's own
   defp project_python() do
     venv = root() <> "/.venv/bin/python"
-    if :"os.path".exists(venv) do
+    if $"os.path".exists(venv) do
       venv
     else
-      :sys.executable
+      $sys.executable
     end
   end
 
@@ -65,7 +65,7 @@ defmodule Main do
     end
   end
 
-  defp runner_version(), do: :"importlib.metadata".version("gandora-tool")
+  defp runner_version(), do: $"importlib.metadata".version("gandora-tool")
 
   def build() do
     try do
@@ -85,7 +85,7 @@ defmodule Main do
     if Enum.empty?(errors) do
       IO.puts("check passed")
     else
-      :sys.exit(1)
+      $sys.exit(1)
     end
   end
 
@@ -93,21 +93,21 @@ defmodule Main do
     cache = root() <> "/.gandora/cache"
     try do
       modules = core.build(root(), cache)
-      abs = to_string(:pathlib.Path(file).resolve())
+      abs = to_string($pathlib.Path(file).resolve())
       target = Enum.find(modules, fn m -> Map.get(m, "source") == abs end)
       cond do
         is_nil(target) ->
           IO.puts("gan: #{file} is not a module of this project")
-          :sys.exit(1)
+          $sys.exit(1)
         is_nil(Map.get(target, "python")) ->
           IO.puts("gan: #{Map.get(target, "module")} defines only macros; nothing to run")
-          :sys.exit(1)
+          $sys.exit(1)
         true ->
           code = subprocess.call(
             [project_python(), "-P", Map.get(target, "python")] ++ args,
-            env: Map.put(:builtins.dict(:os.environ), "PYTHONPATH", cache)
+            env: Map.put($builtins.dict($os.environ), "PYTHONPATH", cache)
           )
-          :sys.exit(code)
+          $sys.exit(code)
       end
     rescue
       e in core.CompileError -> compile_error(e)
@@ -115,18 +115,18 @@ defmodule Main do
   end
 
   def exec_code(code) do
-    eval_line(code, :builtins.dict())
+    eval_line(code, $builtins.dict())
   end
 
   def repl() do
     IO.puts("gan repl (gandora-core #{core.version()}) — Ctrl-D to exit")
-    ns = :builtins.dict()
+    ns = $builtins.dict()
     loop n = 0 do
       line = try do
-        :builtins.input("gan> ")
+        $builtins.input("gan> ")
       rescue
-        _e in :builtins.EOFError -> :eof
-        _e in :builtins.KeyboardInterrupt -> :eof
+        _e in $builtins.EOFError -> :eof
+        _e in $builtins.KeyboardInterrupt -> :eof
       end
       cond do
         line == :eof -> break(n)
@@ -142,16 +142,16 @@ defmodule Main do
   defp eval_line(code, ns) do
     try do
       compiled = core.compile_snippet(code, root())
-      :builtins.exec(compiled, ns)
+      $builtins.exec(compiled, ns)
       result = Map.get(ns, "_")
       if not is_nil(result) do
         IO.puts(inspect(result))
       end
     rescue
       e in core.CompileError ->
-        IO.puts("error: #{Enum.at(:builtins.list(e.args), 0)}")
+        IO.puts("error: #{Enum.at($builtins.list(e.args), 0)}")
       e ->
-        IO.puts("#{:builtins.type(e).__name__}: #{to_string(e)}")
+        IO.puts("#{$builtins.type(e).__name__}: #{to_string(e)}")
     end
   end
 
@@ -188,10 +188,10 @@ defmodule Main do
   end
 
   def init(path) do
-    p = :pathlib.Path(path)
+    p = $pathlib.Path(path)
     if p.exists() do
       IO.puts("gan: #{path} already exists")
-      :sys.exit(1)
+      $sys.exit(1)
     end
     (p / "src").mkdir(parents: true)
     name = to_string(p.resolve().name)
@@ -219,15 +219,15 @@ defmodule Main do
     plugin = find_plugin(cmd)
     ganc = shutil.which("ganc")
     cond do
-      not is_nil(plugin) -> :sys.exit(subprocess.call([plugin] ++ rest))
-      not is_nil(ganc) -> :sys.exit(subprocess.call([ganc, cmd] ++ rest))
+      not is_nil(plugin) -> $sys.exit(subprocess.call([plugin] ++ rest))
+      not is_nil(ganc) -> $sys.exit(subprocess.call([ganc, cmd] ++ rest))
       true -> die_usage("unknown command '#{cmd}' (no gan-#{cmd} plugin, no ganc)")
     end
   end
 
   defp compile_error(e) do
-    args = :builtins.list(e.args)
+    args = $builtins.list(e.args)
     IO.puts("#{Enum.at(args, 1)}:#{Enum.at(args, 2)}:#{Enum.at(args, 3)}: error: #{Enum.at(args, 0)}")
-    :sys.exit(1)
+    $sys.exit(1)
   end
 end

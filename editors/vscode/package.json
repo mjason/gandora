@@ -2,7 +2,7 @@
   "name": "gandora",
   "displayName": "Gandora",
   "description": "Gandora language support via gan lsp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {

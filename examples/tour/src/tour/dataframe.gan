@@ -38,7 +38,7 @@ defmodule Tour.Dataframe do
 
   def main() do
     df = sales()
-    IO.puts("rows = #{:builtins.len(df)}, columns = #{df.columns.tolist()}")
+    IO.puts("rows = #{$builtins.len(df)}, columns = #{df.columns.tolist()}")
 
     top = report(df)
     IO.puts("\nrevenue by product:")

@@ -7,28 +7,28 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server :"pygls.lsp.server".LanguageServer("gan-lsp", "0.2.4",
-    text_document_sync_kind: :"lsprotocol.types".TextDocumentSyncKind.Full)
+  @server $"pygls.lsp.server".LanguageServer("gan-lsp", "0.3.0",
+    text_document_sync_kind: $"lsprotocol.types".TextDocumentSyncKind.Full)
 
-  @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_OPEN)
   def did_open(params) do
     publish(params.text_document.uri, params.text_document.text)
   end
 
-  @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_CHANGE)
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_CHANGE)
   def did_change(params) do
-    text = Enum.at(:builtins.list(params.content_changes), -1).text
+    text = Enum.at($builtins.list(params.content_changes), -1).text
     publish(params.text_document.uri, text)
   end
 
-  @decorate @server.feature(:"lsprotocol.types".TEXT_DOCUMENT_DID_CLOSE)
+  @decorate @server.feature($"lsprotocol.types".TEXT_DOCUMENT_DID_CLOSE)
   def did_close(params) do
     send_diagnostics(params.text_document.uri, [])
   end
 
   defp send_diagnostics(uri, items) do
     @server.text_document_publish_diagnostics(
-      :"lsprotocol.types".PublishDiagnosticsParams(uri: uri, diagnostics: items)
+      $"lsprotocol.types".PublishDiagnosticsParams(uri: uri, diagnostics: items)
     )
   end
 
@@ -54,8 +54,8 @@ defmodule Main do
     send_diagnostics(uri, lsp)
   end
 
-  defp severity("error"), do: :"lsprotocol.types".DiagnosticSeverity.Error
-  defp severity(_), do: :"lsprotocol.types".DiagnosticSeverity.Warning
+  defp severity("error"), do: $"lsprotocol.types".DiagnosticSeverity.Error
+  defp severity(_), do: $"lsprotocol.types".DiagnosticSeverity.Warning
 
   def main() do
     @server.start_io()

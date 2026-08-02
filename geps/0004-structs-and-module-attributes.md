@@ -9,8 +9,8 @@ areas:
   - Language
   - Interop
 created: 2026-08-01
-updated: 2026-08-01
-revision: 1
+updated: 2026-08-02
+revision: 2
 requires: [1, 3]
 replaces: []
 superseded-by: null
@@ -30,7 +30,7 @@ Python `dataclass`, giving Gandora typed-record ergonomics — construction
 update `%User{u | age: 2}` — on top of a class any Python library
 understands. Module attributes `@name expr` compile to module-level
 assignments evaluated at import time, which makes stateful Python
-decorators (`@decorate @app.route("/")` after `@app :flask.Flask(...)`)
+decorators (`@decorate @app.route("/")` after `@app $flask.Flask(...)`)
 expressible without wrapper modules.
 
 ## Motivation
@@ -142,7 +142,7 @@ the natural update form.
 Module attributes diverge from Elixir's compile-time semantics because
 the dominant use case — decorator state like a Flask app — requires one
 shared runtime object, not a value inlined at each use site. Inlining
-`@app :flask.Flask(...)` would create one application per reference,
+`@app $flask.Flask(...)` would create one application per reference,
 which is never what the author means. Import-time assignment matches what
 a Python author would write by hand.
 
@@ -208,5 +208,7 @@ and in `@decorate` chains; and an end-to-end program exercising a
 decorator held in a module attribute.
 
 ## Change History
+
+- Revision 2, 2026-08-02: Examples updated to the GEP-0003 revision 2 `$` interop syntax.
 
 - Revision 1, 2026-08-01: Initial version.

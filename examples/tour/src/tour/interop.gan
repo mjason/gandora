@@ -4,19 +4,19 @@ defmodule Tour.Interop do
   pyimport json, as: j
 
   # a module attribute holds import-time Python state (GEP-0004)
-  @counter :collections.Counter("gandora")
+  @counter $collections.Counter("gandora")
 
   # any Python decorator attaches with @decorate (GEP-0003)
-  @decorate :functools.lru_cache(maxsize: 8)
+  @decorate $functools.lru_cache(maxsize: 8)
   def cached_add(a, b) do
     a + b
   end
 
   def demo() do
-    IO.puts(":math.pi           = #{:math.pi}")
+    IO.puts("$math.pi           = #{$math.pi}")
     IO.puts("json with kwargs   = #{j.dumps(%{lang: "gandora", year: 2026}, sort_keys: true)}")
     IO.puts("counter.most_common = #{inspect(@counter.most_common(2))}")
-    IO.puts("dotted module      = #{:"os.path".join("a", "b")}")
+    IO.puts("dotted module      = #{$"os.path".join("a", "b")}")
     IO.puts("postfix chain      = #{" gandora ".strip().upper()}")
     IO.puts("cached_add(20, 22) = #{cached_add(20, 22)}")
   end

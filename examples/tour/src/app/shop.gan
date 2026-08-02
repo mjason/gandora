@@ -26,6 +26,6 @@ defmodule App.Shop do
     handler = @routes.get("/sale")
     discounted = handler.(item)
     IO.puts("#{discounted.name} now #{discounted.price}, tags #{inspect(discounted.tags)}")
-    IO.puts("registered routes: #{inspect(:builtins.list(@routes.keys()))}")
+    IO.puts("registered routes: #{inspect($builtins.list(@routes.keys()))}")
   end
 end

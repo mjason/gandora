@@ -17,6 +17,9 @@ pub enum Term {
     /// A string literal as interpolation parts.
     Str(Vec<StrPart>),
     Atom(String),
+    /// `$module` — a Python module reference, a first-class module
+    /// object at runtime (GEP-0003-R001/R002).
+    PyRef(String),
     /// A lowercase identifier reference. `ctx` is the hygiene context:
     /// `None` for user-written code, `Some(id)` for macro-template names.
     Var(String, Option<u64>),

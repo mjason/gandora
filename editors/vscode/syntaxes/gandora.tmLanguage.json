@@ -52,6 +52,9 @@
       "include": "#keyword"
     },
     {
+      "include": "#pyref"
+    },
+    {
       "include": "#atom"
     },
     {
@@ -1041,6 +1044,18 @@
               "include": "source.json.comments"
             }
           ]
+        }
+      ]
+    },
+    "pyref": {
+      "patterns": [
+        {
+          "match": "\\$[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.namespace.python.gandora"
+        },
+        {
+          "match": "\\$\"[^\"\\n]*\"",
+          "name": "entity.name.namespace.python.gandora"
         }
       ]
     }

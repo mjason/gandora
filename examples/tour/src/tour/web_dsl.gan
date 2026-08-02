@@ -16,7 +16,7 @@ defmodule Tour.WebDsl do
 
   defmacro __using__(opts) do
     quote do
-      @app :fastapi.FastAPI(unquote(opts))
+      @app $fastapi.FastAPI(unquote(opts))
 
       def asgi(), do: @app
     end

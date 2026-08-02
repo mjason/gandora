@@ -11,7 +11,7 @@ areas:
   - Configuration
 created: 2026-08-01
 updated: 2026-08-02
-revision: 4
+revision: 5
 requires: [0]
 replaces: []
 superseded-by: null
@@ -32,9 +32,10 @@ projects, and the `gan` command-line interface.
 
 Gandora deliberately adopts Elixir's surface: `defmodule`/`def` with
 `do ... end` blocks, atoms, pattern matching, the `|>` pipe, and
-`defmacro`-based metaprogramming. Where Elixir reaches its host platform
-through `:erlang` atom calls, Gandora reaches Python the same way: `:math`,
-`:json`, or any installed module is callable without wrapper code.
+`defmacro`-based metaprogramming. Where Elixir reaches its host
+platform through `:erlang` calls, Gandora reaches Python through the
+`$` sigil: `$math`, `$json`, or any installed module is callable
+without wrapper code (GEP-0003).
 
 ## Motivation
 
@@ -65,7 +66,7 @@ future GEPs.
 - **Project**: a directory tree governed by one `gandora.jsonc` and one
   `pyproject.toml`.
 - **Generated module**: the Python file produced for one Gandora module.
-- **Remote atom call**: the `:module.function(args)` form that calls into
+- **Remote atom call**: the `$module.function(args)` form that calls into
   Python (GEP-0003).
 - **Entry function**: the zero-argument or one-argument `main` function used
   by `gan run`.
@@ -126,8 +127,8 @@ MUST be recorded in a GEP.
   optional `when` guards;
 - `alias`, `import`, and `require` with `as:`, `only:`, and `except:`
   options following Elixir semantics;
-- remote atom calls and `expr.name`/`expr.name(args)` postfix access
-  (GEP-0003).
+- remote `$` references and `expr.name`/`expr.name(args)` postfix
+  access (GEP-0003).
 
 **GEP-0001-R007:** A construct outside the v0 surface MUST produce a
 diagnostic naming the unsupported construct; the compiler MUST NOT silently
@@ -350,6 +351,9 @@ R021–R024. The repository's test suite maps test names to these requirement
 identifiers.
 
 ## Change History
+
+- Revision 5, 2026-08-02: Interop references follow GEP-0003 revision 2
+  (`$module` instead of atom calls) throughout.
 
 - Revision 4, 2026-08-02: Added R026, Elixir heredoc dedent semantics.
 

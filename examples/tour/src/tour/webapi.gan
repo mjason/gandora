@@ -20,14 +20,14 @@ defmodule Tour.Webapi do
   end
 
   get :fact_route, "/fact/{n}", [n] do
-    %{n: n, fact: fact(:builtins.int(n))}
+    %{n: n, fact: fact($builtins.int(n))}
   end
 
   defp fact(0), do: 1
   defp fact(n), do: n * fact(n - 1)
 
   def main() do
-    client = :"fastapi.testclient".TestClient(@app)
+    client = $"fastapi.testclient".TestClient(@app)
     resp = client.get("/")
     IO.puts("GET /                 -> #{resp.status_code} #{resp.json()}")
     resp = client.get("/slug/Hello Gandora World")

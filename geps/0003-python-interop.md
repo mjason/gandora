@@ -1,7 +1,7 @@
 ---
 gep: 3
 title: Python Interop
-description: Wrapper-free access to Python through remote atom calls, pyimport, postfix access, and decorator declarations.
+description: Wrapper-free access to Python through first-class $module references, pyimport, postfix access, and decorator declarations.
 author: MJ
 status: Accepted
 type: Standards Track
@@ -9,8 +9,8 @@ areas:
   - Language
   - Interop
 created: 2026-08-01
-updated: 2026-08-01
-revision: 1
+updated: 2026-08-02
+revision: 2
 requires: [1]
 replaces: []
 superseded-by: null
@@ -23,11 +23,13 @@ translations:
 
 ## Abstract
 
-Gandora reaches Python the way Elixir reaches Erlang: an atom names the
-foreign module, and a call on that atom is a direct call into it.
-`:math.sqrt(2.0)` compiles to `import math` plus `math.sqrt(2.0)` with no
-wrapper, registry, or runtime shim. `pyimport` declares aliased imports,
-postfix `.name` access works on any value, and `@decorate` attaches Python
+Gandora reaches into its host with one sigil: `$` names a foreign
+Python module, and everything after it is direct access.
+`$math.sqrt(2.0)` compiles to `import math` plus `math.sqrt(2.0)` with
+no wrapper, registry, or runtime shim, and `$math` alone is the module
+object itself — a first-class value. Atoms (`:ok`) are pure data and
+never name modules. `pyimport` declares aliased imports, postfix
+`.name` access works on any value, and `@decorate` attaches Python
 decorators to generated functions.
 
 ## Motivation
@@ -47,20 +49,30 @@ signatures are deferred to a future GEP.
 
 ## Terminology
 
-- **Remote atom call**: `:module.function(args)` or attribute read
-  `:module.attribute`.
-- **Foreign module**: the Python module named by an atom or `pyimport`.
+- **Remote reference**: `$module`, `$module.function(args)`, or
+  attribute read `$module.attribute`.
+- **Foreign module**: the Python module named by a `$` reference or
+  `pyimport`.
 
 ## Specification
 
-**GEP-0003-R001:** An atom in call position names a foreign Python module:
-`:math.sqrt(x)` compiles to a module-level `import math` and the expression
-`math.sqrt(x)`. A dotted module uses a quoted atom: `:"os.path".join(a, b)`
-compiles to `import os.path` and `os.path.join(a, b)`.
+**GEP-0003-R001:** `$name` is a remote reference to the Python module
+`name` — any identifier, including uppercase (`$PIL`). A call through
+it compiles to a module-level import plus the direct expression:
+`$math.sqrt(x)` becomes `import math` and `math.sqrt(x)`. A dotted
+module uses the quoted form: `$"os.path".join(a, b)` compiles to
+`import os.path` and `os.path.join(a, b)`.
 
-**GEP-0003-R002:** `:module.name` without a call is an attribute read
-(`sys.argv` for `:sys.argv`). `:module` alone evaluates to the module
-object.
+**GEP-0003-R002:** `$module.name` without a call is an attribute read
+(`sys.argv` for `$sys.argv`). `$module` alone evaluates to the module
+object and is a first-class value: it can be bound, passed, stored in
+collections, and used wherever Python accepts a module —
+`m = $math; m.sqrt(4.0)`, `rescue e in $builtins.ValueError`.
+
+**GEP-0003-R009:** Atoms are pure data (GEP-0001-R010) and never name
+modules. An atom followed by `.` and an identifier is a compile error
+whose message names this rule and shows the `$` spelling — the
+migration diagnostic for revision-1 sources.
 
 **GEP-0003-R003:** `pyimport module` and `pyimport module, as: alias` are
 top-level declarations compiling to `import module` /
@@ -78,7 +90,7 @@ Python attribute access.
 
 **GEP-0003-R005:** Calls (remote, method, local, and captured) MUST support
 Elixir keyword-argument syntax in the final position, compiling to Python
-keyword arguments: `:json.dumps(data, indent: 2)` compiles to
+keyword arguments: `$json.dumps(data, indent: 2)` compiles to
 `json.dumps(data, indent=2)`. Keyword keys MUST be valid Python identifiers
 after the GEP-0001-R015 mapping.
 
@@ -99,11 +111,17 @@ Python's standard `ModuleNotFoundError`.
 
 ## Rationale
 
-The `:erlang`-style atom call is the smallest possible interop surface: it
-needs no declaration for one-off calls, reads unambiguously (a leading `:`
-marks the foreign boundary), and compiles to exactly the Python a reviewer
-expects. `pyimport` exists for the aliased, repeated-use case (`np`, `pd`)
-where atoms would be noisy.
+Revision 1 borrowed Elixir's `:erlang` convention, but the pun is
+semantically true only in Elixir, where modules literally are atoms.
+Here `:math` the value was a string while `$math.sqrt` was a module
+reference — one spelling, two meanings, distinguishable only by the
+trailing dot, and module references could never be first-class. `$`
+splits the roles: `:` is always data, `$` is always the host
+environment (the shell-variable intuition), the two highlight
+differently, and `$module` gains honest module-object semantics.
+It needs no declaration for one-off calls and compiles to exactly the
+Python a reviewer expects. `pyimport` remains for the aliased,
+repeated-use case (`np`, `pd`) where references would be noisy.
 
 Not checking foreign modules at compile time preserves the guarantee that
 compilation never imports Python — the property that keeps builds
@@ -111,8 +129,10 @@ deterministic and safe (the compiler reads only static metadata).
 
 ## Backwards Compatibility
 
-Founding interop proposal. R001–R005 syntax and the compiled-output shapes
-are the compatibility contract.
+Revision 2 is a breaking syntax change: `$module.name` references from
+revision 1 no longer compile. The R009 diagnostic points every such
+site at the `$` spelling, and the migration is a mechanical rewrite;
+compiled-output shapes are unchanged.
 
 ## Security and Determinism
 
@@ -123,7 +143,7 @@ Python could do.
 
 ## Tooling and AI Usage
 
-Agents should prefer remote atom calls for one-off standard-library use and
+Agents should prefer remote `$` references for one-off standard-library use and
 `pyimport ... as:` for libraries used repeatedly, and should not generate
 wrapper modules around Python APIs — the absence of wrappers is the design.
 
@@ -148,12 +168,17 @@ None for v0.
 
 ## Conformance
 
-Tests MUST cover: atom calls with plain and quoted (dotted) modules,
-attribute reads, module-object references, `pyimport` with and without
+Tests MUST cover: `$` calls with plain and quoted (dotted) modules,
+attribute reads, first-class module-object references (bound and
+passed), the R009 atom-dot diagnostic, `pyimport` with and without
 `as:`, postfix chains on expressions, keyword arguments on every call kind,
 decorator stacking order, and the absence of compile-time imports (compiling
 a file referencing a nonexistent module succeeds).
 
 ## Change History
+
+- Revision 2, 2026-08-02: Interop moved from atom calls to the `$`
+  sigil (R001/R002 rewritten, R009 added): `:` is now pure data, and
+  `$module` is a first-class module reference.
 
 - Revision 1, 2026-08-01: Initial version.

@@ -51,7 +51,7 @@ defmodule List do
     do: ~python(<%= xs %>[:<%= index %>] + <%= xs %>[<%= index %>:][1:])
   @doc "The list as a tuple."
   @doc_trans zh_CN: "转换为元组的列表。"
-  def to_tuple(xs), do: :builtins.tuple(xs)
+  def to_tuple(xs), do: $builtins.tuple(xs)
 
   @doc "Whether the list starts with `prefix`."
   @doc_trans zh_CN: "是否以 `prefix` 开头。"

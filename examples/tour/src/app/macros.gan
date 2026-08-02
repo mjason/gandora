@@ -13,7 +13,7 @@ defmodule App.Macros do
   # unquote_splicing inlines a list of syntax into the surrounding form
   defmacro sum_all(items) do
     quote do
-      :builtins.sum([unquote_splicing(items)])
+      $builtins.sum([unquote_splicing(items)])
     end
   end
 
@@ -21,10 +21,10 @@ defmodule App.Macros do
   # var!(timer_result) deliberately escapes into the caller's scope
   defmacro with_timer(label, body) do
     quote do
-      start = :time.perf_counter()
+      start = $time.perf_counter()
       var!(timer_result) = unquote(body)
-      elapsed = :time.perf_counter() - start
-      IO.puts("#{unquote(label)} took #{:builtins.round(elapsed * 1000, 3)} ms")
+      elapsed = $time.perf_counter() - start
+      IO.puts("#{unquote(label)} took #{$builtins.round(elapsed * 1000, 3)} ms")
       var!(timer_result)
     end
   end

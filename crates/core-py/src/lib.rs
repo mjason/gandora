@@ -44,6 +44,13 @@ fn term_to_py(py: Python, t: &Term) -> PyObject {
         Term::Bool(b) => b.into_py(py),
         Term::Nil => py.None(),
         Term::Atom(a) => a.into_py(py),
+        // {:__pyref__, [], ["math"]} — a $module reference (GEP-0003-R001)
+        Term::PyRef(m) => {
+            let name: PyObject = "__pyref__".into_py(py);
+            let meta = PyList::empty_bound(py).into_py(py);
+            let args: PyObject = PyList::new_bound(py, [m.into_py(py)]).into_py(py);
+            PyTuple::new_bound(py, [name, meta, args]).into_py(py)
+        }
         Term::Str(parts) => match t.as_plain_str() {
             Some(s) => s.into_py(py),
             None => {

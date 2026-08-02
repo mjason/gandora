@@ -4,8 +4,8 @@ Gandora is the project for `gan`, a compiler for an Elixir-flavored language
 that produces readable Python. You write Elixir-style modules, pattern
 matching, pipelines, and hygienic `defmacro` macros; deployment is ordinary
 Python managed by `uv` with the standard `.venv` layout. Where Elixir reaches
-its host platform through `:erlang` atom calls, Gandora reaches Python the
-same way: `:math.sqrt(2.0)` compiles to `import math` plus `math.sqrt(2.0)`
+its host platform through `:erlang` calls, Gandora reaches Python through
+the `$` sigil: `$math.sqrt(2.0)` compiles to `import math` plus `math.sqrt(2.0)`
 with no wrapper code.
 
 ```elixir
@@ -22,10 +22,10 @@ defmodule App.Mathy do
   end
 
   defp sum_squares(xs) do
-    :functools.reduce(fn acc, x -> acc + x * x end, xs, 0)
+    $functools.reduce(fn acc, x -> acc + x * x end, xs, 0)
   end
 
-  defp then_sqrt(x), do: :math.sqrt(x)
+  defp then_sqrt(x), do: $math.sqrt(x)
 end
 ```
 
@@ -132,7 +132,7 @@ functions and captures (`&Mod.fun/1`, `&(&1 + 1)`), destructuring `=`,
 calls, `pyimport`, postfix `expr.name(...)`, `@decorate`), and the
 GEP-0004 data declarations: `defstruct` (a frozen `@dataclass` with
 `%Mod{...}` literals, patterns, and `%Mod{s | f: v}` updates) plus module
-attributes (`@app :flask.Flask("__main__")` compiles to a module-level
+attributes (`@app $flask.Flask("__main__")` compiles to a module-level
 binding, so `@decorate @app.route("/")` works like hand-written Python).
 GEP-0005 adds sigils: `~w(a b c)` word lists, `~s(...)` strings,
 `~r/\d+/` compiled Python regexes, and `~python(sum(i*i for i in range(n)))`

@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-02
 updated: 2026-08-02
-revision: 1
+revision: 2
 requires: [1, 2, 6]
 replaces: []
 superseded-by: null
@@ -27,7 +27,7 @@ The compiler becomes three artifacts built from one Rust codebase: the
 `gandora-core` library crate (the single source of language rules), the
 `gan` binary (a thin CLI over it), and the `gandora-core` Python
 extension wheel (PyO3/abi3) that any Python process — and therefore any
-Gandora program, via interop — can import. `:gandora_core.parse(src)`
+Gandora program, via interop — can import. `$gandora_core.parse(src)`
 returns the quoted term as native Gandora data in the Elixir encoding,
 so pattern matching works on the language's own syntax in-process. This
 is the foundation on which the task runner, REPL, LSC, and LSP are
@@ -112,6 +112,7 @@ convention, realized in the GEP-0001-R009 data mapping:
 | interpolated string | `("__interp__", meta, [part, ...])` |
 | variable | `(name, meta, context)` — context `None` or an int |
 | module alias | `("__aliases__", meta, [segment, ...])` |
+| module reference `$name` | `("__pyref__", meta, [name])` |
 | list | `list` |
 | 2-tuple | Python 2-`tuple` |
 | n-tuple (n ≠ 2) | `("{}", meta, [item, ...])` |
@@ -211,5 +212,7 @@ node-vs-data tuple disambiguation and interpolated strings);
 CompileError fields; and `version()` equality with the crate version.
 
 ## Change History
+
+- Revision 2, 2026-08-02: Added the `__pyref__` quoted-term encoding for `$` module references; examples updated to GEP-0003 revision 2.
 
 - Revision 1, 2026-08-02: Initial version.

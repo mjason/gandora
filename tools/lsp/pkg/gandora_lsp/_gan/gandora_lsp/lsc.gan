@@ -21,20 +21,20 @@ defmodule Lsc do
   """
 
   def main() do
-    args = :builtins.list(:sys.argv) |> Enum.drop(1)
+    args = $builtins.list($sys.argv) |> Enum.drop(1)
     {root, args} = take_root(args)
     try do
       dispatch(args, root)
     rescue
       e in core.CompileError ->
-        parts = :builtins.list(e.args)
+        parts = $builtins.list(e.args)
         emit(%{
           "error" => Enum.at(parts, 0),
           "path" => Enum.at(parts, 1),
           "line" => Enum.at(parts, 2),
           "col" => Enum.at(parts, 3)
         })
-        :sys.exit(1)
+        $sys.exit(1)
     end
   end
 
@@ -54,20 +54,20 @@ defmodule Lsc do
         emit(core.resolve(root, module))
       _ ->
         IO.puts(@usage)
-        :sys.exit(2)
+        $sys.exit(2)
     end
   end
 
   defp take_root(args) do
     case Enum.find_index(args, fn a -> a == "--root" end) do
-      nil -> {:os.getcwd(), args}
+      nil -> {$os.getcwd(), args}
       i ->
         root = Enum.at(args, i + 1)
         {root, Enum.take(args, i) ++ Enum.drop(args, i + 2)}
     end
   end
 
-  defp read(file), do: :pathlib.Path(file).read_text()
+  defp read(file), do: $pathlib.Path(file).read_text()
 
   defp emit(value), do: IO.puts(json.dumps(value))
 end

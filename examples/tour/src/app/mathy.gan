@@ -57,9 +57,9 @@ defmodule App.Mathy do
   end
 
   defp sum_squares(xs) do
-    total = :functools.reduce(fn acc, x -> acc + x * x end, xs, 0)
+    total = $functools.reduce(fn acc, x -> acc + x * x end, xs, 0)
     total
   end
 
-  defp then_sqrt(x), do: :math.sqrt(x)
+  defp then_sqrt(x), do: $math.sqrt(x)
 end

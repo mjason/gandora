@@ -24,11 +24,11 @@ defmodule Map do
 
   @doc "The keys as a list."
   @doc_trans zh_CN: "键的列表。"
-  def keys(m), do: :builtins.list(m.keys())
+  def keys(m), do: $builtins.list(m.keys())
 
   @doc "The values as a list."
   @doc_trans zh_CN: "值的列表。"
-  def values(m), do: :builtins.list(m.values())
+  def values(m), do: $builtins.list(m.values())
 
   @doc "Merges `m2` into `m1`; `m2` wins on conflicts."
   @doc_trans zh_CN: "将 `m2` 并入 `m1`；冲突时 `m2` 胜出。"
@@ -40,7 +40,7 @@ defmodule Map do
 
   @doc "The entries as a list of `{key, value}` tuples."
   @doc_trans zh_CN: "以 `{键, 值}` 元组列表表示的条目。"
-  def to_list(m), do: :builtins.list(m.items())
+  def to_list(m), do: $builtins.list(m.items())
 
   @doc "An empty map."
   @doc_trans zh_CN: "空映射。"

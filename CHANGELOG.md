@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.0 — 2026-08-02
+
+**Breaking: Python interop moves from `:module` to `$module`
+(GEP-0003 revision 2).** `:` is now pure data — Elixir's atom pun is
+only true where modules are atoms, and the one-spelling-two-meanings
+ambiguity read badly. The dividend: `$module` is a **first-class
+module reference** — `m = $math; m.sqrt(4.0)`, modules in
+collections, `rescue e in $builtins.ValueError`. Dotted modules keep
+the quoted form (`$"os.path"`). Every revision-1 spelling gets a
+targeted compile error showing the `$` rewrite; migration is
+mechanical. Quoted-term encoding adds `("__pyref__", meta, [name])`
+(GEP-0012). The VS Code grammar highlights `$` references as
+namespaces.
+
 ## v0.2.4 — 2026-08-02
 
 - **Parser: block constructs are expressions everywhere.** `if`,
