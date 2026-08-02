@@ -33,6 +33,7 @@ pub enum LexStrPart {
 
 const KEYWORDS: &[&str] = &[
     "do", "end", "fn", "else", "when", "and", "or", "not", "true", "false", "nil",
+    "rescue", "after", "in",
 ];
 
 pub struct Lexer<'a> {

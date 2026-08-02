@@ -299,6 +299,8 @@ pub struct Codegen {
     /// true after `compile` when the module defines no runtime code
     /// (macros only) and should produce no Python file (GEP-0002-R009).
     pub compile_time_only: bool,
+    /// (state_var, result_var) of enclosing `loop`s (GEP-0014)
+    loop_stack: Vec<(String, String)>,
     tmp_counter: usize,
     tmp_names: Vec<String>,
     fn_counter: usize,
@@ -324,6 +326,7 @@ impl Codegen {
             struct_fields: None,
             warnings: Vec::new(),
             compile_time_only: false,
+            loop_stack: Vec::new(),
             tmp_counter: 0,
             tmp_names: Vec::new(),
             fn_counter: 0,
@@ -1059,6 +1062,36 @@ impl Codegen {
                         "case" => return self.emit_case(call, dest, out),
                         "cond" => return self.emit_cond(call, dest, out),
                         "with" => return self.emit_with(call, dest, out),
+                        "try" => return self.emit_try(call, dest, out),
+                        "loop" => return self.emit_loop(call, dest, out),
+                        "recur" | "break" => {
+                            let Some((state, result)) = self.loop_stack.last().cloned() else {
+                                return Err(self.err(
+                                    call.span,
+                                    format!(
+                                        "{name} is only valid inside a loop body \
+                                         (GEP-0014-R005)"
+                                    ),
+                                ));
+                            };
+                            if call.args.len() != 1 {
+                                return Err(self.err(
+                                    call.span,
+                                    format!("{name} takes exactly one argument"),
+                                ));
+                            }
+                            let mut pre = Vec::new();
+                            let e = self.emit_expr(&call.args[0], &mut pre)?;
+                            out.extend(pre);
+                            if name == "recur" {
+                                out.push(format!("{state} = {e}"));
+                                out.push("continue".into());
+                            } else {
+                                out.push(format!("{result} = {e}"));
+                                out.push("break".into());
+                            }
+                            return Ok(());
+                        }
                         "raise" => {
                             let mut pre = Vec::new();
                             let msg = match call.args.first() {
@@ -1348,6 +1381,165 @@ impl Codegen {
         self.emit_stmt(&current, dest, out)
     }
 
+    /// try/rescue/after (GEP-0014-R001..R003).
+    fn emit_try(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
+        let body = Term::keyword_arg(&call.args, "do")
+            .ok_or_else(|| self.err(call.span, "try requires a do block"))?
+            .clone();
+        let rescue = Term::keyword_arg(&call.args, "rescue").cloned();
+        let after = Term::keyword_arg(&call.args, "after").cloned();
+        if rescue.is_none() && after.is_none() {
+            return Err(self.err(
+                call.span,
+                "try requires rescue and/or after (GEP-0014-R003)",
+            ));
+        }
+        out.push("try:".into());
+        let mut body_lines = Vec::new();
+        self.emit_stmt_block(&body, dest, &mut body_lines)?;
+        if body_lines.is_empty() {
+            body_lines.push("pass".into());
+        }
+        push_indented(out, &body_lines);
+        if let Some(rescue) = rescue {
+            let clauses = self.clause_list(&rescue, call.span)?;
+            let clauses: Vec<Term> = clauses.into_iter().cloned().collect();
+            for clause in &clauses {
+                let Term::Call(c) = clause else { continue };
+                let Term::List(pats) = &c.args[0] else { continue };
+                let (var, ty) = match &pats[0] {
+                    Term::Var(n, ctx) => (hygienic_name(n, *ctx), None),
+                    Term::Call(inc)
+                        if matches!(&inc.callee, Callee::Name(n) if n == "in")
+                            && inc.args.len() == 2 =>
+                    {
+                        let Term::Var(n, ctx) = &inc.args[0] else {
+                            return Err(self.err(
+                                inc.span,
+                                "rescue patterns are `e` or `e in Type` (GEP-0014-R002)",
+                            ));
+                        };
+                        let mut pre = Vec::new();
+                        let te = self.emit_expr(&inc.args[1], &mut pre)?;
+                        if !pre.is_empty() {
+                            return Err(self.err(
+                                inc.span,
+                                "rescue types must be simple expressions",
+                            ));
+                        }
+                        (hygienic_name(n, *ctx), Some(te))
+                    }
+                    other => {
+                        return Err(self.err(
+                            c.span,
+                            format!(
+                                "rescue patterns are `e` or `e in Type`, found {other:?} \
+                                 (GEP-0014-R002)"
+                            ),
+                        ))
+                    }
+                };
+                let ty = ty.unwrap_or_else(|| "Exception".to_string());
+                out.push(format!("except {ty} as {var}:"));
+                let mut arm = Vec::new();
+                self.emit_stmt_block(&c.args[1], dest, &mut arm)?;
+                if arm.is_empty() {
+                    arm.push("pass".into());
+                }
+                push_indented(out, &arm);
+            }
+        }
+        if let Some(after) = after {
+            out.push("finally:".into());
+            let mut fin = Vec::new();
+            self.emit_stmt_block(&after, Dest::Ignore, &mut fin)?;
+            if fin.is_empty() {
+                fin.push("pass".into());
+            }
+            push_indented(out, &fin);
+        }
+        Ok(())
+    }
+
+    /// loop/recur/break (GEP-0014-R004..R006).
+    fn emit_loop(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
+        let head = call
+            .args
+            .first()
+            .ok_or_else(|| self.err(call.span, "loop requires `pattern = initial`"))?;
+        let (pat, init) = match head {
+            Term::Call(c) if matches!(&c.callee, Callee::Name(n) if n == "=") => {
+                (c.args[0].clone(), c.args[1].clone())
+            }
+            other => {
+                return Err(self.err(
+                    call.span,
+                    format!("loop requires `pattern = initial`, found {other:?}"),
+                ))
+            }
+        };
+        let body = Term::keyword_arg(&call.args, "do")
+            .ok_or_else(|| self.err(call.span, "loop requires a do block"))?
+            .clone();
+        let s = self.fresh_tmp("loop");
+        let state = self.tmp(s).to_string();
+        let r = self.fresh_tmp("res");
+        let result = self.tmp(r).to_string();
+        let mut pre = Vec::new();
+        let init_e = self.emit_expr(&init, &mut pre)?;
+        out.extend(pre);
+        out.push(format!("{state} = {init_e}"));
+        out.push(format!("{result} = None"));
+        out.push("while True:".into());
+        let mut inner: Vec<String> = Vec::new();
+        // rebind the state pattern each iteration (GEP-0014-R005)
+        match &pat {
+            Term::Var(n, ctx) if n != "_" => {
+                inner.push(format!("{} = {state}", hygienic_name(n, *ctx)));
+            }
+            _ => {
+                let mut guards = Vec::new();
+                let p = self.compile_pattern(&pat, &mut guards)?;
+                self.helpers.insert("match_error");
+                inner.push(format!("match {state}:"));
+                let case_line = if guards.is_empty() {
+                    format!("case {p}:")
+                } else {
+                    format!("case {p} if {}:", guards.join(" and "))
+                };
+                push_indented(&mut inner, &[case_line, "    pass".into()]);
+                push_indented(
+                    &mut inner,
+                    &[
+                        "case _:".into(),
+                        format!(
+                            "    raise GanMatchError(\"loop state did not match: \" + repr({state}))"
+                        ),
+                    ],
+                );
+            }
+        }
+        self.loop_stack.push((state.clone(), result.clone()));
+        let body_result = (|| -> Result<()> {
+            let stmts = body.as_block();
+            for (i, stmt) in stmts.iter().enumerate() {
+                if i + 1 == stmts.len() {
+                    let d = Dest::Assign(r);
+                    self.emit_stmt(stmt, d, &mut inner)?;
+                } else {
+                    self.emit_stmt(stmt, Dest::Ignore, &mut inner)?;
+                }
+            }
+            Ok(())
+        })();
+        self.loop_stack.pop();
+        body_result?;
+        inner.push("break".into());
+        push_indented(out, &inner);
+        self.finish_value(result, dest, out);
+        Ok(())
+    }
+
     // ---- expressions -----------------------------------------------------
 
     /// Emit an expression that will be used as a Python condition.
@@ -1367,7 +1559,7 @@ impl Codegen {
             Term::Call(c) => match &c.callee {
                 Callee::Name(n) => matches!(
                     n.as_str(),
-                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "not" | "and" | "or"
+                    "==" | "!=" | "<" | ">" | "<=" | ">=" | "not" | "and" | "or" | "in"
                 ) && {
                     if n == "and" || n == "or" {
                         c.args.iter().all(|a| self.is_boolean_shaped(a))
@@ -1657,6 +1849,11 @@ impl Codegen {
                 let b = self.emit_operand(&args[1], name, pre)?;
                 Ok(format!("{a} {name} {b}"))
             }
+            ("in", 2) => {
+                let a = self.emit_operand(&args[0], "in", pre)?;
+                let b = self.emit_operand(&args[1], "in", pre)?;
+                Ok(format!("{a} in {b}"))
+            }
             ("and", 2) | ("or", 2) => {
                 if self.is_boolean_shaped(&args[0]) && self.is_boolean_shaped(&args[1]) {
                     let a = self.emit_operand(&args[0], name, pre)?;
@@ -1866,7 +2063,13 @@ impl Codegen {
                 pre.extend(lines);
                 Ok(self.tmp(t).to_string())
             }
-            ("if", _) | ("unless", _) | ("case", _) | ("cond", _) | ("with", _) => {
+            ("recur", 1) | ("break", 1) => Err(self.err(
+                call.span,
+                "recur/break are statements; use them directly in a loop body \
+                 (GEP-0014-R005)",
+            )),
+            ("if", _) | ("unless", _) | ("case", _) | ("cond", _) | ("with", _) | ("try", _)
+            | ("loop", _) => {
                 let t = self.fresh_tmp("tmp");
                 let mut lines = Vec::new();
                 self.emit_stmt(&Term::Call(Box::new(call.clone())), Dest::Assign(t), &mut lines)?;
@@ -1968,7 +2171,7 @@ impl Codegen {
             _ => {
                 // unsupported special surface forms produce a named diagnostic
                 const UNSUPPORTED: &[&str] = &[
-                    "defstruct", "defprotocol", "defimpl", "receive", "try", "for", "send",
+                    "defstruct", "defprotocol", "defimpl", "receive", "for", "send",
                     "spawn", "defdelegate", "defguard", "sigil",
                 ];
                 if UNSUPPORTED.contains(&name) {
@@ -3279,4 +3482,62 @@ pub fn compile_snippet(
         out.push('\n');
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod gep0014_tests {
+    use super::tests_helpers::{compile, compile_err};
+
+    #[test]
+    fn try_rescue_after_compiles_to_python_machinery() {
+        let py = compile(
+            "defmodule M do\n  def parse(s) do\n    try do\n      {:ok, :builtins.int(s)}\n    rescue\n      e in :builtins.ValueError -> {:error, to_string(e)}\n      e -> {:error, :unknown}\n    after\n      IO.puts(\"done\")\n    end\n  end\nend",
+        );
+        assert!(py.contains("try:"), "{py}");
+        assert!(py.contains("except builtins.ValueError as e:"), "{py}");
+        assert!(py.contains("except Exception as e:"), "{py}");
+        assert!(py.contains("finally:"), "{py}");
+        assert!(py.contains("print(\"done\")"), "{py}");
+    }
+
+    #[test]
+    fn try_is_an_expression() {
+        let py = compile(
+            "defmodule M do\n  def f(s) do\n    v = try do\n      :builtins.int(s)\n    rescue\n      _e -> 0\n    end\n    v + 1\n  end\nend",
+        );
+        assert!(py.contains("return v + 1"), "{py}");
+    }
+
+    #[test]
+    fn loop_recur_break_compile_to_while() {
+        let py = compile(
+            "defmodule M do\n  def count_to(n) do\n    loop {acc, i} = {0, 0} do\n      if i >= n do\n        break(acc)\n      else\n        recur({acc + i, i + 1})\n      end\n    end\n  end\nend",
+        );
+        assert!(py.contains("while True:"), "{py}");
+        assert!(py.contains("continue"), "{py}");
+        assert!(py.contains("break"), "{py}");
+        assert!(py.contains("case (acc, i)"), "{py}");
+    }
+
+    #[test]
+    fn recur_outside_loop_is_an_error() {
+        let err = compile_err("defmodule M do\n  def f(), do: recur(1)\nend");
+        assert!(err.contains("GEP-0014-R005"), "{err}");
+    }
+
+    #[test]
+    fn try_without_rescue_or_after_is_an_error() {
+        let err = compile_err(
+            "defmodule M do\n  def f() do\n    try do\n      1\n    end\n  end\nend",
+        );
+        assert!(err.contains("GEP-0014-R003"), "{err}");
+    }
+
+    #[test]
+    fn membership_in_operator() {
+        let py = compile(
+            "defmodule M do\n  def has?(x, xs), do: x in xs\nend",
+        );
+        assert!(py.contains("return x in xs"), "{py}");
+    }
 }

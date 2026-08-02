@@ -64,6 +64,7 @@ fn infix_prec(op: &str) -> Option<(u8, bool)> {
         "or" => (P_OR, false),
         "and" => (P_AND, false),
         "==" | "!=" => (P_EQ, false),
+        "in" => (P_CMP, false),
         "<" | ">" | "<=" | ">=" => (P_CMP, false),
         "|>" => (P_PIPE, false),
         "++" | "<>" => (P_CONCAT, true),
@@ -169,7 +170,7 @@ impl Parser {
                     Some((p, r)) => ((*op).to_string(), p, r),
                     None => break,
                 },
-                Tok::Kw(k @ ("and" | "or" | "when")) => {
+                Tok::Kw(k @ ("and" | "or" | "when" | "in")) => {
                     let (p, r) = infix_prec(k).unwrap();
                     ((*k).to_string(), p, r)
                 }
@@ -654,12 +655,18 @@ impl Parser {
     fn parse_do_block(&mut self) -> Result<Vec<Term>> {
         let span = self.span();
         self.expect_tok(&Tok::Kw("do"))?;
-        let body = self.parse_block_section(&[Tok::Kw("end"), Tok::Kw("else")])?;
+        let sections = [
+            Tok::Kw("end"),
+            Tok::Kw("else"),
+            Tok::Kw("rescue"),
+            Tok::Kw("after"),
+        ];
+        let body = self.parse_block_section(&sections)?;
         let mut out = vec![Term::Pair("do".into(), Box::new(body))];
-        if *self.peek() == Tok::Kw("else") {
+        while let Tok::Kw(kw @ ("else" | "rescue" | "after")) = self.peek().clone() {
             self.bump();
-            let else_body = self.parse_block_section(&[Tok::Kw("end")])?;
-            out.push(Term::Pair("else".into(), Box::new(else_body)));
+            let section = self.parse_block_section(&sections)?;
+            out.push(Term::Pair(kw.to_string(), Box::new(section)));
         }
         self.expect_tok(&Tok::Kw("end"))
             .map_err(|_| self.err_at(span, "missing 'end' for this 'do'".to_string()))?;
