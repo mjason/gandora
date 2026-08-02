@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.1 — 2026-08-02
+
+- **201 `@param` docs across the ecosystem**: every std parameter
+  (Enum/Map/String/List/Keyword, bilingual en + zh-CN), the fmt and
+  Python-intelligence tool surfaces, and the playground showcase.
+  Hover, `gan doc` (localized headings), docstrings, signature help,
+  and `gan lsc doc` all serve them.
+
 ## v0.6.0 — 2026-08-02
 
 **Parameter documentation (GEP-0018).** `@param name, "text"`

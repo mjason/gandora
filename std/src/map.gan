@@ -8,6 +8,12 @@ defmodule Map do
       gan> Map.get(%{a: 1}, :b, 0)
       0
   """
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key to read."
+  @param_trans key, zh_CN: "要读取的键。"
+  @param default, "Returned when the key is absent."
+  @param_trans default, zh_CN: "键缺失时的返回值。"
   @spec get(map(), any(), any()) :: any()
   def get(m, key, default \\ nil), do: m.get(key, default)
 
@@ -17,36 +23,60 @@ defmodule Map do
       gan> Map.put(%{a: 1}, :b, 2)
       {'a': 1, 'b': 2}
   """
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key to set."
+  @param_trans key, zh_CN: "要写入的键。"
+  @param value, "The value to store."
+  @param_trans value, zh_CN: "要存储的值。"
   @spec put(map(), any(), any()) :: map()
   def put(m, key, value), do: ~python({**<%= m %>, <%= key %>: <%= value %>})
 
   @doc "A new map without `key`."
   @doc_trans zh_CN: "移除 `key` 后的新映射。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key to remove."
+  @param_trans key, zh_CN: "要删除的键。"
   @spec delete(map(), any()) :: map()
   def delete(m, key), do: ~python({k: v for k, v in <%= m %>.items() if k != <%= key %>})
 
   @doc "The keys as a list."
   @doc_trans zh_CN: "键的列表。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
   @spec keys(map()) :: list()
   def keys(m), do: $builtins.list(m.keys())
 
   @doc "The values as a list."
   @doc_trans zh_CN: "值的列表。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
   @spec values(map()) :: list()
   def values(m), do: $builtins.list(m.values())
 
   @doc "Merges `m2` into `m1`; `m2` wins on conflicts."
   @doc_trans zh_CN: "将 `m2` 并入 `m1`；冲突时 `m2` 胜出。"
+  @param m1, "The base map."
+  @param_trans m1, zh_CN: "基础映射。"
+  @param m2, "Its entries win on conflicts."
+  @param_trans m2, zh_CN: "冲突时以其条目为准。"
   @spec merge(map(), map()) :: map()
   def merge(m1, m2), do: ~python({**<%= m1 %>, **<%= m2 %>})
 
   @doc "Whether `key` is present."
   @doc_trans zh_CN: "是否存在键 `key`。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key to test."
+  @param_trans key, zh_CN: "要检测的键。"
   @spec has_key?(map(), any()) :: boolean()
   def has_key?(m, key), do: ~python(<%= key %> in <%= m %>)
 
   @doc "The entries as a list of `{key, value}` tuples."
   @doc_trans zh_CN: "以 `{键, 值}` 元组列表表示的条目。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
   @spec to_list(map()) :: list(tuple(any(), any()))
   def to_list(m), do: $builtins.list(m.items())
 
@@ -61,6 +91,14 @@ defmodule Map do
       gan> Map.update(%{a: 1}, :a, 0, fn v -> v + 10 end)
       {'a': 11}
   """
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key to update."
+  @param_trans key, zh_CN: "要更新的键。"
+  @param default, "Stored when the key is absent."
+  @param_trans default, zh_CN: "键缺失时写入的初值。"
+  @param f, "Applied to the current value when present."
+  @param_trans f, zh_CN: "键存在时作用于当前值。"
   @spec update(map(), any(), any(), fun()) :: map()
   def update(m, key, default, f) do
     if has_key?(m, key) do
@@ -71,11 +109,21 @@ defmodule Map do
   end
   @doc "The value for `key`; raises Python KeyError when absent."
   @doc_trans zh_CN: "键 `key` 的值；不存在时抛 Python KeyError。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key that must exist."
+  @param_trans key, zh_CN: "必须存在的键。"
   @spec fetch!(map(), any()) :: any()
   def fetch!(m, key), do: ~python(<%= m %>[<%= key %>])
 
   @doc "Sets `key` only when absent."
   @doc_trans zh_CN: "仅当 `key` 不存在时设置。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param key, "The key to set only if absent."
+  @param_trans key, zh_CN: "仅当缺失时写入的键。"
+  @param value, "The value to store."
+  @param_trans value, zh_CN: "要存储的值。"
   @spec put_new(map(), any(), any()) :: map()
   def put_new(m, key, value) do
     if has_key?(m, key) do
@@ -87,11 +135,19 @@ defmodule Map do
 
   @doc "The submap with only `keys` (missing keys ignored)."
   @doc_trans zh_CN: "仅含 `keys` 的子映射（缺失的键忽略）。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param keys, "The keys to keep."
+  @param_trans keys, zh_CN: "要保留的键。"
   @spec take(map(), list()) :: map()
   def take(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k in <%= keys %>})
 
   @doc "The map without `keys`."
   @doc_trans zh_CN: "移除 `keys` 后的映射。"
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param keys, "The keys to remove."
+  @param_trans keys, zh_CN: "要移除的键。"
   @spec drop(map(), list()) :: map()
   def drop(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k not in <%= keys %>})
 
@@ -101,6 +157,10 @@ defmodule Map do
       gan> Map.filter(%{"a" => 1, "b" => 5}, fn pair -> elem(pair, 1) > 2 end)
       {'b': 5}
   """
+  @param m, "The map."
+  @param_trans m, zh_CN: "映射。"
+  @param f, "Receives {key, value}; keeps entries it returns truthy for."
+  @param_trans f, zh_CN: "接收 {键, 值}；保留使其为真的条目。"
   @spec filter(map(), fun()) :: map()
   def filter(m, f), do: ~python({k: v for k, v in <%= m %>.items() if <%= f %>((k, v))})
 end

@@ -4,11 +4,15 @@ defmodule List do
 
   @doc "The first element, or nil for an empty list."
   @doc_trans zh_CN: "首元素，空列表为 nil。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
   @spec first(list()) :: any()
   def first(xs), do: Enum.at(xs, 0)
 
   @doc "The last element, or nil for an empty list."
   @doc_trans zh_CN: "末元素，空列表为 nil。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
   @spec last(list()) :: any()
   def last(xs), do: Enum.at(xs, -1)
 
@@ -18,6 +22,8 @@ defmodule List do
       gan> List.flatten([1, [2, [3, 4]], 5])
       [1, 2, 3, 4, 5]
   """
+  @param xs, "Nested lists collapse to one level."
+  @param_trans xs, zh_CN: "要完全展平的嵌套列表。"
   @spec flatten(list()) :: list()
   def flatten(xs) do
     Enum.flat_map(xs, fn x ->
@@ -31,6 +37,8 @@ defmodule List do
 
   @doc "Wraps a value in a list: nil becomes [], lists pass through, anything else becomes [value]."
   @doc_trans zh_CN: "包装为列表：nil 变 []，列表原样返回，其余变 [值]。"
+  @param value, "nil becomes [], lists pass through, others become [value]."
+  @param_trans value, zh_CN: "nil 变 []，列表原样返回，其余包成 [值]。"
   @spec wrap(any()) :: list()
   def wrap(value) do
     cond do
@@ -42,32 +50,58 @@ defmodule List do
 
   @doc "A list of `n` copies of `value`."
   @doc_trans zh_CN: "由 `n` 个 `value` 构成的列表。"
+  @param value, "The value to repeat."
+  @param_trans value, zh_CN: "要重复的值。"
+  @param n, "How many copies."
+  @param_trans n, zh_CN: "份数。"
   @spec duplicate(any(), integer()) :: list()
   def duplicate(value, n), do: ~python([<%= value %>] * <%= n %>)
 
   @doc "Inserts `value` at `index` (negative counts from the end, as in Elixir)."
   @doc_trans zh_CN: "在 `index` 处插入 `value`（负数从尾部数起，同 Elixir）。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
+  @param index, "Where the value lands."
+  @param_trans index, zh_CN: "插入位置。"
+  @param value, "The value to insert."
+  @param_trans value, zh_CN: "要插入的值。"
   @spec insert_at(list(), integer(), any()) :: list()
   def insert_at(xs, index, value),
     do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:])
 
   @doc "Removes the element at `index`; out-of-range leaves the list unchanged."
   @doc_trans zh_CN: "删除 `index` 处的元素；越界时列表原样返回。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
+  @param index, "The position to remove."
+  @param_trans index, zh_CN: "要删除的位置。"
   @spec delete_at(list(), integer()) :: list()
   def delete_at(xs, index),
     do: ~python(<%= xs %>[:<%= index %>] + <%= xs %>[<%= index %>:][1:])
   @doc "The list as a tuple."
   @doc_trans zh_CN: "转换为元组的列表。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
   @spec to_tuple(list()) :: tuple()
   def to_tuple(xs), do: $builtins.tuple(xs)
 
   @doc "Whether the list starts with `prefix`."
   @doc_trans zh_CN: "是否以 `prefix` 开头。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
+  @param prefix, "The candidate prefix."
+  @param_trans prefix, zh_CN: "候选前缀。"
   @spec starts_with?(list(), list()) :: boolean()
   def starts_with?(xs, prefix), do: ~python(<%= xs %>[:len(<%= prefix %>)] == <%= prefix %>)
 
   @doc "Replaces the element at `index` (negative counts from the end)."
   @doc_trans zh_CN: "替换 `index` 处的元素（负数从尾部数起）。"
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
+  @param index, "The position to replace."
+  @param_trans index, zh_CN: "要替换的位置。"
+  @param value, "The new value."
+  @param_trans value, zh_CN: "新值。"
   @spec replace_at(list(), integer(), any()) :: list()
   def replace_at(xs, index, value),
     do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:][1:])
@@ -78,6 +112,12 @@ defmodule List do
       gan> List.update_at([1, 2, 3], 1, fn v -> v * 10 end)
       [1, 20, 3]
   """
+  @param xs, "The list."
+  @param_trans xs, zh_CN: "列表。"
+  @param index, "The position to update."
+  @param_trans index, zh_CN: "要更新的位置。"
+  @param f, "Applied to the current value."
+  @param_trans f, zh_CN: "作用于当前值。"
   @spec update_at(list(), integer(), fun()) :: list()
   def update_at(xs, index, f), do: replace_at(xs, index, f.(Enum.at(xs, index)))
 end

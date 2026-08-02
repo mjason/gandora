@@ -10,6 +10,7 @@ defmodule PyIntel do
   @pyimport_re ~r/pyimport\s+([A-Za-z0-9_.]+)\s*,\s*as:\s*([a-z_][A-Za-z0-9_]*)/
 
   # alias -> module map from the file's pyimport declarations
+  @param source, "The Gandora source holding pyimport declarations."
   @spec aliases(string()) :: map(string(), string())
   def aliases(source) do
     @pyimport_re.findall(source)
@@ -17,6 +18,9 @@ defmodule PyIntel do
   end
 
   # {import_line, expr} for a `$mod.chain` or aliased `np.chain` token
+  @param source, "The Gandora source, for alias resolution."
+  @param token, "The dotted reference under the cursor."
+  @param pyref, "Whether the token was written with a leading $."
   @spec target(string(), string(), boolean()) :: tuple(string(), string()) | nil
   def target(source, token, pyref) do
     first = Enum.at(token.split("."), 0)
@@ -34,6 +38,9 @@ defmodule PyIntel do
     jedi.Script("#{import_line}\n#{expr}", project: jedi.Project(root))
   end
 
+  @param root, "The project root jedi resolves in."
+  @param import_line, "The synthesized import statement."
+  @param expr, "The dotted expression to document."
   @spec hover_markdown(string(), string(), string()) :: string() | nil
   def hover_markdown(root, import_line, expr) do
     try do
@@ -54,6 +61,9 @@ defmodule PyIntel do
     end
   end
 
+  @param root, "The project root jedi resolves in."
+  @param import_line, "The synthesized import statement."
+  @param expr, "The dotted prefix to complete."
   @spec complete(string(), string(), string()) :: list(map())
   def complete(root, import_line, expr) do
     try do
@@ -66,6 +76,9 @@ defmodule PyIntel do
   end
 
   # zero-based line/character, ready for LSP positions
+  @param root, "The project root jedi resolves in."
+  @param import_line, "The synthesized import statement."
+  @param expr, "The dotted reference to locate."
   @spec goto(string(), string(), string()) :: map() | nil
   def goto(root, import_line, expr) do
     try do
@@ -86,6 +99,9 @@ defmodule PyIntel do
     end
   end
 
+  @param root, "The project root jedi resolves in."
+  @param import_line, "The synthesized import statement."
+  @param callee, "The callable whose signatures to fetch."
   @spec signatures(string(), string(), string()) :: list(map())
   def signatures(root, import_line, callee) do
     try do

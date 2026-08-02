@@ -10,6 +10,11 @@ class GanMatchError(Exception):
 def get(kw: list, key: str) -> object:
     """The first value for `key`, or nil.
 
+## Parameters
+
+  - kw: The keyword list.
+  - key: The key to read; first match wins.
+
     >>> get([("a", 1), ("b", 2)], "a")
     1
 """
@@ -17,7 +22,14 @@ def get(kw: list, key: str) -> object:
 
 
 def put(kw: list, key: str, value: object) -> list:
-    """Replaces `key` with `value`, prepending it (Elixir Keyword.put)."""
+    """Replaces `key` with `value`, prepending it (Elixir Keyword.put).
+
+## Parameters
+
+  - kw: The keyword list.
+  - key: The key to set.
+  - value: The value to store.
+"""
     def _gan_fn0(*_gan_args):
         match _gan_args:
             case ((k, _) as _gan_t0,) if isinstance(_gan_t0, tuple):
@@ -27,7 +39,12 @@ def put(kw: list, key: str, value: object) -> list:
 
 
 def keys(kw: list) -> list[str]:
-    """The keys, in order, duplicates included."""
+    """The keys, in order, duplicates included.
+
+## Parameters
+
+  - kw: The keyword list.
+"""
     def _gan_fn1(*_gan_args):
         match _gan_args:
             case ((k, _) as _gan_t1,) if isinstance(_gan_t1, tuple):
@@ -37,7 +54,12 @@ def keys(kw: list) -> list[str]:
 
 
 def values(kw: list) -> list:
-    """The values, in order."""
+    """The values, in order.
+
+## Parameters
+
+  - kw: The keyword list.
+"""
     def _gan_fn2(*_gan_args):
         match _gan_args:
             case ((_, v) as _gan_t2,) if isinstance(_gan_t2, tuple):
@@ -47,7 +69,13 @@ def values(kw: list) -> list:
 
 
 def has_key_p(kw: list, key: str) -> bool:
-    """Whether `key` is present."""
+    """Whether `key` is present.
+
+## Parameters
+
+  - kw: The keyword list.
+  - key: The key to test.
+"""
     def _gan_fn3(*_gan_args):
         match _gan_args:
             case ((k, _) as _gan_t3,) if isinstance(_gan_t3, tuple):
@@ -57,7 +85,13 @@ def has_key_p(kw: list, key: str) -> bool:
 
 
 def delete(kw: list, key: str) -> list:
-    """Removes every entry for `key`."""
+    """Removes every entry for `key`.
+
+## Parameters
+
+  - kw: The keyword list.
+  - key: Every entry with this key is removed.
+"""
     def _gan_fn4(*_gan_args):
         match _gan_args:
             case ((k, _) as _gan_t4,) if isinstance(_gan_t4, tuple):
@@ -68,6 +102,11 @@ def delete(kw: list, key: str) -> list:
 
 def merge(kw1: list, kw2: list) -> list:
     """Merges `kw2` into `kw1`; `kw2` wins, its entries appended.
+
+## Parameters
+
+  - kw1: The base list.
+  - kw2: Its entries win on conflicts.
 
     >>> merge([("a", 1), ("b", 2)], [("b", 9), ("c", 3)])
     [('a', 1), ('b', 9), ('c', 3)]

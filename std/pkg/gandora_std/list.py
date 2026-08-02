@@ -6,17 +6,31 @@ import gandora_std.enum
 
 
 def first(xs: list) -> object:
-    """The first element, or nil for an empty list."""
+    """The first element, or nil for an empty list.
+
+## Parameters
+
+  - xs: The list.
+"""
     return gandora_std.enum.at(xs, 0)
 
 
 def last(xs: list) -> object:
-    """The last element, or nil for an empty list."""
+    """The last element, or nil for an empty list.
+
+## Parameters
+
+  - xs: The list.
+"""
     return gandora_std.enum.at(xs, -1)
 
 
 def flatten(xs: list) -> list:
     """Flattens nested lists to any depth.
+
+## Parameters
+
+  - xs: Nested lists collapse to one level.
 
     >>> flatten([1, [2, [3, 4]], 5])
     [1, 2, 3, 4, 5]
@@ -30,7 +44,12 @@ def flatten(xs: list) -> list:
 
 
 def wrap(value: object) -> list:
-    """Wraps a value in a list: nil becomes [], lists pass through, anything else becomes [value]."""
+    """Wraps a value in a list: nil becomes [], lists pass through, anything else becomes [value].
+
+## Parameters
+
+  - value: nil becomes [], lists pass through, others become [value].
+"""
     if (value is None):
         return []
     elif isinstance(value, list):
@@ -40,37 +59,80 @@ def wrap(value: object) -> list:
 
 
 def duplicate(value: object, n: int) -> list:
-    """A list of `n` copies of `value`."""
+    """A list of `n` copies of `value`.
+
+## Parameters
+
+  - value: The value to repeat.
+  - n: How many copies.
+"""
     return ([(value)] * (n))
 
 
 def insert_at(xs: list, index: int, value: object) -> list:
-    """Inserts `value` at `index` (negative counts from the end, as in Elixir)."""
+    """Inserts `value` at `index` (negative counts from the end, as in Elixir).
+
+## Parameters
+
+  - xs: The list.
+  - index: Where the value lands.
+  - value: The value to insert.
+"""
     return ((xs)[:(index)] + [(value)] + (xs)[(index):])
 
 
 def delete_at(xs: list, index: int) -> list:
-    """Removes the element at `index`; out-of-range leaves the list unchanged."""
+    """Removes the element at `index`; out-of-range leaves the list unchanged.
+
+## Parameters
+
+  - xs: The list.
+  - index: The position to remove.
+"""
     return ((xs)[:(index)] + (xs)[(index):][1:])
 
 
 def to_tuple(xs: list) -> tuple:
-    """The list as a tuple."""
+    """The list as a tuple.
+
+## Parameters
+
+  - xs: The list.
+"""
     return builtins.tuple(xs)
 
 
 def starts_with_p(xs: list, prefix: list) -> bool:
-    """Whether the list starts with `prefix`."""
+    """Whether the list starts with `prefix`.
+
+## Parameters
+
+  - xs: The list.
+  - prefix: The candidate prefix.
+"""
     return ((xs)[:len((prefix))] == (prefix))
 
 
 def replace_at(xs: list, index: int, value: object) -> list:
-    """Replaces the element at `index` (negative counts from the end)."""
+    """Replaces the element at `index` (negative counts from the end).
+
+## Parameters
+
+  - xs: The list.
+  - index: The position to replace.
+  - value: The new value.
+"""
     return ((xs)[:(index)] + [(value)] + (xs)[(index):][1:])
 
 
 def update_at(xs: list, index: int, f: collections.abc.Callable) -> list:
     """Updates the element at `index` by `f`.
+
+## Parameters
+
+  - xs: The list.
+  - index: The position to update.
+  - f: Applied to the current value.
 
     >>> update_at([1, 2, 3], 1, lambda v: v * 10)
     [1, 20, 3]

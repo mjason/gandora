@@ -29,7 +29,7 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.6.0", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.6.1", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
 

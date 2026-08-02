@@ -11,6 +11,7 @@ defmodule Fmt do
 
   # ---- entry ---------------------------------------------------------------
 
+  @param args, "CLI arguments after `fmt`: paths and --check."
   @spec run(list(string())) :: nil
   def run(args) do
     check = Enum.member?(args, "--check")
@@ -77,6 +78,8 @@ defmodule Fmt do
 
   # ---- verification (R006) -------------------------------------------------
 
+  @param old_text, "The original source."
+  @param new_text, "The candidate rewrite that must preserve comments and parse."
   @spec verify(string(), string()) :: atom() | tuple(atom(), string())
   def verify(old_text, new_text) do
     cond do
@@ -108,6 +111,7 @@ defmodule Fmt do
 
   # ---- formatting ----------------------------------------------------------
 
+  @param text, "The source to normalize."
   @spec format_text(string()) :: tuple(atom(), string())
   def format_text(text) do
     parsed = try do

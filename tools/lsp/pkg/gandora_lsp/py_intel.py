@@ -21,6 +21,10 @@ pyimport_re = re.compile("pyimport\\s+([A-Za-z0-9_.]+)\\s*,\\s*as:\\s*([a-z_][A-
 
 
 def aliases(source: str) -> dict[str, str]:
+    """## Parameters
+
+  - source: The Gandora source holding pyimport declarations.
+"""
     def _gan_fn0(*_gan_args):
         match _gan_args:
             case ((mod, name) as _gan_t0, acc,) if isinstance(_gan_t0, tuple):
@@ -30,6 +34,12 @@ def aliases(source: str) -> dict[str, str]:
 
 
 def target(source: str, token: str, pyref: bool) -> tuple[str, str] | None:
+    """## Parameters
+
+  - source: The Gandora source, for alias resolution.
+  - token: The dotted reference under the cursor.
+  - pyref: Whether the token was written with a leading $.
+"""
     first = gandora_std.enum.at(token.split("."), 0)
     if _gan_truthy(pyref):
         return ("import " + first, token)
@@ -45,6 +55,12 @@ def _script(root, import_line, expr):
 
 
 def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
+    """## Parameters
+
+  - root: The project root jedi resolves in.
+  - import_line: The synthesized import statement.
+  - expr: The dotted expression to document.
+"""
     try:
         names = builtins.list(_script(root, import_line, expr).help(2, gandora_std.string.length(expr)))
         _gan_case1 = names
@@ -65,6 +81,12 @@ def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
 
 
 def complete(root: str, import_line: str, expr: str) -> list[dict]:
+    """## Parameters
+
+  - root: The project root jedi resolves in.
+  - import_line: The synthesized import statement.
+  - expr: The dotted prefix to complete.
+"""
     try:
         return gandora_std.enum.map(gandora_std.enum.take(builtins.list(_script(root, import_line, expr).complete(2, gandora_std.string.length(expr))), 120), lambda c: {"name": c.name, "kind": c.type})
     except Exception as _e:
@@ -72,6 +94,12 @@ def complete(root: str, import_line: str, expr: str) -> list[dict]:
 
 
 def goto(root: str, import_line: str, expr: str) -> dict | None:
+    """## Parameters
+
+  - root: The project root jedi resolves in.
+  - import_line: The synthesized import statement.
+  - expr: The dotted reference to locate.
+"""
     try:
         names = builtins.list(_script(root, import_line, expr).goto(2, gandora_std.string.length(expr), follow_imports=True))
         _gan_case4 = names
@@ -90,6 +118,12 @@ def goto(root: str, import_line: str, expr: str) -> dict | None:
 
 
 def signatures(root: str, import_line: str, callee: str) -> list[dict]:
+    """## Parameters
+
+  - root: The project root jedi resolves in.
+  - import_line: The synthesized import statement.
+  - callee: The callable whose signatures to fetch.
+"""
     try:
         def _gan_fn1(s):
             params = gandora_std.enum.map(builtins.list(s.params), lambda p: p.to_string())

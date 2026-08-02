@@ -34,6 +34,10 @@ space_around = ["=", "|>", "->", "<-", "=>", "\\\\"]
 
 
 def run(args: list[str]) -> None:
+    """## Parameters
+
+  - args: CLI arguments after `fmt`: paths and --check.
+"""
     check = gandora_std.enum.member_p(args, "--check")
     paths = gandora_std.enum.reject(args, lambda a: gandora_std.string.starts_with_p(a, "--"))
     files = _collect_files(paths)
@@ -113,6 +117,11 @@ def _format_file(file, check):
 
 
 def verify(old_text: str, new_text: str) -> str | tuple[str, str]:
+    """## Parameters
+
+  - old_text: The original source.
+  - new_text: The candidate rewrite that must preserve comments and parse.
+"""
     if _comments_of(old_text) != _comments_of(new_text):
         return ("error", "comment sequence changed")
     elif _strip_meta(core.parse(old_text)) != _strip_meta(core.parse(new_text)):
@@ -137,6 +146,10 @@ def _strip_meta(t):
 
 
 def format_text(text: str) -> tuple[str, str]:
+    """## Parameters
+
+  - text: The source to normalize.
+"""
     try:
         core.parse(text)
         _gan_tmp9 = "ok"
