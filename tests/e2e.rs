@@ -414,3 +414,36 @@ fn builtin_docs_are_embedded_and_bilingual() {
     assert!(stdout.contains("截断除法"), "{stdout}");
     assert!(stdout.contains("rem(-7, 2)"), "{stdout}");
 }
+
+#[test]
+fn marker_runtime_resolution_and_py_package() {
+    // a fake installed package whose marker claims module name `Enum`
+    // under the gandora_std prefix (GEP-0006-R005A, GEP-0010-R002/R003)
+    let dir = temp_dir("stdres");
+    let proj = dir.join("app");
+    let out = gan().arg("init").arg(&proj).output().unwrap();
+    assert!(out.status.success());
+    let site = proj.join(".venv/lib/python3.12/site-packages/gandora_std");
+    std::fs::create_dir_all(&site).unwrap();
+    std::fs::write(
+        site.join("enum.py"),
+        "def map(xs, f):\n    return [f(x) for x in xs]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        site.join("gandora.toml"),
+        "schema = 1\ncompiler = \"0.1.0\"\n\n[[modules]]\nname = \"Enum\"\npython = \"gandora_std/enum.py\"\nsource = \"gandora_std/_gan/gandora_std/enum.gan\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        proj.join("src/main.gan"),
+        "defmodule Main do\n  def main(), do: IO.puts(inspect(Enum.map([1, 2], fn x -> x * 2 end)))\nend\n",
+    )
+    .unwrap();
+    let out = gan().current_dir(&proj).arg("build").output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let py = std::fs::read_to_string(proj.join("dist/main.py")).unwrap();
+    assert!(py.contains("import gandora_std.enum"), "{py}");
+    assert!(py.contains("gandora_std.enum.map("), "{py}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

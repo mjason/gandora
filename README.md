@@ -63,6 +63,10 @@ The practical guide is the [language manual](docs/syntax.md)
 - [GEP-0009](geps/0009-embedded-languages-and-templates.md) — the `~<lang>`
   embedded-language family (`~sql`, `~markdown`, ...) with EEx-style
   `<%= %>` splices ([中文](geps/local/zh/0009-embedded-languages-and-templates.md))
+- [GEP-0010](geps/0010-standard-library.md) — the standard library
+  ([gandora-std](https://github.com/mjason/gandora-std)): `Enum`, `String`,
+  `Map`, `List`, `Keyword` as an ordinary package
+  ([中文](geps/local/zh/0010-standard-library.md))
 
 English GEPs are normative; the synchronized Chinese translations are
 generated with `scripts/translate-gep.py` (a DeepSeek-backed translator
@@ -181,5 +185,7 @@ cargo test             # unit + end-to-end tests
 v0: GEP-0001..0009 are implemented and tested — including GEP-0008's
 definition-generating macros, `use`/`__using__`, `def unquote(name)`,
 and the `defattr`/`@on_definition` annotation system, and GEP-0009's
-embedded-language sigils with EEx-style `<%= %>` splices. Deferred:
+embedded-language sigils with EEx-style `<%= %>` splices. GEP-0010's gandora-std
+(`uv add git+https://github.com/mjason/gandora-std`) provides
+Enum/String/Map/List/Keyword. Deferred:
 protocols, comprehensions, `try/rescue`, binaries, a formatter, an LSP.

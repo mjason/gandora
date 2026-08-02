@@ -1,0 +1,139 @@
+defmodule Enum do
+  @moduledoc "Eager, data-first collection functions (GEP-0010). Every subject comes first, so everything pipes."
+  @moduledoc_trans zh_CN: "急切求值、数据优先的集合函数（GEP-0010）。主语在首位，全部可入管道。"
+
+  @doc "Applies `f` to every element."
+  @doc_trans zh_CN: "对每个元素应用 `f`。"
+  @example """
+      gan> Enum.map([1, 2, 3], fn x -> x * 10 end)
+      [10, 20, 30]
+  """
+  def map(xs, f), do: :builtins.list(:builtins.map(f, xs))
+
+  @doc "Keeps elements for which `f` is truthy."
+  @doc_trans zh_CN: "保留 `f` 为真值的元素。"
+  @example """
+      gan> Enum.filter([1, 2, 3, 4], fn x -> rem(x, 2) == 0 end)
+      [2, 4]
+  """
+  def filter(xs, f), do: ~python([x for x in <%= xs %> if <%= f %>(x)])
+
+  @doc "Drops elements for which `f` is truthy."
+  @doc_trans zh_CN: "丢弃 `f` 为真值的元素。"
+  def reject(xs, f), do: ~python([x for x in <%= xs %> if not <%= f %>(x)])
+
+  @doc "Folds left with Elixir argument order: `f` receives (element, acc)."
+  @doc_trans zh_CN: "左折叠，参数顺序与 Elixir 一致：`f` 接收 (元素, 累积值)。"
+  @example """
+      gan> Enum.reduce([1, 2, 3, 4], 0, fn x, acc -> acc + x end)
+      10
+  """
+  def reduce(xs, acc, f) do
+    :functools.reduce(fn a, x -> f.(x, a) end, xs, acc)
+  end
+
+  @doc "Sum of the elements."
+  @doc_trans zh_CN: "元素之和。"
+  def sum(xs), do: :builtins.sum(xs)
+
+  @doc "Number of elements."
+  @doc_trans zh_CN: "元素个数。"
+  def count(xs), do: :builtins.len(xs)
+
+  @doc "Ascending sort."
+  @doc_trans zh_CN: "升序排序。"
+  def sort(xs), do: :builtins.sorted(xs)
+
+  @doc "Sorts by the key computed by `f` (Python `key=`, not a comparator)."
+  @doc_trans zh_CN: "按 `f` 计算的键排序（Python 的 `key=`，非比较器）。"
+  @example """
+      gan> Enum.sort_by(["ccc", "a", "bb"], fn s -> String.length(s) end)
+      ['a', 'bb', 'ccc']
+  """
+  def sort_by(xs, f), do: :builtins.sorted(xs, key: f)
+
+  @doc "Elements in reverse order."
+  @doc_trans zh_CN: "逆序排列的元素。"
+  def reverse(xs), do: ~python(list(reversed(<%= xs %>)))
+
+  @doc "Joins elements (converted by `to_string`) with `sep`."
+  @doc_trans zh_CN: "以 `sep` 连接各元素（先经 `to_string` 转换）。"
+  @example """
+      gan> Enum.join([1, 2, 3], "-")
+      '1-2-3'
+  """
+  def join(xs, sep), do: sep.join(~python([str(x) for x in <%= xs %>]))
+
+  @doc "The element at `index` (negative counts from the end), or nil."
+  @doc_trans zh_CN: "位于 `index` 的元素（负数从尾部数起），越界返回 nil。"
+  def at(xs, index) do
+    if index < :builtins.len(xs) and index >= -:builtins.len(xs) do
+      ~python(<%= xs %>[<%= index %>])
+    else
+      nil
+    end
+  end
+
+  @doc "The first `n` elements."
+  @doc_trans zh_CN: "前 `n` 个元素。"
+  def take(xs, n), do: ~python(<%= xs %>[:<%= n %>])
+
+  @doc "The elements after the first `n`."
+  @doc_trans zh_CN: "跳过前 `n` 个之后的元素。"
+  def drop(xs, n), do: ~python(<%= xs %>[<%= n %>:])
+
+  @doc "Pairs up two lists into `{a, b}` tuples, stopping at the shorter."
+  @doc_trans zh_CN: "将两个列表配成 `{a, b}` 元组，止于较短者。"
+  def zip(xs, ys), do: :builtins.list(:builtins.zip(xs, ys))
+
+  @doc "Each element paired with its index: `{element, index}`."
+  @doc_trans zh_CN: "每个元素与其下标配对：`{元素, 下标}`。"
+  @example """
+      gan> Enum.with_index([:a, :b])
+      [('a', 0), ('b', 1)]
+  """
+  def with_index(xs), do: ~python([(x, i) for i, x in enumerate(<%= xs %>)])
+
+  @doc "Whether `x` is an element."
+  @doc_trans zh_CN: "`x` 是否为其中元素。"
+  def member?(xs, x), do: ~python(<%= x %> in <%= xs %>)
+
+  @doc "Whether `f` is truthy for every element."
+  @doc_trans zh_CN: "`f` 是否对所有元素为真值。"
+  def all?(xs, f), do: ~python(all(<%= f %>(x) for x in <%= xs %>))
+
+  @doc "Whether `f` is truthy for any element."
+  @doc_trans zh_CN: "`f` 是否对任一元素为真值。"
+  def any?(xs, f), do: ~python(any(<%= f %>(x) for x in <%= xs %>))
+
+  @doc "Whether the collection has no elements."
+  @doc_trans zh_CN: "集合是否为空。"
+  def empty?(xs), do: :builtins.len(xs) == 0
+
+  @doc "Removes duplicates, keeping first occurrences in order."
+  @doc_trans zh_CN: "去重，按序保留首次出现者。"
+  def uniq(xs), do: ~python(list(dict.fromkeys(<%= xs %>)))
+
+  @doc "Maps `f` (which returns a list) and concatenates the results."
+  @doc_trans zh_CN: "对每个元素应用返回列表的 `f`，并拼接全部结果。"
+  @example """
+      gan> Enum.flat_map([1, 2], fn x -> [x, x * 10] end)
+      [1, 10, 2, 20]
+  """
+  def flat_map(xs, f), do: ~python([y for x in <%= xs %> for y in <%= f %>(x)])
+
+  @doc "Runs `f` on each element for its side effects; returns :ok."
+  @doc_trans zh_CN: "对每个元素执行 `f`（取其副作用）；返回 :ok。"
+  def each(xs, f) do
+    ~python([<%= f %>(x) for x in <%= xs %>])
+    :ok
+  end
+
+  @doc "The smallest element."
+  @doc_trans zh_CN: "最小元素。"
+  def min(xs), do: :builtins.min(xs)
+
+  @doc "The largest element."
+  @doc_trans zh_CN: "最大元素。"
+  def max(xs), do: :builtins.max(xs)
+end

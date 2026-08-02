@@ -286,6 +286,12 @@ pub struct Codegen {
     local_funs: BTreeSet<(String, usize)>,
     private_funs: BTreeSet<(String, usize)>,
     attr_names: BTreeSet<String>,
+    /// python package prefix for this build's own modules (pyPackage)
+    pub py_prefix: Option<String>,
+    /// sibling module names of the same build
+    pub project_modules: BTreeSet<String>,
+    /// installed marker names -> dotted python paths (GEP-0006-R005A)
+    pub installed_modules: BTreeMap<String, String>,
     struct_fields: Option<Vec<(String, Term)>>,
     /// non-fatal notices surfaced by `gan check`/`gan build`
     pub warnings: Vec<String>,
@@ -310,6 +316,9 @@ impl Codegen {
             local_funs: BTreeSet::new(),
             private_funs: BTreeSet::new(),
             attr_names: BTreeSet::new(),
+            py_prefix: None,
+            project_modules: BTreeSet::new(),
+            installed_modules: BTreeMap::new(),
             struct_fields: None,
             warnings: Vec::new(),
             compile_time_only: false,
@@ -715,8 +724,7 @@ impl Codegen {
         if resolved == self.module_segs {
             return self.struct_class_name();
         }
-        let path = module_py_path(&resolved);
-        self.gan_imports.insert(path.clone());
+        let path = self.gan_module_import(&resolved);
         format!("{path}.{}", resolved.last().unwrap())
     }
 
@@ -1339,9 +1347,7 @@ impl Codegen {
             Term::Alias(segs) => {
                 // a bare module reference
                 let resolved = self.resolve_alias(segs);
-                let path = module_py_path(&resolved);
-                self.gan_imports.insert(path.clone());
-                Ok(path)
+                Ok(self.gan_module_import(&resolved))
             }
             Term::List(items) => {
                 // keyword list -> list of tuples (GEP-0001-R009)
@@ -1413,6 +1419,26 @@ impl Codegen {
         Ok(format!("f\"{body}\""))
     }
 
+    /// The Python import path for a resolved Gandora module reference.
+    /// Precedence: sibling project modules (with the project's pyPackage
+    /// prefix), installed-package marker names, then the mechanical
+    /// GEP-0001-R014 mapping (GEP-0006-R005A).
+    fn gan_module_import(&mut self, resolved: &[String]) -> String {
+        let joined = resolved.join(".");
+        let path = if self.project_modules.contains(&joined) {
+            match &self.py_prefix {
+                Some(prefix) => format!("{prefix}.{}", module_py_path(resolved)),
+                None => module_py_path(resolved),
+            }
+        } else if let Some(installed) = self.installed_modules.get(&joined) {
+            installed.clone()
+        } else {
+            module_py_path(resolved)
+        };
+        self.gan_imports.insert(path.clone());
+        path
+    }
+
     fn resolve_alias(&self, segs: &[String]) -> Vec<String> {
         if let Some(full) = self.aliases.get(&segs[0]) {
             let mut out = full.clone();
@@ -1470,8 +1496,7 @@ impl Codegen {
                         if resolved == vec!["IO".to_string()] {
                             return self.emit_io_call(name, call, pre);
                         }
-                        let path = module_py_path(&resolved);
-                        self.gan_imports.insert(path.clone());
+                        let path = self.gan_module_import(&resolved);
                         let f = map_ident(name);
                         if *is_call {
                             let args = self.emit_args(&call.args, pre)?;

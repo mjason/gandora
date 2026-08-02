@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-01
-revision: 1
+revision: 2
 requires: [1, 2]
 replaces: []
 superseded-by: null
@@ -102,6 +102,12 @@ Paths are relative to the site-packages root. A macro-only module omits
 qualified calls) compile to plain Python imports exactly as for local
 modules (GEP-0001-R017); the compiler performs no discovery, and the
 import resolves at runtime against the installed wheel.
+
+**GEP-0006-R005A:** Marker module names are authoritative for runtime
+resolution as well: when a referenced module is not among the build's
+own modules, the compiler resolves its import path from the installed
+markers before falling back to the mechanical GEP-0001-R014 mapping.
+Project modules take precedence over installed names.
 
 **GEP-0006-R006:** When `require` or `import` names a module not found in
 the project's sources, the compiler MUST search the project environment's
@@ -200,4 +206,6 @@ package and contains no Gandora import.
 
 ## Change History
 
+- Revision 2, 2026-08-02: Added R005A — marker names govern runtime
+  resolution (with GEP-0010).
 - Revision 1, 2026-08-01: Initial version.

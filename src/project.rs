@@ -19,6 +19,9 @@ pub struct Config {
     /// package project: `gan build` also emits marker + shipped sources
     /// (GEP-0006-R001/R002)
     pub package: bool,
+    /// python package prefix for compiled output, e.g. "gandora_std"
+    /// (GEP-0010-R002)
+    pub py_package: Option<String>,
 }
 
 impl Config {
@@ -30,6 +33,7 @@ impl Config {
             target_python: "3.12".into(),
             exclude: Vec::new(),
             package: false,
+            py_package: None,
         }
     }
 }
@@ -74,6 +78,9 @@ pub fn load_config(path: &Path) -> Result<Config> {
             }
             "exclude" => {
                 config.exclude = string_array(&file, &key, val)?;
+            }
+            "pyPackage" => {
+                config.py_package = Some(string_value(&file, &key, val)?);
             }
             "package" => match val {
                 JsonValue::Bool(b) => config.package = b,
@@ -357,6 +364,14 @@ pub fn compile_files(
         }
     }
 
+    let project_modules: BTreeSet<String> =
+        parsed.iter().map(|p| p.module.join(".")).collect();
+    let installed = match config {
+        Some(cfg) => installed_module_map(cfg),
+        None => BTreeMap::new(),
+    };
+    let py_prefix = config.and_then(|c| c.py_package.clone());
+
     // 3. expand and compile each module with its visible macros
     let mut out = Vec::new();
     for p in &parsed {
@@ -376,11 +391,20 @@ pub fn compile_files(
         let mut expander = Expander::new(&file, table);
         let expanded = expander.expand_module(&p.term)?;
         let mut cg = Codegen::new(&file, p.module.clone());
+        cg.py_prefix = py_prefix.clone();
+        cg.project_modules = project_modules.clone();
+        cg.installed_modules = installed.clone();
         let python = cg.compile(&expanded)?;
         out.push(CompiledModule {
             source: p.path.clone(),
             module: p.module.clone(),
-            py_path: module_py_path(&p.module).replace('.', "/") + ".py",
+            py_path: match &py_prefix {
+                Some(prefix) => format!(
+                    "{prefix}/{}.py",
+                    module_py_path(&p.module).replace('.', "/")
+                ),
+                None => module_py_path(&p.module).replace('.', "/") + ".py",
+            },
             python,
             compile_time_only: cg.compile_time_only,
             warnings: std::mem::take(&mut cg.warnings),
@@ -545,6 +569,66 @@ fn site_packages_dirs(root: &Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+/// All installed marker modules: gandora name -> dotted python path
+/// (GEP-0006-R005A). Static reads only.
+pub fn installed_module_map(config: &Config) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    for sp in site_packages_dirs(&config.root) {
+        let Ok(entries) = std::fs::read_dir(&sp) else { continue };
+        let mut dirs: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+        dirs.sort();
+        for dir in dirs {
+            let Ok(text) = std::fs::read_to_string(dir.join("gandora.toml")) else {
+                continue;
+            };
+            for (name, python) in parse_marker_python(&text) {
+                out.entry(name)
+                    .or_insert_with(|| python.trim_end_matches(".py").replace('/', "."));
+            }
+        }
+    }
+    out
+}
+
+/// Marker (name, python) entries for runtime resolution.
+fn parse_marker_python(text: &str) -> Vec<(String, String)> {
+    let mut entries = Vec::new();
+    let mut name: Option<String> = None;
+    let mut python: Option<String> = None;
+    let mut schema_ok = false;
+    let mut flush = |name: &mut Option<String>, python: &mut Option<String>,
+                     entries: &mut Vec<(String, String)>| {
+        if let (Some(n), Some(p)) = (name.take(), python.take()) {
+            entries.push((n, p));
+        } else {
+            name.take();
+            python.take();
+        }
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line == "[[modules]]" {
+            flush(&mut name, &mut python, &mut entries);
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            let v = v.trim().trim_matches('"');
+            match k.trim() {
+                "schema" => schema_ok = v == "1",
+                "name" => name = Some(v.to_string()),
+                "python" => python = Some(v.to_string()),
+                _ => {}
+            }
+        }
+    }
+    flush(&mut name, &mut python, &mut entries);
+    if schema_ok {
+        entries
+    } else {
+        Vec::new()
+    }
 }
 
 /// Locate a module shipped by an installed package by scanning markers in

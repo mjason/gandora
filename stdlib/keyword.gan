@@ -1,0 +1,30 @@
+defmodule Keyword do
+  @moduledoc "Functions over keyword lists — lists of {atom, value} tuples (GEP-0010)."
+  @moduledoc_trans zh_CN: "关键字列表（{原子, 值} 元组的列表）上的函数（GEP-0010）。"
+
+  @doc "The first value for `key`, or nil."
+  @doc_trans zh_CN: "键 `key` 的首个值，不存在时为 nil。"
+  @example """
+      gan> Keyword.get([a: 1, b: 2], :a)
+      1
+  """
+  def get(kw, key), do: ~python(next((v for k, v in <%= kw %> if k == <%= key %>), None))
+
+  @doc "Replaces `key` with `value`, prepending it (Elixir Keyword.put)."
+  @doc_trans zh_CN: "以 `value` 替换 `key` 并将其前置（Elixir 的 Keyword.put）。"
+  def put(kw, key, value) do
+    [{key, value}] ++ Enum.reject(kw, fn {k, _} -> k == key end)
+  end
+
+  @doc "The keys, in order, duplicates included."
+  @doc_trans zh_CN: "按序的全部键（含重复）。"
+  def keys(kw), do: Enum.map(kw, fn {k, _} -> k end)
+
+  @doc "The values, in order."
+  @doc_trans zh_CN: "按序的全部值。"
+  def values(kw), do: Enum.map(kw, fn {_, v} -> v end)
+
+  @doc "Whether `key` is present."
+  @doc_trans zh_CN: "是否存在键 `key`。"
+  def has_key?(kw, key), do: Enum.any?(kw, fn {k, _} -> k == key end)
+end
