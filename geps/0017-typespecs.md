@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-02
 updated: 2026-08-02
-revision: 1
+revision: 2
 requires: [1, 3, 7]
 replaces: []
 superseded-by: null
@@ -86,6 +86,7 @@ no clause of the following definition is a compile error.
 | `fun()` | `collections.abc.Callable` |
 | `a \| b` | `a \| b` |
 | `$mod.Type` | `mod.Type` (module import recorded) |
+| `$mod.Type(t, ...)` | `mod.Type[t, ...]` — parametrized host types |
 | `Mod.t()` | the struct class generated for `Mod` (GEP-0004) |
 
 Any other expression is a compile error naming this rule.
@@ -147,5 +148,10 @@ LSP surfacing; and a pyright run over annotated output accepting a
 well-typed module.
 
 ## Change History
+
+- Revision 2, 2026-08-02: R002 — parametrized host types
+  `$mod.Type(t, ...)` map to subscripted hints, e.g.
+  `$"collections.abc".Sequence(number())` becomes
+  `collections.abc.Sequence[int | float]`.
 
 - Revision 1, 2026-08-02: Initial version.

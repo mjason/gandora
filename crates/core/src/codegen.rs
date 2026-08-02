@@ -990,10 +990,20 @@ impl Codegen {
                     )),
                 },
                 Callee::Dot { base, name, .. } => match base.as_ref() {
-                    // $mod.Type — the host's own types at the boundary
+                    // $mod.Type — the host's own types at the boundary;
+                    // $mod.Type(t, ...) parametrizes: mod.Type[t, ...]
                     Term::PyRef(m) => {
                         self.py_imports.insert(m.clone());
-                        Ok(format!("{m}.{name}"))
+                        if c.args.is_empty() {
+                            Ok(format!("{m}.{name}"))
+                        } else {
+                            let parts: Vec<String> = c
+                                .args
+                                .iter()
+                                .map(|a| self.spec_hint(a))
+                                .collect::<Result<_>>()?;
+                            Ok(format!("{m}.{name}[{}]", parts.join(", ")))
+                        }
                     }
                     // Mod.t() — the struct class generated for Mod (GEP-0004)
                     Term::Alias(segs) if name == "t" => {
@@ -3189,6 +3199,19 @@ mod tests {
             "defmodule M do\n  @param_trans a, zh_CN: \"x\"\n  def f(a), do: a\nend",
         );
         assert!(err3.contains("GEP-0018-R003"), "{err3}");
+    }
+
+    #[test]
+    fn parametrized_host_types() {
+        // GEP-0017-R002 rev 2: $mod.Type(t) -> mod.Type[t]
+        let py = compile(
+            "defmodule M do\n  @spec total($\"collections.abc\".Sequence(number())) :: float()\n  def total(xs), do: xs\nend",
+        );
+        assert!(
+            py.contains("def total(xs: collections.abc.Sequence[int | float]) -> float:"),
+            "{py}"
+        );
+        assert!(py.contains("import collections.abc"), "{py}");
     }
 
     #[test]
