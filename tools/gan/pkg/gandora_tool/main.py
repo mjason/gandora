@@ -149,29 +149,28 @@ def exec_code(code):
 def repl():
     print(f"gan repl (gandora-core {core.version()}) — Ctrl-D to exit")
     ns = builtins.dict()
-    _gan_loop23 = 0
-    _gan_res24 = None
+    _repl_walk(ns)
+    return print("")
+
+
+def _repl_walk(ns):
     while True:
-        n = _gan_loop23
         try:
-            _gan_tmp25 = builtins.input("gan> ")
+            _gan_tmp23 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp25 = "eof"
+            _gan_tmp23 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp25 = "eof"
-        line = _gan_tmp25
+            _gan_tmp23 = "eof"
+        line = _gan_tmp23
         if line == "eof":
-            _gan_res24 = n
-            break
+            return "ok"
         elif gandora_std.string.trim(line) == "":
-            _gan_loop23 = n
+            ns = ns
             continue
         else:
             _eval_line(line, ns)
-            _gan_loop23 = n + 1
+            ns = ns
             continue
-        break
-    return print("")
 
 
 def _eval_line(code, ns):

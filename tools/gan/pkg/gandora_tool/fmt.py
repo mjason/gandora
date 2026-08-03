@@ -168,58 +168,54 @@ def _reflow(text):
     interior = _interior_lines(toks)
     buckets = _bucket_by_line(toks)
     n = gandora_std.enum.count(lines)
-    _gan_loop11 = (1, [], "blank_start", None, False, {}, [])
-    _gan_res12 = None
-    while True:
-        match _gan_loop11:
-            case (i, stack, prev_kind, prev_last, prev_hang, deltas, acc) as _gan_t13 if isinstance(_gan_t13, tuple):
-                pass
-            case _:
-                raise GanMatchError("loop state did not match: " + repr(_gan_loop11))
-        if i > n:
-            _gan_res12 = gandora_std.enum.reverse(acc)
-            break
-        else:
-            line = gandora_std.enum.at(lines, i - 1)
-            lt = gandora_std.map.get(buckets, i, [])
-            if _gan_truthy(gandora_std.map.has_key_p(interior, i)):
-                d = gandora_std.map.get(deltas, gandora_std.map.get(interior, i), 0)
-                _gan_loop11 = (i + 1, stack, "code", prev_last, prev_hang, deltas, [_shift(line, d)] + acc)
-                continue
-            elif _gan_truthy(gandora_std.enum.empty_p(lt)):
-                if (prev_kind == "blank") or (prev_kind == "blank_start"):
-                    _gan_loop11 = (i + 1, stack, prev_kind, prev_last, prev_hang, deltas, acc)
-                    continue
-                else:
-                    _gan_loop11 = (i + 1, stack, "blank", prev_last, prev_hang, deltas, [""] + acc)
-                    continue
-            else:
-                _gan_val14 = _line_level(lt, stack, prev_last, prev_hang)
-                match _gan_val14:
-                    case (level, stack2, hung) as _gan_t15 if isinstance(_gan_t15, tuple):
-                        pass
-                    case _:
-                        raise GanMatchError("no match of right-hand side value: " + repr(_gan_val14))
-                indent = gandora_std.string.duplicate("  ", level)
-                multi = gandora_std.enum.find(lt, lambda t: _multiline_p(t))
-                if (multi is None):
-                    _gan_tmp16 = indent + _render_tokens(_capture_parens(lt), lines)
-                else:
-                    _gan_tmp16 = indent + line.strip()
-                rendered = _gan_tmp16
-                if (multi is None):
-                    _gan_tmp17 = deltas
-                else:
-                    old_lead = builtins.len(line) - builtins.len(line.lstrip())
-                    _gan_tmp17 = gandora_std.map.put(deltas, i, builtins.len(indent) - old_lead)
-                deltas2 = _gan_tmp17
-                stack3 = _advance(lt, stack2, level)
-                _gan_loop11 = (i + 1, stack3, "code", _last_significant(lt), hung, deltas2, [rendered] + acc)
-                continue
-        break
-    _gan_tmp10 = _gan_res12
-    out = _gan_tmp10
+    out = _reflow_walk((1, [], "blank_start", None, False, {}, []), lines, interior, buckets, n)
     return gandora_std.enum.join(_trim_trailing_blanks(out), "\n") + "\n"
+
+
+def _reflow_walk(*_gan_args):
+    while True:
+        match _gan_args:
+            case ((i, stack, prev_kind, prev_last, prev_hang, deltas, acc) as _gan_t10, lines, interior, buckets, n,) if isinstance(_gan_t10, tuple):
+                if i > n:
+                    return gandora_std.enum.reverse(acc)
+                else:
+                    line = gandora_std.enum.at(lines, i - 1)
+                    lt = gandora_std.map.get(buckets, i, [])
+                    if _gan_truthy(gandora_std.map.has_key_p(interior, i)):
+                        d = gandora_std.map.get(deltas, gandora_std.map.get(interior, i), 0)
+                        _gan_args = ((i + 1, stack, "code", prev_last, prev_hang, deltas, [_shift(line, d)] + acc), lines, interior, buckets, n)
+                        continue
+                    elif _gan_truthy(gandora_std.enum.empty_p(lt)):
+                        if (prev_kind == "blank") or (prev_kind == "blank_start"):
+                            _gan_args = ((i + 1, stack, prev_kind, prev_last, prev_hang, deltas, acc), lines, interior, buckets, n)
+                            continue
+                        else:
+                            _gan_args = ((i + 1, stack, "blank", prev_last, prev_hang, deltas, [""] + acc), lines, interior, buckets, n)
+                            continue
+                    else:
+                        _gan_val11 = _line_level(lt, stack, prev_last, prev_hang)
+                        match _gan_val11:
+                            case (level, stack2, hung) as _gan_t12 if isinstance(_gan_t12, tuple):
+                                pass
+                            case _:
+                                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val11))
+                        indent = gandora_std.string.duplicate("  ", level)
+                        multi = gandora_std.enum.find(lt, lambda t: _multiline_p(t))
+                        if (multi is None):
+                            _gan_tmp13 = indent + _render_tokens(_capture_parens(lt), lines)
+                        else:
+                            _gan_tmp13 = indent + line.strip()
+                        rendered = _gan_tmp13
+                        if (multi is None):
+                            _gan_tmp14 = deltas
+                        else:
+                            old_lead = builtins.len(line) - builtins.len(line.lstrip())
+                            _gan_tmp14 = gandora_std.map.put(deltas, i, builtins.len(indent) - old_lead)
+                        deltas2 = _gan_tmp14
+                        stack3 = _advance(lt, stack2, level)
+                        _gan_args = ((i + 1, stack3, "code", _last_significant(lt), hung, deltas2, [rendered] + acc), lines, interior, buckets, n)
+                        continue
+        raise GanMatchError("no clause of reflow_walk/5 matched " + repr(_gan_args))
 
 
 def _trim_trailing_blanks(ls):
@@ -279,7 +275,7 @@ def _opener_tok_p(t):
 def _clause_head_p(lt):
     def _gan_fn6(*_gan_args):
         match _gan_args:
-            case (t, (depth, found) as _gan_t19,) if isinstance(_gan_t19, tuple):
+            case (t, (depth, found) as _gan_t16,) if isinstance(_gan_t16, tuple):
                 if _gan_truthy(_opener_tok_p(t)):
                     return (depth + 1, found)
                 elif _gan_truthy(_closer_p(t)):
@@ -308,42 +304,38 @@ def _hang_p(first, prev_last, prev_hang, in_paren):
 
 def _line_level(lt, stack, prev_last, prev_hang):
     first = gandora_std.enum.at(lt, 0)
-    _gan_loop21 = stack
-    _gan_res22 = None
-    while True:
-        s = _gan_loop21
-        if _gan_truthy(gandora_std.enum.empty_p(s)):
-            _gan_res22 = s
-            break
-        else:
-            top = gandora_std.enum.at(s, 0)
-            if _gan_truthy(_gan_and(gandora_std.map.get(top, "kind") == "clause", lambda: _gan_or(_gan_or(_closer_p(first), lambda: _mid_p(first)), lambda: _clause_head_p(lt)))):
-                _gan_loop21 = gandora_std.enum.drop(s, 1)
-                continue
-            else:
-                _gan_res22 = s
-                break
-        break
-    _gan_tmp20 = _gan_res22
-    popped = _gan_tmp20
+    popped = _pop_clauses(stack, first, lt)
     top = gandora_std.enum.at(popped, 0)
     if _gan_truthy(gandora_std.enum.empty_p(popped)):
-        _gan_tmp23 = 0
+        _gan_tmp17 = 0
     elif _gan_truthy(_closer_p(first)):
-        _gan_tmp23 = gandora_std.map.get(top, "open")
+        _gan_tmp17 = gandora_std.map.get(top, "open")
     elif _gan_truthy(_mid_p(first)):
-        _gan_tmp23 = gandora_std.map.get(top, "open")
+        _gan_tmp17 = gandora_std.map.get(top, "open")
     else:
-        _gan_tmp23 = gandora_std.map.get(top, "body")
-    level = _gan_tmp23
+        _gan_tmp17 = gandora_std.map.get(top, "body")
+    level = _gan_tmp17
     top_paren = not (_gan_truthy(gandora_std.enum.empty_p(popped))) and (gandora_std.map.get(gandora_std.enum.at(popped, 0), "kind") == "paren")
     hung = _gan_and(not (_gan_truthy(_closer_p(first))) and not (_gan_truthy(_mid_p(first))), lambda: _hang_p(first, prev_last, prev_hang, top_paren))
     if _gan_truthy(hung):
-        _gan_tmp24 = level + 1
+        _gan_tmp18 = level + 1
     else:
-        _gan_tmp24 = level
-    level = _gan_tmp24
+        _gan_tmp18 = level
+    level = _gan_tmp18
     return (gandora_std.enum.max([level, 0]), popped, hung)
+
+
+def _pop_clauses(s, first, lt):
+    while True:
+        if _gan_truthy(gandora_std.enum.empty_p(s)):
+            return s
+        else:
+            top = gandora_std.enum.at(s, 0)
+            if _gan_truthy(_gan_and(gandora_std.map.get(top, "kind") == "clause", lambda: _gan_or(_gan_or(_closer_p(first), lambda: _mid_p(first)), lambda: _clause_head_p(lt)))):
+                s, first, lt = gandora_std.enum.drop(s, 1), first, lt
+                continue
+            else:
+                return s
 
 
 def _advance(lt, stack, level):
@@ -370,48 +362,45 @@ def _struct_kind(t):
 
 def _pop_to_opener(s):
     while True:
-        _gan_case26 = s
-        match _gan_case26:
-            case [] as _gan_l27 if isinstance(_gan_l27, list):
+        _gan_case20 = s
+        match _gan_case20:
+            case [] as _gan_l21 if isinstance(_gan_l21, list):
                 return []
-            case [{"kind": "clause"}, *rest] as _gan_l28 if isinstance(_gan_l28, list):
+            case [{"kind": "clause"}, *rest] as _gan_l22 if isinstance(_gan_l22, list):
                 s = rest
                 continue
-            case [_, *rest] as _gan_l29 if isinstance(_gan_l29, list):
+            case [_, *rest] as _gan_l23 if isinstance(_gan_l23, list):
                 return rest
             case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case26))
+                raise GanMatchError("no case clause matched: " + repr(_gan_case20))
 
 
 def _render_tokens(lt, lines):
-    _gan_loop30 = (lt, "", None)
-    _gan_res31 = None
+    return _render_walk((lt, "", None), lines)
+
+
+def _render_walk(*_gan_args):
     while True:
-        match _gan_loop30:
-            case (toks, out, prev) as _gan_t32 if isinstance(_gan_t32, tuple):
-                pass
-            case _:
-                raise GanMatchError("loop state did not match: " + repr(_gan_loop30))
-        _gan_case33 = toks
-        match _gan_case33:
-            case [] as _gan_l34 if isinstance(_gan_l34, list):
-                _gan_res31 = out
-                break
-            case [t, *rest] as _gan_l35 if isinstance(_gan_l35, list):
-                txt = _tok_text(t, lines)
-                if (prev is None):
-                    _gan_tmp36 = txt
-                elif _gap(prev, t) == 0:
-                    _gan_tmp36 = txt
-                else:
-                    _gan_tmp36 = " " + txt
-                piece = _gan_tmp36
-                _gan_loop30 = (rest, out + piece, t)
-                continue
-            case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case33))
-        break
-    return _gan_res31
+        match _gan_args:
+            case ((toks, out, prev) as _gan_t24, lines,) if isinstance(_gan_t24, tuple):
+                _gan_case25 = toks
+                match _gan_case25:
+                    case [] as _gan_l26 if isinstance(_gan_l26, list):
+                        return out
+                    case [t, *rest] as _gan_l27 if isinstance(_gan_l27, list):
+                        txt = _tok_text(t, lines)
+                        if (prev is None):
+                            _gan_tmp28 = txt
+                        elif _gap(prev, t) == 0:
+                            _gan_tmp28 = txt
+                        else:
+                            _gan_tmp28 = " " + txt
+                        piece = _gan_tmp28
+                        _gan_args = ((rest, out + piece, t), lines)
+                        continue
+                    case _:
+                        raise GanMatchError("no case clause matched: " + repr(_gan_case25))
+        raise GanMatchError("no clause of render_walk/2 matched " + repr(_gan_args))
 
 
 def _space_around_p(t):
@@ -453,91 +442,80 @@ def _tok_text(t, lines):
 
 
 def _capture_parens(lt):
-    _gan_loop37 = (lt, [])
-    _gan_res38 = None
+    return _capture_walk((lt, []))
+
+
+def _capture_walk(*_gan_args):
     while True:
-        match _gan_loop37:
-            case (toks, out) as _gan_t39 if isinstance(_gan_t39, tuple):
-                pass
-            case _:
-                raise GanMatchError("loop state did not match: " + repr(_gan_loop37))
-        _gan_case40 = toks
-        match _gan_case40:
-            case [] as _gan_l41 if isinstance(_gan_l41, list):
-                _gan_res38 = gandora_std.enum.reverse(out)
-                break
-            case [t, *rest] as _gan_l42 if isinstance(_gan_l42, list):
-                if _gan_truthy(_gan_and(_gan_and(_tok_is(t, "op", "&"), lambda: not (_gan_truthy(gandora_std.enum.empty_p(rest)))), lambda: gandora_std.map.get(gandora_std.enum.at(rest, 0), "kind") == "pyref")):
-                    _gan_case43 = _split_capture(rest)
-                    match _gan_case43:
-                        case (body, tail) as _gan_t44 if isinstance(_gan_t44, tuple):
-                            open = _synth("(", t)
-                            close = _synth(")", gandora_std.enum.at(body, -1))
-                            _gan_loop37 = (tail, [close] + (gandora_std.enum.reverse(body) + ([open, t] + out)))
+        match _gan_args:
+            case ((toks, out) as _gan_t29,) if isinstance(_gan_t29, tuple):
+                _gan_case30 = toks
+                match _gan_case30:
+                    case [] as _gan_l31 if isinstance(_gan_l31, list):
+                        return gandora_std.enum.reverse(out)
+                    case [t, *rest] as _gan_l32 if isinstance(_gan_l32, list):
+                        if _gan_truthy(_gan_and(_gan_and(_tok_is(t, "op", "&"), lambda: not (_gan_truthy(gandora_std.enum.empty_p(rest)))), lambda: gandora_std.map.get(gandora_std.enum.at(rest, 0), "kind") == "pyref")):
+                            _gan_case33 = _split_capture(rest)
+                            match _gan_case33:
+                                case (body, tail) as _gan_t34 if isinstance(_gan_t34, tuple):
+                                    open = _synth("(", t)
+                                    close = _synth(")", gandora_std.enum.at(body, -1))
+                                    _gan_args = ((tail, [close] + (gandora_std.enum.reverse(body) + ([open, t] + out))),)
+                                    continue
+                                case None:
+                                    _gan_args = ((rest, [t] + out),)
+                                    continue
+                                case _:
+                                    raise GanMatchError("no case clause matched: " + repr(_gan_case33))
+                        else:
+                            _gan_args = ((rest, [t] + out),)
                             continue
-                        case None:
-                            _gan_loop37 = (rest, [t] + out)
-                            continue
-                        case _:
-                            raise GanMatchError("no case clause matched: " + repr(_gan_case43))
-                else:
-                    _gan_loop37 = (rest, [t] + out)
-                    continue
-            case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case40))
-        break
-    return _gan_res38
+                    case _:
+                        raise GanMatchError("no case clause matched: " + repr(_gan_case30))
+        raise GanMatchError("no clause of capture_walk/1 matched " + repr(_gan_args))
 
 
 def _split_capture(toks):
-    _gan_loop45 = (toks, [], "ref")
-    _gan_res46 = None
+    return _split_walk((toks, [], "ref"))
+
+
+def _split_walk(*_gan_args):
     while True:
-        match _gan_loop45:
-            case (left, taken, state) as _gan_t47 if isinstance(_gan_t47, tuple):
-                pass
-            case _:
-                raise GanMatchError("loop state did not match: " + repr(_gan_loop45))
-        _gan_case48 = (state, left)
-        match _gan_case48:
-            case ("ref", [t, *rest] as _gan_l49) as _gan_t50 if isinstance(_gan_l49, list) and isinstance(_gan_t50, tuple):
-                if gandora_std.map.get(t, "kind") == "pyref":
-                    _gan_loop45 = (rest, [t] + taken, "dot")
-                    continue
-                else:
-                    _gan_res46 = None
-                    break
-            case ("dot", [t, *rest] as _gan_l51) as _gan_t52 if isinstance(_gan_l51, list) and isinstance(_gan_t52, tuple):
-                if _gan_truthy(_tok_is(t, "op", ".")):
-                    _gan_loop45 = (rest, [t] + taken, "name")
-                    continue
-                elif _gan_truthy(_tok_is(t, "op", "/")):
-                    _gan_loop45 = (rest, [t] + taken, "arity")
-                    continue
-                else:
-                    _gan_res46 = None
-                    break
-            case ("name", [t, *rest] as _gan_l53) as _gan_t54 if isinstance(_gan_l53, list) and isinstance(_gan_t54, tuple):
-                if (gandora_std.map.get(t, "kind") == "ident") or (gandora_std.map.get(t, "kind") == "upident"):
-                    _gan_loop45 = (rest, [t] + taken, "dot")
-                    continue
-                else:
-                    _gan_res46 = None
-                    break
-            case ("arity", [t, *rest] as _gan_l55) as _gan_t56 if isinstance(_gan_l55, list) and isinstance(_gan_t56, tuple):
-                if gandora_std.map.get(t, "kind") == "int":
-                    _gan_res46 = (gandora_std.enum.reverse([t] + taken), rest)
-                    break
-                else:
-                    _gan_res46 = None
-                    break
-            case (_, [] as _gan_l57) as _gan_t58 if isinstance(_gan_l57, list) and isinstance(_gan_t58, tuple):
-                _gan_res46 = None
-                break
-            case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case48))
-        break
-    return _gan_res46
+        match _gan_args:
+            case ((left, taken, state) as _gan_t35,) if isinstance(_gan_t35, tuple):
+                _gan_case36 = (state, left)
+                match _gan_case36:
+                    case ("ref", [t, *rest] as _gan_l37) as _gan_t38 if isinstance(_gan_l37, list) and isinstance(_gan_t38, tuple):
+                        if gandora_std.map.get(t, "kind") == "pyref":
+                            _gan_args = ((rest, [t] + taken, "dot"),)
+                            continue
+                        else:
+                            return None
+                    case ("dot", [t, *rest] as _gan_l39) as _gan_t40 if isinstance(_gan_l39, list) and isinstance(_gan_t40, tuple):
+                        if _gan_truthy(_tok_is(t, "op", ".")):
+                            _gan_args = ((rest, [t] + taken, "name"),)
+                            continue
+                        elif _gan_truthy(_tok_is(t, "op", "/")):
+                            _gan_args = ((rest, [t] + taken, "arity"),)
+                            continue
+                        else:
+                            return None
+                    case ("name", [t, *rest] as _gan_l41) as _gan_t42 if isinstance(_gan_l41, list) and isinstance(_gan_t42, tuple):
+                        if (gandora_std.map.get(t, "kind") == "ident") or (gandora_std.map.get(t, "kind") == "upident"):
+                            _gan_args = ((rest, [t] + taken, "dot"),)
+                            continue
+                        else:
+                            return None
+                    case ("arity", [t, *rest] as _gan_l43) as _gan_t44 if isinstance(_gan_l43, list) and isinstance(_gan_t44, tuple):
+                        if gandora_std.map.get(t, "kind") == "int":
+                            return (gandora_std.enum.reverse([t] + taken), rest)
+                        else:
+                            return None
+                    case (_, [] as _gan_l45) as _gan_t46 if isinstance(_gan_l45, list) and isinstance(_gan_t46, tuple):
+                        return None
+                    case _:
+                        raise GanMatchError("no case clause matched: " + repr(_gan_case36))
+        raise GanMatchError("no clause of split_walk/1 matched " + repr(_gan_args))
 
 
 def _synth(op, near):

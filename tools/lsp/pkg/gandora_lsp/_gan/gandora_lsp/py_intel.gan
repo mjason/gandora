@@ -139,20 +139,7 @@ defmodule PyIntel do
   defp find_and_infer(source_py, lines, start, var) do
     pattern = $re.compile("\\b" <> $re.escape(var) <> "\\b")
     total = Enum.count(lines)
-    hit = loop i = start do
-      cond do
-        i >= total -> break(nil)
-        i > start and Enum.at(lines, i).startswith("def ") -> break(nil)
-        true ->
-          m = pattern.search(Enum.at(lines, i))
-          if is_nil(m) do
-            recur(i + 1)
-          else
-            {s, _e} = m.span()
-            break({i + 1, s})
-          end
-      end
-    end
+    hit = scan_lines(start, start, lines, pattern, total)
     if is_nil(hit) do
       nil
     else
@@ -162,6 +149,21 @@ defmodule PyIntel do
         [] -> nil
         [n | _] -> n.name
       end
+    end
+  end
+
+  defp scan_lines(i, start, lines, pattern, total) do
+    cond do
+      i >= total -> nil
+      i > start and Enum.at(lines, i).startswith("def ") -> nil
+      true ->
+        m = pattern.search(Enum.at(lines, i))
+        if is_nil(m) do
+          recur(i + 1, start, lines, pattern, total)
+        else
+          {s, _e} = m.span()
+          {i + 1, s}
+        end
     end
   end
 

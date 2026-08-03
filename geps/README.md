@@ -26,9 +26,10 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0011](0011-multi-arity-functions.md) | Multi-Arity Functions | Standards Track | Accepted | 1 | [zh](local/zh/0011-multi-arity-functions.md) |
 | [0012](0012-compiler-as-a-library.md) | The Compiler as a Library | Standards Track | Accepted | 2 | [zh](local/zh/0012-compiler-as-a-library.md) |
 | [0013](0013-the-gan-task-runner.md) | The gan Task Runner | Standards Track | Accepted | 2 | [zh](local/zh/0013-the-gan-task-runner.md) |
-| [0014](0014-control-flow-completion.md) | Control-Flow Completion | Standards Track | Accepted | 2 | [zh](local/zh/0014-control-flow-completion.md) |
+| [0014](0014-control-flow-completion.md) | Control-Flow Completion | Standards Track | Accepted | 3 | [zh](local/zh/0014-control-flow-completion.md) |
 | [0015](0015-the-language-server.md) | The Language Server | Standards Track | Accepted | 6 | [zh](local/zh/0015-the-language-server.md) |
 | [0016](0016-the-formatter.md) | The Formatter | Standards Track | Accepted | 1 | [zh](local/zh/0016-the-formatter.md) |
 | [0017](0017-typespecs.md) | Typespecs and the Typed Boundary | Standards Track | Accepted | 3 | [zh](local/zh/0017-typespecs.md) |
 | [0018](0018-parameter-documentation.md) | Parameter Documentation | Standards Track | Accepted | 1 | [zh](local/zh/0018-parameter-documentation.md) |
 | [0019](0019-tail-call-optimization.md) | Self-Recursion Tail-Call Optimization | Standards Track | Accepted | 1 | [zh](local/zh/0019-tail-call-optimization.md) |
+| [0020](0020-comprehensions.md) | Comprehensions | Standards Track | Accepted | 1 | [zh](local/zh/0020-comprehensions.md) |

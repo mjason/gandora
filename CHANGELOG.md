@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.9.0 — 2026-08-03
+
+**`for` comprehensions land, `loop` retires.**
+
+- **GEP-0020**: Elixir's `for` — generators, filters, multiple
+  generators, pattern generators that *skip* non-matching elements,
+  and `into: %{}` — compiles to native Python comprehensions:
+  `for {k, v} <- xs, into: %{}, do: {k, v * 10}` is a dict
+  comprehension, byte-for-byte what a reviewer would write.
+- **GEP-0014 rev 3**: `loop` and `break` are retired. With GEP-0019
+  recursion (implicit TCO + checked `recur`) and `for`, the
+  construct's reason to exist is gone — and Elixir never had it. The
+  compile error carries the migration recipe; the whole toolchain
+  (fmt, runner repl, LSP scanners, playground) is itself migrated to
+  recursive helpers, dogfooding the answer.
+
 ## v0.8.0 — 2026-08-03
 
 **Tail-call optimization (GEP-0019).** Tail-position self-calls

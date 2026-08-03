@@ -152,51 +152,46 @@ def infer_type(source_py, fn_names, var):
 def _find_and_infer(source_py, lines, start, var):
     pattern = re.compile("\\b" + (re.escape(var) + "\\b"))
     total = gandora_std.enum.count(lines)
-    _gan_loop8 = start
-    _gan_res9 = None
-    while True:
-        i = _gan_loop8
-        if i >= total:
-            _gan_res9 = None
-            break
-        elif _gan_truthy(_gan_and(i > start, lambda: gandora_std.enum.at(lines, i).startswith("def "))):
-            _gan_res9 = None
-            break
-        else:
-            m = pattern.search(gandora_std.enum.at(lines, i))
-            if (m is None):
-                _gan_loop8 = i + 1
-                continue
-            else:
-                _gan_val10 = m.span()
-                match _gan_val10:
-                    case (s, _e) as _gan_t11 if isinstance(_gan_t11, tuple):
-                        pass
-                    case _:
-                        raise GanMatchError("no match of right-hand side value: " + repr(_gan_val10))
-                _gan_res9 = (i + 1, s)
-                break
-        break
-    _gan_tmp7 = _gan_res9
-    hit = _gan_tmp7
+    hit = _scan_lines(start, start, lines, pattern, total)
     if (hit is None):
         return None
     else:
-        _gan_val12 = hit
-        match _gan_val12:
-            case (line1, col) as _gan_t13 if isinstance(_gan_t13, tuple):
+        _gan_val7 = hit
+        match _gan_val7:
+            case (line1, col) as _gan_t8 if isinstance(_gan_t8, tuple):
                 pass
             case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val12))
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val7))
         names = builtins.list(jedi.Script(source_py).infer(line1, col))
-        _gan_case14 = names
-        match _gan_case14:
-            case [] as _gan_l15 if isinstance(_gan_l15, list):
+        _gan_case9 = names
+        match _gan_case9:
+            case [] as _gan_l10 if isinstance(_gan_l10, list):
                 return None
-            case [n, *_] as _gan_l16 if isinstance(_gan_l16, list):
+            case [n, *_] as _gan_l11 if isinstance(_gan_l11, list):
                 return n.name
             case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case14))
+                raise GanMatchError("no case clause matched: " + repr(_gan_case9))
+
+
+def _scan_lines(i, start, lines, pattern, total):
+    while True:
+        if i >= total:
+            return None
+        elif _gan_truthy(_gan_and(i > start, lambda: gandora_std.enum.at(lines, i).startswith("def "))):
+            return None
+        else:
+            m = pattern.search(gandora_std.enum.at(lines, i))
+            if (m is None):
+                i, start, lines, pattern, total = i + 1, start, lines, pattern, total
+                continue
+            else:
+                _gan_val12 = m.span()
+                match _gan_val12:
+                    case (s, _e) as _gan_t13 if isinstance(_gan_t13, tuple):
+                        pass
+                    case _:
+                        raise GanMatchError("no match of right-hand side value: " + repr(_gan_val12))
+                return (i + 1, s)
 
 
 def _to_first_line(text):

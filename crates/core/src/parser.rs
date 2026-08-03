@@ -298,7 +298,7 @@ impl Parser {
                 // `{1, if ok do 2 else 3 end}`, `f(case x do ... end)`
                 let block_form = matches!(
                     name.as_str(),
-                    "if" | "unless" | "case" | "cond" | "with" | "try" | "loop" | "quote"
+                    "if" | "unless" | "case" | "cond" | "with" | "try" | "for" | "quote"
                 );
                 if (command || block_form) && self.starts_expr() {
                     let args = self.parse_command_args()?;

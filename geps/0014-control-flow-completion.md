@@ -1,7 +1,7 @@
 ---
 gep: 14
 title: Control-Flow Completion
-description: try/rescue/after in Elixir syntax, and loop/recur/break as the tail-recursion substitute long-running programs need on a VM without TCO.
+description: try/rescue/after in Elixir syntax; the loop/break construct served until GEP-0019 recursion retired it, with recur surviving as the function-level jump.
 author: MJ
 status: Accepted
 type: Standards Track
@@ -9,7 +9,7 @@ areas:
   - Language
 created: 2026-08-02
 updated: 2026-08-02
-revision: 2
+revision: 3
 requires: [1]
 replaces: []
 superseded-by: null
@@ -107,6 +107,22 @@ nearest enclosing `loop`. Rebinding uses full pattern matching: a
 `recur` value that does not match the state pattern raises the
 GEP-0001-R012 match error.
 
+**GEP-0014-R007:** `loop` and `break` are retired. GEP-0019 gives
+tail recursion constant stack and `recur` its compiler-checked
+function-level meaning, and GEP-0020 gives iteration its `for`
+comprehension — the construct's reason to exist (a VM without TCO)
+is gone, and Elixir has no `loop`. The migration is mechanical:
+
+```elixir
+loop state = init do body end
+# becomes
+defp step(state) do body end   # recur(x) unchanged; break(v) -> v
+step(init)
+```
+
+`loop` and `break` produce compile errors carrying this recipe.
+R004–R006 below stand as the historical specification.
+
 **GEP-0014-R006:** Compilation is a Python `while True:` with the
 state held in a compiler-named variable, the pattern matched at the
 top of each iteration, `recur` as assignment plus `continue`, and
@@ -171,6 +187,10 @@ outside-loop diagnostics; and a million-iteration loop proving
 constant stack.
 
 ## Change History
+
+- Revision 3, 2026-08-03: R007 — `loop`/`break` retired in favor of
+  GEP-0019 recursion and GEP-0020 comprehensions; `recur` lives on at
+  function level.
 
 - Revision 2, 2026-08-02: Examples updated to the GEP-0003 revision 2 `$` interop syntax.
 

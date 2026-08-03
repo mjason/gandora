@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.8.0",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.9.0",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -488,6 +488,20 @@ defmodule Main do
     end
   end
 
+  defp split_walk({i, depth, cur, acc}, inner) do
+    if i >= String.length(inner) do
+      acc ++ [cur]
+    else
+      ch = String.slice(inner, i, 1)
+      cond do
+        ch == "(" or ch == "[" or ch == "{" -> recur({i + 1, depth + 1, cur <> ch, acc}, inner)
+        ch == ")" or ch == "]" or ch == "}" -> recur({i + 1, depth - 1, cur <> ch, acc}, inner)
+        ch == "," and depth == 0 -> recur({i + 1, depth, "", acc ++ [cur]}, inner)
+        true -> recur({i + 1, depth, cur <> ch, acc}, inner)
+      end
+    end
+  end
+
   # ---- formatting through the GEP-0016 engine (GEP-0015-R007) --------------
 
   @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_FORMATTING)
@@ -555,21 +569,7 @@ defmodule Main do
 
   # the innermost unclosed call before the cursor: {callee, arg_index}
   defp open_call(prefix) do
-    found = loop {i, depth, commas} = {String.length(prefix) - 1, 0, 0} do
-      if i < 0 do
-        break(nil)
-      else
-        ch = String.slice(prefix, i, 1)
-        cond do
-          ch == ")" or ch == "]" or ch == "}" -> recur({i - 1, depth + 1, commas})
-          ch == "[" or ch == "{" -> recur({i - 1, Enum.max([depth - 1, 0]), commas})
-          ch == "," and depth == 0 -> recur({i - 1, depth, commas + 1})
-          ch == "(" and depth == 0 -> break({i, commas})
-          ch == "(" -> recur({i - 1, depth - 1, commas})
-          true -> recur({i - 1, depth, commas})
-        end
-      end
-    end
+    found = scan_call({String.length(prefix) - 1, 0, 0}, prefix)
     if is_nil(found) do
       nil
     else
@@ -580,6 +580,22 @@ defmodule Main do
         nil
       else
         {m.group(1), commas}
+      end
+    end
+  end
+
+  defp scan_call({i, depth, commas}, prefix) do
+    if i < 0 do
+      nil
+    else
+      ch = String.slice(prefix, i, 1)
+      cond do
+        ch == ")" or ch == "]" or ch == "}" -> recur({i - 1, depth + 1, commas}, prefix)
+        ch == "[" or ch == "{" -> recur({i - 1, Enum.max([depth - 1, 0]), commas}, prefix)
+        ch == "," and depth == 0 -> recur({i - 1, depth, commas + 1}, prefix)
+        ch == "(" and depth == 0 -> {i, commas}
+        ch == "(" -> recur({i - 1, depth - 1, commas}, prefix)
+        true -> recur({i - 1, depth, commas}, prefix)
       end
     end
   end
@@ -636,19 +652,7 @@ defmodule Main do
   end
 
   defp split_top(inner) do
-    parts = loop {i, depth, cur, acc} = {0, 0, "", []} do
-      if i >= String.length(inner) do
-        break(acc ++ [cur])
-      else
-        ch = String.slice(inner, i, 1)
-        cond do
-          ch == "(" or ch == "[" or ch == "{" -> recur({i + 1, depth + 1, cur <> ch, acc})
-          ch == ")" or ch == "]" or ch == "}" -> recur({i + 1, depth - 1, cur <> ch, acc})
-          ch == "," and depth == 0 -> recur({i + 1, depth, "", acc ++ [cur]})
-          true -> recur({i + 1, depth, cur <> ch, acc})
-        end
-      end
-    end
+    parts = split_walk({0, 0, "", []}, inner)
     parts |> Enum.map(fn p -> p.strip() end) |> Enum.reject(fn p -> p == "" end)
   end
 

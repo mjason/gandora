@@ -1446,9 +1446,24 @@ impl Codegen {
                         "cond" => return self.emit_cond(call, dest, out),
                         "with" => return self.emit_with(call, dest, out),
                         "try" => return self.emit_try(call, dest, out),
-                        "loop" => return self.emit_loop(call, dest, out),
-                        "recur" | "break" => {
-                            if name == "recur" && self.loop_stack.is_empty() {
+                        "for" => return self.emit_for(call, dest, out),
+                        "loop" => {
+                            return Err(self.err(
+                                call.span,
+                                "loop was retired (GEP-0014-R007): write a recursive \
+                                 helper — `defp step(state) do body end; step(init)`; \
+                                 recur(x) stays, break(v) becomes the value v",
+                            ))
+                        }
+                        "break" => {
+                            return Err(self.err(
+                                call.span,
+                                "break was retired with loop (GEP-0014-R007): return \
+                                 the value directly from your recursive helper",
+                            ))
+                        }
+                        "recur" => {
+                            if self.loop_stack.is_empty() {
                                 if let Some((_, arities, params)) = self.tail_ctx.clone() {
                                     if !matches!(dest, Dest::Return) {
                                         return Err(self.err(
@@ -1879,6 +1894,205 @@ impl Codegen {
     }
 
     /// try/rescue/after (GEP-0014-R001..R003).
+
+    /// `for` comprehensions (GEP-0020): generators, filters, into.
+    fn emit_for(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
+        let span = call.span;
+        let mut clauses: Vec<Term> = Vec::new();
+        let mut body: Option<Term> = None;
+        let mut into: Option<Term> = None;
+        for a in &call.args {
+            match a {
+                Term::Pair(k, v) if k == "do" => body = Some(v.as_ref().clone()),
+                Term::Pair(k, v) if k == "into" => into = Some(v.as_ref().clone()),
+                Term::Pair(k, _) => {
+                    return Err(self.err(span, format!("for does not take {k}: (GEP-0020)")))
+                }
+                other => clauses.push(other.clone()),
+            }
+        }
+        let body = body.ok_or_else(|| self.err(span, "for requires a do: body (GEP-0020-R001)"))?;
+        let body_stmts = body.as_block();
+        if body_stmts.len() != 1 {
+            return Err(self.err(
+                span,
+                "a for body must be a single expression (GEP-0020-R001)",
+            ));
+        }
+        let body_expr = &body_stmts[0];
+
+        let mut parts: Vec<String> = Vec::new();
+        let mut first_pre: Vec<String> = Vec::new();
+        let mut seen_generator = false;
+        for c in &clauses {
+            let is_gen = matches!(&c,
+                Term::Call(cc) if matches!(&cc.callee, Callee::Name(n) if n == "<-"));
+            if is_gen {
+                let Term::Call(cc) = c else { unreachable!() };
+                let pat = &cc.args[0];
+                let mut pre = Vec::new();
+                let it = self.emit_expr(&cc.args[1], &mut pre)?;
+                if !pre.is_empty() {
+                    if seen_generator {
+                        return Err(self.err(
+                            span,
+                            "for generators after the first must be simple expressions",
+                        ));
+                    }
+                    first_pre.extend(pre);
+                }
+                match pat {
+                    Term::Var(n, ctx) if n != "_" => {
+                        parts.push(format!("for {} in {it}", hygienic_name(n, *ctx)));
+                    }
+                    Term::Var(_, _) => {
+                        let t = self.fresh_tmp("for");
+                        parts.push(format!("for {} in {it}", self.tmp(t)));
+                    }
+                    _ => {
+                        let t = self.fresh_tmp("for");
+                        let g = self.tmp(t).to_string();
+                        parts.push(format!("for {g} in {it}"));
+                        let mut guards = Vec::new();
+                        let mut binds: Vec<(String, String)> = Vec::new();
+                        self.comp_pattern(pat, &g, &mut guards, &mut binds)?;
+                        if !guards.is_empty() {
+                            parts.push(format!("if {}", guards.join(" and ")));
+                        }
+                        if !binds.is_empty() {
+                            let names: Vec<&str> =
+                                binds.iter().map(|(n, _)| n.as_str()).collect();
+                            let exprs: Vec<&str> =
+                                binds.iter().map(|(_, e)| e.as_str()).collect();
+                            parts.push(format!(
+                                "for ({},) in [({},)]",
+                                names.join(", "),
+                                exprs.join(", ")
+                            ));
+                        }
+                    }
+                }
+                seen_generator = true;
+            } else {
+                let mut pre = Vec::new();
+                let e = self.emit_bool_expr(c, &mut pre)?;
+                if !pre.is_empty() {
+                    return Err(self.err(span, "for filters must be simple expressions"));
+                }
+                parts.push(format!("if {e}"));
+            }
+        }
+        if !seen_generator {
+            return Err(self.err(span, "for requires at least one `pattern <- enumerable`"));
+        }
+
+        let mut pre = Vec::new();
+        let comp = match &into {
+            None => {
+                let elem = self.emit_expr(body_expr, &mut pre)?;
+                format!("[{elem} {}]", parts.join(" "))
+            }
+            Some(Term::Map(entries)) if entries.is_empty() => {
+                let Term::Tuple(kv) = body_expr else {
+                    return Err(self.err(
+                        span,
+                        "into: %{} needs a {key, value} body (GEP-0020-R003)",
+                    ));
+                };
+                if kv.len() != 2 {
+                    return Err(self.err(
+                        span,
+                        "into: %{} needs a {key, value} body (GEP-0020-R003)",
+                    ));
+                }
+                let k = self.emit_expr(&kv[0], &mut pre)?;
+                let v = self.emit_expr(&kv[1], &mut pre)?;
+                format!("{{{k}: {v} {}}}", parts.join(" "))
+            }
+            Some(_) => {
+                return Err(self.err(
+                    span,
+                    "into: supports %{} in this revision (GEP-0020-R003)",
+                ))
+            }
+        };
+        if !pre.is_empty() {
+            return Err(self.err(span, "a for body must be a simple expression"));
+        }
+        out.extend(first_pre);
+        self.finish_value(comp, dest, out);
+        Ok(())
+    }
+
+    /// Structural guard + bindings for a comprehension generator pattern
+    /// (GEP-0020-R002): non-matching elements are skipped, never raised.
+    fn comp_pattern(
+        &mut self,
+        pat: &Term,
+        subject: &str,
+        guards: &mut Vec<String>,
+        binds: &mut Vec<(String, String)>,
+    ) -> Result<()> {
+        match pat {
+            Term::Var(n, _) if n == "_" || n.starts_with('_') => Ok(()),
+            Term::Var(n, ctx) => {
+                binds.push((hygienic_name(n, *ctx), subject.to_string()));
+                Ok(())
+            }
+            Term::Int(v) => {
+                guards.push(format!("{subject} == {v}"));
+                Ok(())
+            }
+            Term::Atom(a) => {
+                guards.push(format!("{subject} == {}", py_str_lit(a)));
+                Ok(())
+            }
+            Term::Bool(b) => {
+                guards.push(format!("{subject} is {}", if *b { "True" } else { "False" }));
+                Ok(())
+            }
+            Term::Nil => {
+                guards.push(format!("{subject} is None"));
+                Ok(())
+            }
+            Term::Str(parts) => match Term::Str(parts.clone()).as_plain_str() {
+                Some(text) => {
+                    guards.push(format!("{subject} == {}", py_str_lit(&text)));
+                    Ok(())
+                }
+                None => Err(self.err(
+                    Span::default(),
+                    "interpolated strings are not comprehension patterns (GEP-0020-R002)",
+                )),
+            },
+            Term::Tuple(items) => {
+                guards.push(format!(
+                    "isinstance({subject}, tuple) and len({subject}) == {}",
+                    items.len()
+                ));
+                for (i, item) in items.iter().enumerate() {
+                    self.comp_pattern(item, &format!("{subject}[{i}]"), guards, binds)?;
+                }
+                Ok(())
+            }
+            Term::List(items) => {
+                guards.push(format!(
+                    "isinstance({subject}, list) and len({subject}) == {}",
+                    items.len()
+                ));
+                for (i, item) in items.iter().enumerate() {
+                    self.comp_pattern(item, &format!("{subject}[{i}]"), guards, binds)?;
+                }
+                Ok(())
+            }
+            other => Err(self.err(
+                other.span(),
+                "this pattern is not supported in a comprehension generator \
+                 (GEP-0020-R002)",
+            )),
+        }
+    }
+
     fn emit_try(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
         let saved_tail = self.tail_ctx.take();
         let r = self.emit_try_inner(call, dest, out);
@@ -2653,7 +2867,7 @@ impl Codegen {
                 "recur/break are statements; use them directly in a loop body \
                  (GEP-0014-R005)",
             )),
-            ("if", _) | ("unless", _) | ("case", _) | ("cond", _) | ("with", _) | ("try", _)
+            ("if", _) | ("unless", _) | ("case", _) | ("cond", _) | ("with", _) | ("try", _) | ("for", _)
             | ("loop", _) => {
                 let t = self.fresh_tmp("tmp");
                 let mut lines = Vec::new();
@@ -2756,7 +2970,7 @@ impl Codegen {
             _ => {
                 // unsupported special surface forms produce a named diagnostic
                 const UNSUPPORTED: &[&str] = &[
-                    "defstruct", "defprotocol", "defimpl", "receive", "for", "send",
+                    "defstruct", "defprotocol", "defimpl", "receive", "send",
                     "spawn", "defdelegate", "defguard", "sigil",
                 ];
                 if UNSUPPORTED.contains(&name) {
@@ -3481,6 +3695,40 @@ mod tests {
             "defmodule M do\n  @param_trans a, zh_CN: \"x\"\n  def f(a), do: a\nend",
         );
         assert!(err3.contains("GEP-0018-R003"), "{err3}");
+    }
+
+    #[test]
+    fn comprehensions_compile_to_native_comprehensions() {
+        // GEP-0020-R001/R003
+        let py = compile(
+            "defmodule M do\n  def f(xs), do: for x <- xs, x > 1, do: x * 10\nend",
+        );
+        assert!(py.contains("[x * 10 for x in xs if _gan_truthy(x > 1)]")
+            || py.contains("[x * 10 for x in xs if x > 1]"), "{py}");
+        let py2 = compile(
+            "defmodule M do\n  def g(xs), do: for {k, v} <- xs, into: %{}, do: {k, v}\nend",
+        );
+        assert!(py2.contains("isinstance("), "{py2}");
+        assert!(py2.contains("{"), "{py2}");
+    }
+
+    #[test]
+    fn comprehension_pattern_skips_not_raises() {
+        // GEP-0020-R002
+        let py = compile(
+            "defmodule M do\n  def f(xs), do: for {a, b} <- xs, do: a + b\nend",
+        );
+        assert!(py.contains("isinstance(") && py.contains("len("), "{py}");
+        assert!(!py.contains("GanMatchError\" + repr"), "{py}");
+    }
+
+    #[test]
+    fn loop_and_break_are_retired() {
+        // GEP-0014-R007
+        let err = compile_err(
+            "defmodule M do\n  def f() do\n    loop n = 0 do\n      break(n)\n    end\n  end\nend",
+        );
+        assert!(err.contains("GEP-0014-R007"), "{err}");
     }
 
     #[test]
@@ -4413,14 +4661,13 @@ mod gep0014_tests {
     }
 
     #[test]
-    fn loop_recur_break_compile_to_while() {
+    fn recur_replaces_the_retired_loop() {
+        // GEP-0014-R007 + GEP-0019: the loop shape now comes from recur
         let py = compile(
-            "defmodule M do\n  def count_to(n) do\n    loop {acc, i} = {0, 0} do\n      if i >= n do\n        break(acc)\n      else\n        recur({acc + i, i + 1})\n      end\n    end\n  end\nend",
+            "defmodule M do\n  defp tally(left, seen) do\n    case left do\n      [] -> seen\n      [h | t] -> recur(t, seen + h)\n    end\n  end\nend",
         );
         assert!(py.contains("while True:"), "{py}");
         assert!(py.contains("continue"), "{py}");
-        assert!(py.contains("break"), "{py}");
-        assert!(py.contains("case (acc, i)"), "{py}");
     }
 
     #[test]

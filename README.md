@@ -77,7 +77,7 @@ The practical guide is the [language manual](docs/syntax.md)
   binary is the stage-0 compiler `ganc`
   ([中文](geps/local/zh/0013-the-gan-task-runner.md))
 - [GEP-0014](geps/0014-control-flow-completion.md) — `try/rescue/after`,
-  `loop/recur/break`, and the `in` operator
+  tail-call-optimized recursion with explicit `recur`, `for` comprehensions, and the `in` operator
   ([中文](geps/local/zh/0014-control-flow-completion.md))
 - [GEP-0015](geps/0015-the-language-server.md) — `gan-lsp`, the language
   server written in Gandora ([tools/lsp](tools/lsp)), plus the VS Code

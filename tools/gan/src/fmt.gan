@@ -135,47 +135,53 @@ defmodule Fmt do
     interior = interior_lines(toks)
     buckets = bucket_by_line(toks)
     n = Enum.count(lines)
-    out = loop {i, stack, prev_kind, prev_last, prev_hang, deltas, acc} =
-      {1, [], :blank_start, nil, false, %{}, []} do
-        if i > n do
-          break(Enum.reverse(acc))
-        else
-          line = Enum.at(lines, i - 1)
-          lt = Map.get(buckets, i, [])
-          cond do
-            Map.has_key?(interior, i) ->
-              # inside a multi-line string: shift by the opener's delta (R005)
-              d = Map.get(deltas, Map.get(interior, i), 0)
-              recur({i + 1, stack, :code, prev_last, prev_hang, deltas, [shift(line, d)] ++ acc})
-            Enum.empty?(lt) ->
-              # blank line: collapse runs, drop leading blanks
-              if prev_kind == :blank or prev_kind == :blank_start do
-                recur({i + 1, stack, prev_kind, prev_last, prev_hang, deltas, acc})
-              else
-                recur({i + 1, stack, :blank, prev_last, prev_hang, deltas, [""] ++ acc})
-              end
-            true ->
-              {level, stack2, hung} = line_level(lt, stack, prev_last, prev_hang)
-              indent = String.duplicate("  ", level)
-              multi = Enum.find(lt, fn t -> multiline?(t) end)
-              rendered = if is_nil(multi) do
-                indent <> render_tokens(capture_parens(lt), lines)
-              else
-                indent <> line.strip()
-              end
-              deltas2 = if is_nil(multi) do
-                deltas
-              else
-                old_lead = $builtins.len(line) - $builtins.len(line.lstrip())
-                Map.put(deltas, i, $builtins.len(indent) - old_lead)
-              end
-              stack3 = advance(lt, stack2, level)
-              recur({i + 1, stack3, :code, last_significant(lt), hung, deltas2, [rendered] ++ acc})
-          end
-        end
-      end
+    out = reflow_walk({1, [], :blank_start, nil, false, %{}, []}, lines, interior, buckets, n)
     (out |> trim_trailing_blanks() |> Enum.join("\n")) <> "\n"
   end
+
+  defp reflow_walk({i, stack, prev_kind, prev_last, prev_hang, deltas, acc},
+    lines, interior, buckets, n) do
+      if i > n do
+        Enum.reverse(acc)
+      else
+        line = Enum.at(lines, i - 1)
+        lt = Map.get(buckets, i, [])
+        cond do
+          Map.has_key?(interior, i) ->
+            # inside a multi-line string: shift by the opener's delta (R005)
+            d = Map.get(deltas, Map.get(interior, i), 0)
+            recur({i + 1, stack, :code, prev_last, prev_hang, deltas, [shift(line, d)] ++ acc},
+              lines, interior, buckets, n)
+          Enum.empty?(lt) ->
+            # blank line: collapse runs, drop leading blanks
+            if prev_kind == :blank or prev_kind == :blank_start do
+              recur({i + 1, stack, prev_kind, prev_last, prev_hang, deltas, acc},
+                lines, interior, buckets, n)
+            else
+              recur({i + 1, stack, :blank, prev_last, prev_hang, deltas, [""] ++ acc},
+                lines, interior, buckets, n)
+            end
+          true ->
+            {level, stack2, hung} = line_level(lt, stack, prev_last, prev_hang)
+            indent = String.duplicate("  ", level)
+            multi = Enum.find(lt, fn t -> multiline?(t) end)
+            rendered = if is_nil(multi) do
+              indent <> render_tokens(capture_parens(lt), lines)
+            else
+              indent <> line.strip()
+            end
+            deltas2 = if is_nil(multi) do
+              deltas
+            else
+              old_lead = $builtins.len(line) - $builtins.len(line.lstrip())
+              Map.put(deltas, i, $builtins.len(indent) - old_lead)
+            end
+            stack3 = advance(lt, stack2, level)
+            recur({i + 1, stack3, :code, last_significant(lt), hung, deltas2, [rendered] ++ acc},
+              lines, interior, buckets, n)
+        end
+      end
+    end
 
   defp trim_trailing_blanks(ls) do
     ls |> Enum.reverse() |> Enum.drop_while(fn l -> l == "" end) |> Enum.reverse()
@@ -279,19 +285,7 @@ defmodule Fmt do
   defp line_level(lt, stack, prev_last, prev_hang) do
     first = Enum.at(lt, 0)
     # sibling clause heads and block closers end an open clause body
-    popped = loop s = stack do
-      if Enum.empty?(s) do
-        break(s)
-      else
-        top = Enum.at(s, 0)
-        if Map.get(top, :kind) == :clause and
-          (closer?(first) or mid?(first) or clause_head?(lt)) do
-            recur(Enum.drop(s, 1))
-          else
-            break(s)
-          end
-      end
-    end
+    popped = pop_clauses(stack, first, lt)
     top = Enum.at(popped, 0)
     level = cond do
       Enum.empty?(popped) -> 0
@@ -308,6 +302,20 @@ defmodule Fmt do
       level
     end
     {Enum.max([level, 0]), popped, hung}
+  end
+
+  defp pop_clauses(s, first, lt) do
+    if Enum.empty?(s) do
+      s
+    else
+      top = Enum.at(s, 0)
+      if Map.get(top, :kind) == :clause and
+        (closer?(first) or mid?(first) or clause_head?(lt)) do
+          recur(Enum.drop(s, 1), first, lt)
+        else
+          s
+        end
+    end
   end
 
   # push/pop the structures this line opens and closes
@@ -345,18 +353,20 @@ defmodule Fmt do
   # ---- line rendering (R003) -----------------------------------------------
 
   defp render_tokens(lt, lines) do
-    loop {toks, out, prev} = {lt, "", nil} do
-      case toks do
-        [] -> break(out)
-        [t | rest] ->
-          txt = tok_text(t, lines)
-          piece = cond do
-            is_nil(prev) -> txt
-            gap(prev, t) == 0 -> txt
-            true -> " " <> txt
-          end
-          recur({rest, out <> piece, t})
-      end
+    render_walk({lt, "", nil}, lines)
+  end
+
+  defp render_walk({toks, out, prev}, lines) do
+    case toks do
+      [] -> out
+      [t | rest] ->
+        txt = tok_text(t, lines)
+        piece = cond do
+          is_nil(prev) -> txt
+          gap(prev, t) == 0 -> txt
+          true -> " " <> txt
+        end
+        recur({rest, out <> piece, t}, lines)
     end
   end
 
@@ -399,57 +409,61 @@ defmodule Fmt do
   # ---- &$mod.fun/arity -> &($mod.fun/arity) (R008) -------------------------
 
   defp capture_parens(lt) do
-    loop {toks, out} = {lt, []} do
-      case toks do
-        [] -> break(Enum.reverse(out))
-        [t | rest] ->
-          if tok_is(t, "op", "&") and not Enum.empty?(rest) and
-            Map.get(Enum.at(rest, 0), "kind") == "pyref" do
-              case split_capture(rest) do
-                {body, tail} ->
-                  open = synth("(", t)
-                  close = synth(")", Enum.at(body, -1))
-                  recur({tail, [close] ++ Enum.reverse(body) ++ [open, t] ++ out})
-                nil ->
-                  recur({rest, [t] ++ out})
-              end
-            else
-              recur({rest, [t] ++ out})
+    capture_walk({lt, []})
+  end
+
+  defp capture_walk({toks, out}) do
+    case toks do
+      [] -> Enum.reverse(out)
+      [t | rest] ->
+        if tok_is(t, "op", "&") and not Enum.empty?(rest) and
+          Map.get(Enum.at(rest, 0), "kind") == "pyref" do
+            case split_capture(rest) do
+              {body, tail} ->
+                open = synth("(", t)
+                close = synth(")", Enum.at(body, -1))
+                recur({tail, [close] ++ Enum.reverse(body) ++ [open, t] ++ out})
+              nil ->
+                recur({rest, [t] ++ out})
             end
-      end
+          else
+            recur({rest, [t] ++ out})
+          end
     end
   end
 
   # $mod (. name)* / int — returns {body_tokens, rest} or nil
   defp split_capture(toks) do
-    loop {left, taken, state} = {toks, [], :ref} do
-      case {state, left} do
-        {:ref, [t | rest]} ->
-          if Map.get(t, "kind") == "pyref" do
-            recur({rest, [t] ++ taken, :dot})
-          else
-            break(nil)
-          end
-        {:dot, [t | rest]} ->
-          cond do
-            tok_is(t, "op", ".") -> recur({rest, [t] ++ taken, :name})
-            tok_is(t, "op", "/") -> recur({rest, [t] ++ taken, :arity})
-            true -> break(nil)
-          end
-        {:name, [t | rest]} ->
-          if Map.get(t, "kind") == "ident" or Map.get(t, "kind") == "upident" do
-            recur({rest, [t] ++ taken, :dot})
-          else
-            break(nil)
-          end
-        {:arity, [t | rest]} ->
-          if Map.get(t, "kind") == "int" do
-            break({Enum.reverse([t] ++ taken), rest})
-          else
-            break(nil)
-          end
-        {_, []} -> break(nil)
-      end
+    split_walk({toks, [], :ref})
+  end
+
+  defp split_walk({left, taken, state}) do
+    case {state, left} do
+      {:ref, [t | rest]} ->
+        if Map.get(t, "kind") == "pyref" do
+          recur({rest, [t] ++ taken, :dot})
+        else
+          nil
+        end
+      {:dot, [t | rest]} ->
+        cond do
+          tok_is(t, "op", ".") -> recur({rest, [t] ++ taken, :name})
+          tok_is(t, "op", "/") -> recur({rest, [t] ++ taken, :arity})
+          true -> nil
+        end
+      {:name, [t | rest]} ->
+        if Map.get(t, "kind") == "ident" or Map.get(t, "kind") == "upident" do
+          recur({rest, [t] ++ taken, :dot})
+        else
+          nil
+        end
+      {:arity, [t | rest]} ->
+        if Map.get(t, "kind") == "int" do
+          {Enum.reverse([t] ++ taken), rest}
+        else
+          nil
+        end
+      {_, []} -> nil
     end
   end
 

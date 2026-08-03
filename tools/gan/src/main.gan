@@ -122,22 +122,24 @@ defmodule Main do
   def repl() do
     IO.puts("gan repl (gandora-core #{core.version()}) — Ctrl-D to exit")
     ns = $builtins.dict()
-    loop n = 0 do
-      line = try do
-        $builtins.input("gan> ")
-      rescue
-        _e in $builtins.EOFError -> :eof
-        _e in $builtins.KeyboardInterrupt -> :eof
-      end
-      cond do
-        line == :eof -> break(n)
-        String.trim(line) == "" -> recur(n)
-        true ->
-          eval_line(line, ns)
-          recur(n + 1)
-      end
-    end
+    repl_walk(ns)
     IO.puts("")
+  end
+
+  defp repl_walk(ns) do
+    line = try do
+      $builtins.input("gan> ")
+    rescue
+      _e in $builtins.EOFError -> :eof
+      _e in $builtins.KeyboardInterrupt -> :eof
+    end
+    cond do
+      line == :eof -> :ok
+      String.trim(line) == "" -> recur(ns)
+      true ->
+        eval_line(line, ns)
+        recur(ns)
+    end
   end
 
   defp eval_line(code, ns) do
