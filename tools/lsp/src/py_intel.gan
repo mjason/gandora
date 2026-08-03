@@ -128,7 +128,6 @@ defmodule PyIntel do
       if is_nil(start) do
         nil
       else
-        var_re = jedi and ~r/\b/ and nil
         find_and_infer(source_py, lines, start, var)
       end
     rescue

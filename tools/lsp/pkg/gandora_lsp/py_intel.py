@@ -143,7 +143,6 @@ def infer_type(source_py, fn_names, var):
         if (start is None):
             return None
         else:
-            var_re = _gan_and(_gan_and(jedi, lambda: re.compile("\\b")), lambda: None)
             return _find_and_infer(source_py, lines, start, var)
     except Exception as _e:
         return None

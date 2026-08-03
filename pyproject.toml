@@ -1,6 +1,6 @@
 [project]
 name = "gandora-lang"
-version = "0.9.2"
+version = "0.9.3"
 description = "The gan compiler: an Elixir-flavored language that compiles to Python"
 readme = "README.md"
 license = "MIT"

@@ -564,7 +564,9 @@ impl Codegen {
                     // (GEP-0019-R007); unknown targets are typos
                     for a in &call.args {
                         match a {
-                            Term::Atom(s) if s == "stack_recursion" => {
+                            Term::Atom(s)
+                                if s == "stack_recursion" || s == "unused_function" =>
+                            {
                                 pending_allows.insert(s.clone());
                             }
                             Term::Atom(s) => {
@@ -572,7 +574,8 @@ impl Codegen {
                                     call.span,
                                     format!(
                                         "@allow does not recognize :{s}; known \
-                                         targets: :stack_recursion (GEP-0019-R007)"
+                                         targets: :stack_recursion, \
+                                         :unused_function (GEP-0019-R007, GEP-0022)"
                                     ),
                                 ));
                             }
@@ -799,6 +802,42 @@ impl Codegen {
             let code = self.compile_fun(f)?;
             fun_code.push('\n');
             fun_code.push_str(&code);
+        }
+        // a private function nothing references is dead code
+        // (GEP-0022-R005); references from its own group don't count
+        for (pi, p) in funs.iter().enumerate() {
+            if !p.private || p.allows.contains("unused_function") {
+                continue;
+            }
+            let referenced = funs.iter().enumerate().any(|(i, other)| {
+                i != pi
+                    && other.clauses.iter().any(|(params, guard, body)| {
+                        params.iter().any(|t| name_referenced(t, &p.name))
+                            || guard
+                                .as_ref()
+                                .is_some_and(|g| name_referenced(g, &p.name))
+                            || name_referenced(body, &p.name)
+                    })
+            }) || attrs.iter().any(|(_, v)| name_referenced(v, &p.name))
+                || funs.iter().enumerate().any(|(i, other)| {
+                    i != pi
+                        && other
+                            .decorators
+                            .iter()
+                            .any(|d| name_referenced(d, &p.name))
+                });
+            if !referenced {
+                self.warnings.push(crate::diag::Diagnostic::new(
+                    &self.file,
+                    p.span,
+                    format!(
+                        "defp {} is never referenced in this module; remove it \
+                         or acknowledge with @allow :unused_function \
+                         (GEP-0022-R005)",
+                        p.name
+                    ),
+                ));
+            }
         }
 
         let mut out = String::new();
@@ -1267,6 +1306,7 @@ impl Codegen {
             }
             scope_binders(body, &mut fn_scope);
         }
+        self.lint_fun(f, &fn_scope, &arity_label);
         self.scope_bound.push(fn_scope);
         // keyword-only creation-time snapshots of captured locals
         // (GEP-0021-R001): `def f(x, *, n=n):` / `def f(*_gan_args, n=n):`
@@ -1762,6 +1802,116 @@ impl Codegen {
         term_has_tail_self(term, name, arities)
     }
 
+    /// Per-function unsafety lints (GEP-0022): undefined variables,
+    /// unused bindings, unreachable clauses.
+    fn lint_fun(&mut self, f: &FnDef, fn_scope: &BTreeSet<String>, arity_label: &str) {
+        let display = if f.name.starts_with("_gan_fn") {
+            "this anonymous fn".to_string()
+        } else {
+            format!("{}/{arity_label}", f.name)
+        };
+        let mut fn_reads: BTreeSet<String> = BTreeSet::new();
+        for (params, guard, body) in &f.clauses {
+            for p in params {
+                pattern_pin_reads(p, &mut fn_reads);
+            }
+            if let Some(g) = guard {
+                scope_reads(g, &mut fn_reads);
+            }
+            scope_reads(body, &mut fn_reads);
+        }
+        // a name bound but never read wants a _ prefix (GEP-0022-R002)
+        for name in fn_scope {
+            if name.starts_with('_')
+                || name.contains("__gan")
+                || f.captures.contains(name)
+                || fn_reads.contains(name)
+            {
+                continue;
+            }
+            self.warnings.push(crate::diag::Diagnostic::new(
+                &self.file,
+                f.span,
+                format!(
+                    "variable {name} is bound but never used in {display}; \
+                     prefix it with _ to keep the intent visible (GEP-0022-R002)"
+                ),
+            ));
+        }
+        // a read nothing binds is a guaranteed NameError (GEP-0022-R001);
+        // `import Mod` makes bare names statically unknowable — stand down
+        if self.star_imports.is_empty() {
+            let mut known: BTreeSet<String> = self
+                .local_funs
+                .iter()
+                .map(|(n, _)| map_ident(n))
+                .collect();
+            for imp in &self.py_imports {
+                match imp.split(" as ").nth(1) {
+                    Some(alias) => {
+                        known.insert(alias.to_string());
+                    }
+                    // `pyimport os.path` binds the bare first segment
+                    None => {
+                        if let Some(first) = imp.split('.').next() {
+                            known.insert(first.to_string());
+                        }
+                    }
+                }
+            }
+            for name in &fn_reads {
+                if name.starts_with('_')
+                    || name.contains("__gan")
+                    || fn_scope.contains(name)
+                    || known.contains(name)
+                {
+                    continue;
+                }
+                self.warnings.push(crate::diag::Diagnostic::new(
+                    &self.file,
+                    f.span,
+                    format!(
+                        "variable {name} is never bound in {display}: this is a \
+                         guaranteed NameError at runtime (GEP-0022-R001)"
+                    ),
+                ));
+            }
+        }
+        // clauses behind a guard-less all-variable head can never match
+        // (GEP-0022-R003); compared per arity — other arities still run
+        let arities: BTreeSet<usize> =
+            f.clauses.iter().map(|(p, _, _)| p.len()).collect();
+        for arity in arities {
+            let same: Vec<usize> = f
+                .clauses
+                .iter()
+                .enumerate()
+                .filter(|(_, (p, _, _))| p.len() == arity)
+                .map(|(i, _)| i)
+                .collect();
+            let catch_all = same.iter().position(|&i| {
+                let (params, guard, _) = &f.clauses[i];
+                guard.is_none()
+                    && params.iter().all(|p| matches!(p, Term::Var(_, _)))
+            });
+            if let Some(pos) = catch_all {
+                if pos + 1 < same.len() {
+                    self.warnings.push(crate::diag::Diagnostic::new(
+                        &self.file,
+                        f.span,
+                        format!(
+                            "clause {} of {display} already matches every \
+                             argument; the {} clause(s) after it can never run \
+                             (GEP-0022-R003)",
+                            pos + 1,
+                            same.len() - pos - 1
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
     fn clause_list<'t>(&self, block: &'t Term, span: Span) -> Result<Vec<&'t Term>> {
         match block {
             Term::Call(c) if matches!(&c.callee, Callee::Name(n) if n == "__clauses__") => {
@@ -1782,10 +1932,11 @@ impl Codegen {
             .ok_or_else(|| self.err(call.span, "case requires a do block"))?
             .clone();
         let clauses = self.clause_list(&block, call.span)?;
+        let n_clauses = clauses.len();
         out.push(format!("match {tname}:"));
         let mut any_wild = false;
         let mut arms: Vec<String> = Vec::new();
-        for clause in clauses {
+        for (ci, clause) in clauses.into_iter().enumerate() {
             let Term::Call(c) = clause else { continue };
             let Term::List(pats) = &c.args[0] else { continue };
             if pats.len() != 1 {
@@ -1808,6 +1959,15 @@ impl Codegen {
                     && p.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
                     && p.chars().all(|c| c.is_alphanumeric() || c == '_'));
             if is_capture && guards.is_empty() {
+                // clauses after this one are dead (GEP-0022-R003)
+                if !any_wild && ci + 1 < n_clauses {
+                    self.warnings.push(crate::diag::Diagnostic::new(
+                        &self.file,
+                        c.span,
+                        "this case clause matches every value; the clauses \
+                         after it can never run (GEP-0022-R003)",
+                    ));
+                }
                 any_wild = true;
             }
             let case_line = if guards.is_empty() {
@@ -1947,6 +2107,15 @@ impl Codegen {
     /// `for` comprehensions (GEP-0020): generators, filters, into.
     fn emit_for(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
         let span = call.span;
+        if matches!(dest, Dest::Ignore) {
+            // building a collection nobody looks at (GEP-0022-R004)
+            self.warnings.push(crate::diag::Diagnostic::new(
+                &self.file,
+                span,
+                "the comprehension's result is discarded; `for` builds a \
+                 collection — use Enum.each for side effects (GEP-0022-R004)",
+            ));
+        }
         let mut clauses: Vec<Term> = Vec::new();
         let mut body: Option<Term> = None;
         let mut into: Option<Term> = None;
@@ -3370,6 +3539,34 @@ pub fn term_has_tail_self(term: &Term, name: &str, arities: &BTreeSet<usize>) ->
     }
 }
 
+/// Whether `term` mentions `name` at all — as a callee (any arity) or a
+/// bare reference (`&name/1` targets included) (GEP-0022-R005).
+fn name_referenced(term: &Term, name: &str) -> bool {
+    match term {
+        Term::Var(n, _) => n == name,
+        Term::Str(parts) => parts.iter().any(|p| match p {
+            StrPart::Interp(t) => name_referenced(t, name),
+            _ => false,
+        }),
+        Term::List(items) | Term::Tuple(items) => {
+            items.iter().any(|t| name_referenced(t, name))
+        }
+        Term::Map(entries) => entries
+            .iter()
+            .any(|(k, v)| name_referenced(k, name) || name_referenced(v, name)),
+        Term::Pair(_, v) => name_referenced(v, name),
+        Term::Call(c) => {
+            let own = match &c.callee {
+                Callee::Name(n) => n == name,
+                Callee::Dot { base, .. } => name_referenced(base, name),
+                Callee::Apply(t) => name_referenced(t, name),
+            };
+            own || c.args.iter().any(|t| name_referenced(t, name))
+        }
+        _ => false,
+    }
+}
+
 /// Whether `term` calls `name` with an arity in `arities` anywhere.
 fn calls_self(term: &Term, name: &str, arities: &BTreeSet<usize>) -> bool {
     match term {
@@ -3613,6 +3810,25 @@ fn pattern_binds(pat: &Term, out: &mut BTreeSet<String>) {
     }
 }
 
+/// Var reads a pattern performs: pin (`^x`) targets only.
+fn pattern_pin_reads(pat: &Term, out: &mut BTreeSet<String>) {
+    match pat {
+        Term::Call(c) if matches!(&c.callee, Callee::Name(n) if n == "^") => {
+            c.args.iter().for_each(|a| scope_reads(a, out));
+        }
+        Term::List(items) | Term::Tuple(items) => {
+            items.iter().for_each(|p| pattern_pin_reads(p, out));
+        }
+        Term::Map(entries) => entries.iter().for_each(|(k, v)| {
+            pattern_pin_reads(k, out);
+            pattern_pin_reads(v, out);
+        }),
+        Term::Pair(_, v) => pattern_pin_reads(v, out),
+        Term::Call(c) => c.args.iter().for_each(|p| pattern_pin_reads(p, out)),
+        _ => {}
+    }
+}
+
 /// Hygienic names a term binds in the enclosing function scope: `=` and
 /// `<-` left sides plus `->` clause patterns, which all compile to Python
 /// assignments. `fn` bodies are their own scope; `cond` clause heads are
@@ -3636,7 +3852,8 @@ fn scope_binders(term: &Term, out: &mut BTreeSet<String>) {
         Term::Pair(_, v) => scope_binders(v, out),
         Term::Call(c) => {
             match &c.callee {
-                Callee::Name(n) if n == "fn" => return,
+                // fn bodies are their own scope; quote bodies are data
+                Callee::Name(n) if n == "fn" || n == "quote" => return,
                 Callee::Name(n) if (n == "=" || n == "<-") && c.args.len() == 2 => {
                     pattern_binds(&c.args[0], out);
                     scope_binders(&c.args[1], out);
@@ -3704,6 +3921,73 @@ fn scope_reads(term: &Term, out: &mut BTreeSet<String>) {
             match &c.callee {
                 Callee::Name(n) if n == "fn" => {
                     out.extend(fn_free_vars(&c.args));
+                    return;
+                }
+                // &name/arity references a function, not a variable
+                Callee::Name(n) if n == "&" && c.args.len() == 1 => {
+                    if let Some(Term::Call(inner)) = c.args.first() {
+                        if matches!(&inner.callee, Callee::Name(x) if x == "/")
+                            && inner.args.len() == 2
+                            && matches!(inner.args[1], Term::Int(_))
+                        {
+                            return;
+                        }
+                    }
+                }
+                // pattern sides read only through pins — a binding
+                // occurrence is not a use (GEP-0022-R002)
+                Callee::Name(n) if (n == "=" || n == "<-") && c.args.len() == 2 => {
+                    pattern_pin_reads(&c.args[0], out);
+                    scope_reads(&c.args[1], out);
+                    return;
+                }
+                Callee::Name(n) if n == "->" && c.args.len() == 2 => {
+                    if let Term::List(pats) = &c.args[0] {
+                        for p in pats {
+                            let (pat, guard) = split_when(p);
+                            pattern_pin_reads(pat, out);
+                            if let Some(g) = guard {
+                                scope_reads(g, out);
+                            }
+                        }
+                    } else {
+                        scope_reads(&c.args[0], out);
+                    }
+                    scope_reads(&c.args[1], out);
+                    return;
+                }
+                // cond clause heads are conditions, not patterns
+                Callee::Name(n) if n == "cond" => {
+                    if let Some(Term::Call(cl)) = Term::keyword_arg(&c.args, "do") {
+                        for clause in &cl.args {
+                            if let Term::Call(arrow) = clause {
+                                for a in &arrow.args {
+                                    scope_reads(a, out);
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
+                // sigil templates read through `<%= expr %>` splices
+                // (GEP-0009-R002)
+                Callee::Name(n) if n.starts_with('~') => {
+                    for a in &c.args {
+                        match a.as_plain_str() {
+                            Some(body) => {
+                                for part in split_splices(&body) {
+                                    if let SplicePart::Expr(src) = part {
+                                        if let Ok(t) = crate::parser::parse_expr_str(
+                                            "<lint>", &src,
+                                        ) {
+                                            scope_reads(&t, out);
+                                        }
+                                    }
+                                }
+                            }
+                            None => scope_reads(a, out),
+                        }
+                    }
                     return;
                 }
                 Callee::Dot { base, .. } => scope_reads(base, out),
@@ -4021,6 +4305,98 @@ mod tests {
         );
         assert!(py.contains("while True:"), "{py}");
         assert!(py.contains("[lambda *, n=n: n] + acc"), "{py}");
+    }
+
+    fn warnings_of(src: &str) -> Vec<String> {
+        let module = crate::parser::parse_file("t.gan", src).unwrap();
+        let macros = collect_macros("t.gan", &module).unwrap();
+        let mut ex = Expander::new("t.gan", macros);
+        let expanded = ex.expand_module(&module).unwrap();
+        let mut cg = Codegen::new("t.gan", vec![]);
+        cg.compile(&expanded).unwrap();
+        cg.warnings.iter().map(|w| w.message.clone()).collect()
+    }
+
+    #[test]
+    fn undefined_variables_warn() {
+        // GEP-0022-R001: reading a name nothing binds is a NameError
+        let ws = warnings_of("defmodule M do\n  def f(x), do: x + y\nend");
+        assert!(ws.iter().any(|w| w.contains("R001") && w.contains("y")), "{ws:?}");
+        // pyimport names — aliased and bare — are known
+        let ws2 = warnings_of(
+            "defmodule M do\n  pyimport json\n  pyimport numpy, as: np\n  def f(x), do: json.dumps(np.array(x))\nend",
+        );
+        assert!(!ws2.iter().any(|w| w.contains("R001")), "{ws2:?}");
+        // `import Mod` makes bare names unknowable: lint stands down
+        let ws3 = warnings_of(
+            "defmodule M do\n  import Enum\n  def f(x), do: x + y\nend",
+        );
+        assert!(!ws3.iter().any(|w| w.contains("R001")), "{ws3:?}");
+    }
+
+    #[test]
+    fn unused_variables_warn_unless_underscored() {
+        // GEP-0022-R002
+        let ws = warnings_of("defmodule M do\n  def f(x, y), do: x\nend");
+        assert!(ws.iter().any(|w| w.contains("R002") && w.contains("y")), "{ws:?}");
+        let ws2 = warnings_of("defmodule M do\n  def f(x, _y), do: x\nend");
+        assert!(!ws2.iter().any(|w| w.contains("R002")), "{ws2:?}");
+        // sigil splices are reads
+        let ws3 = warnings_of(
+            "defmodule M do\n  def f(xs), do: ~python([x for x in <%= xs %>])\nend",
+        );
+        assert!(!ws3.iter().any(|w| w.contains("R002")), "{ws3:?}");
+        // a var read only in a later clause of the group still counts
+        let ws4 = warnings_of(
+            "defmodule M do\n  def f(0, y), do: y\n  def f(n, y), do: n + y\nend",
+        );
+        assert!(!ws4.iter().any(|w| w.contains("R002")), "{ws4:?}");
+    }
+
+    #[test]
+    fn unreachable_clauses_warn() {
+        // GEP-0022-R003: def group — catch-all before more clauses
+        let ws = warnings_of(
+            "defmodule M do\n  def f(0), do: 1\n  def f(n), do: n\n  def f(9), do: 2\nend",
+        );
+        assert!(ws.iter().any(|w| w.contains("R003")), "{ws:?}");
+        // different arities do not shadow each other
+        let ws2 = warnings_of(
+            "defmodule M do\n  def f(n), do: n\n  def f(a, b), do: a + b\nend",
+        );
+        assert!(!ws2.iter().any(|w| w.contains("R003")), "{ws2:?}");
+        // case: wildcard shadowing later clauses
+        let ws3 = warnings_of(
+            "defmodule M do\n  def f(x) do\n    case x do\n      _ -> :any\n      1 -> :one\n    end\n  end\nend",
+        );
+        assert!(ws3.iter().any(|w| w.contains("R003")), "{ws3:?}");
+        // guarded catch-all is refutable: no warning
+        let ws4 = warnings_of(
+            "defmodule M do\n  def f(n) when n > 0, do: n\n  def f(n), do: -n\nend",
+        );
+        assert!(!ws4.iter().any(|w| w.contains("R003")), "{ws4:?}");
+    }
+
+    #[test]
+    fn discarded_comprehensions_and_dead_defps_warn() {
+        // GEP-0022-R004
+        let ws = warnings_of(
+            "defmodule M do\n  def f(xs) do\n    for x <- xs, do: IO.puts(x)\n    :ok\n  end\nend",
+        );
+        assert!(ws.iter().any(|w| w.contains("R004")), "{ws:?}");
+        // GEP-0022-R005 + @allow :unused_function
+        let ws2 = warnings_of(
+            "defmodule M do\n  def f(x), do: x\n  defp helper(x), do: x\nend",
+        );
+        assert!(ws2.iter().any(|w| w.contains("R005") && w.contains("helper")), "{ws2:?}");
+        let ws3 = warnings_of(
+            "defmodule M do\n  def f(x), do: helper(x)\n  defp helper(x), do: x\nend",
+        );
+        assert!(!ws3.iter().any(|w| w.contains("R005")), "{ws3:?}");
+        let ws4 = warnings_of(
+            "defmodule M do\n  def f(x), do: x\n  @allow :unused_function\n  defp helper(x), do: x\nend",
+        );
+        assert!(!ws4.iter().any(|w| w.contains("R005")), "{ws4:?}");
     }
 
     #[test]

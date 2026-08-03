@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.9.3 — 2026-08-03
+
+**Rust-style lints: the compiler now proves your code unsafe before Python does.**
+
+- **GEP-0022**: five statically provable warnings, each pinned to its
+  definition in `gan check`/`gan build`/editor squiggles:
+  - *undefined variable* — a read nothing binds is a guaranteed
+    `NameError`; pyimport names known, `import Mod` stands the lint down
+  - *unused binding* — suggest the `_` prefix (sigil `<%= %>` splices
+    count as reads)
+  - *unreachable clause* — a guard-less all-variable head shadows the
+    same-arity clauses after it; ditto `case` wildcards
+  - *discarded comprehension* — `for` in statement position; use
+    Enum.each for side effects
+  - *unused defp* — dead code; acknowledge deliberate keep-alive with
+    `@allow :unused_function`
+- The sweep over our own five codebases found and removed one real
+  dead statement in the LSP's jedi bridge — the lint paid for itself
+  before shipping.
+
 ## v0.9.2 — 2026-08-03
 
 **Stack recursion now warns — with a way to say "I meant it."**

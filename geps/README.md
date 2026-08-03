@@ -34,3 +34,4 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0019](0019-tail-call-optimization.md) | Self-Recursion Tail-Call Optimization | Standards Track | Accepted | 4 | [zh](local/zh/0019-tail-call-optimization.md) |
 | [0020](0020-comprehensions.md) | Comprehensions | Standards Track | Accepted | 1 | [zh](local/zh/0020-comprehensions.md) |
 | [0021](0021-closure-capture.md) | Closure Capture Semantics | Standards Track | Accepted | 1 | [zh](local/zh/0021-closure-capture.md) |
+| [0022](0022-compiler-lints.md) | Compiler Lints | Standards Track | Accepted | 1 | [zh](local/zh/0022-compiler-lints.md) |
