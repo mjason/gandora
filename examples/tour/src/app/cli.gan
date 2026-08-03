@@ -4,6 +4,8 @@ defmodule App.Cli do
   require App.Macros
   alias App.Mathy
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     IO.puts("fact(10) = #{Mathy.fact(10)}")
     IO.puts("classify(-3) = #{Mathy.classify(-3)}")

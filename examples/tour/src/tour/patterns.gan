@@ -2,12 +2,17 @@ defmodule Tour.Patterns do
   @moduledoc "Pattern matching everywhere: =, case, cond, with, guards, multi-clause heads."
 
   # multi-clause dispatch with guards, top to bottom
+  @doc "Multi-clause dispatch with guards, top to bottom."
+  @param n, "The number to describe."
+  @spec describe(integer()) :: string()
   def describe(0), do: "zero"
   def describe(n) when n < 0, do: "negative #{n}"
   def describe(n) when rem(n, 2) == 0, do: "even #{n}"
   def describe(n), do: "odd #{n}"
 
   # destructuring with =
+  @doc "Destructuring with `=`: tuples, cons cells, and map keys."
+  @spec destructure() :: tuple(atom(), integer(), list(integer()), string())
   def destructure() do
     {status, payload} = {:ok, [1, 2, 3]}
     [first | rest] = payload
@@ -16,6 +21,10 @@ defmodule Tour.Patterns do
   end
 
   # case with tuple patterns, a pinned value, nested maps, and a catch-all
+  @doc "case with tuple patterns, a pinned value, nested maps, and a catch-all."
+  @param result, "A `{:ok, _}` / `{:error, _}` shaped value."
+  @param expected, "Pinned: the clause matches only this exact payload."
+  @spec handle(term(), term()) :: string()
   def handle(result, expected) do
     case result do
       {:ok, ^expected} -> "matched the pinned value #{inspect(expected)}"
@@ -26,6 +35,9 @@ defmodule Tour.Patterns do
   end
 
   # cond: first truthy branch wins
+  @doc "cond: the first truthy branch wins."
+  @param score, "A grade from 0 to 100."
+  @spec bucket(number()) :: atom()
   def bucket(score) do
     cond do
       score >= 90 -> :a
@@ -35,6 +47,9 @@ defmodule Tour.Patterns do
   end
 
   # with: chain of matches, else on the first failure
+  @doc "with: a chain of matches; the first failure falls to else."
+  @param text, "Two integers separated by a comma."
+  @spec parse_pair(string()) :: term()
   def parse_pair(text) do
     with [a, b] <- text.split(","),
       {:ok, x} <- parse_int(a),
@@ -53,6 +68,8 @@ defmodule Tour.Patterns do
     end
   end
 
+  @doc "Runs the chapter."
+  @spec demo() :: nil
   def demo() do
     IO.puts("describe:    #{inspect([describe(0), describe(-3), describe(4), describe(7)])}")
     IO.puts("destructure: #{inspect(destructure())}")

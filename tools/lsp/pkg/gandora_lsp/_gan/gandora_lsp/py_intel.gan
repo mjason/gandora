@@ -119,6 +119,7 @@ defmodule PyIntel do
 
   # the inferred type of `var` inside compiled function `fn_names` (first
   # match wins) of the generated Python source (GEP-0015-R011)
+  @spec infer_type(string(), list(string()), string()) :: string() | nil
   def infer_type(source_py, fn_names, var) do
     try do
       lines = source_py.split("\n")

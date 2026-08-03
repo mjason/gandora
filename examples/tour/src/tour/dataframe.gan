@@ -6,6 +6,8 @@ defmodule Tour.Dataframe do
 
   pyimport pandas, as: pd
 
+  @doc "A demo frame — host types appear in specs as `$pandas.DataFrame()`."
+  @spec sales() :: $pandas.DataFrame()
   def sales() do
     pd.DataFrame(%{
       "product" => ~w(keyboard mouse monitor cable keyboard monitor),
@@ -15,6 +17,9 @@ defmodule Tour.Dataframe do
     })
   end
 
+  @doc "Revenue per product, best first — a pandas fluent chain as a pipeline."
+  @param df, "The sales frame."
+  @spec report($pandas.DataFrame()) :: $pandas.DataFrame()
   def report(df) do
     df
     |> with_revenue()
@@ -36,6 +41,8 @@ defmodule Tour.Dataframe do
     |> .sort_values("revenue", ascending: false)
   end
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     df = sales()
     IO.puts("rows = #{$builtins.len(df)}, columns = #{df.columns.tolist()}")

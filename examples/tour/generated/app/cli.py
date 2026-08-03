@@ -10,7 +10,8 @@ class GanMatchError(Exception):
     pass
 
 
-def main():
+def main() -> None:
+    """Runs the chapter."""
     print(f"fact(10) = {app.mathy.fact(10)}")
     print(f"classify(-3) = {app.mathy.classify(-3)}")
     print(f"norm([3, 4]) = {app.mathy.norm([3, 4])}")

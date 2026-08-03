@@ -39,8 +39,12 @@ defmodule Tour.Dsl do
   @route {:post, "/users"}
   def create_user(), do: :created
 
+  @doc "Everything the userland annotation collected."
+  @spec routes() :: list()
   def routes(), do: @route
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     IO.puts(injected_greeting())
     IO.puts("answer = #{answer()}, language = #{language()}")

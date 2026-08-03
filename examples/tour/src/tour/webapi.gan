@@ -27,6 +27,8 @@ defmodule Tour.Webapi do
   defp fact(0), do: 1
   defp fact(n), do: n * fact(n - 1)
 
+  @doc "Prints what each route returns."
+  @spec main() :: nil
   def main() do
     client = $fastapi.testclient.TestClient(@app)
     resp = client.get("/")

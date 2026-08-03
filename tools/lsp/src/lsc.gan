@@ -30,6 +30,8 @@ defmodule Lsc do
     pysig <mod.fun>             Python call signatures
   """
 
+  @doc "Entry: parses --root, dispatches one query, emits one JSON value."
+  @spec main() :: nil
   def main() do
     args = $builtins.list($sys.argv) |> Enum.drop(1)
     {root, args} = take_root(args)

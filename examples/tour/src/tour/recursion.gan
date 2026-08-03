@@ -1,0 +1,70 @@
+defmodule Tour.Recursion do
+  @moduledoc """
+  Iteration the Gandora way (GEP-0019/0020): tail recursion compiles
+  to a `while` loop and runs in constant stack, `recur` is the
+  compile-checked spelling of that jump, structural recursion says so
+  with `@allow`, and `for` comprehensions compile to native Python
+  comprehensions. Hover any head in your editor to see the compiled
+  shape; `gan doc Tour.Recursion.sum_to` prints it too.
+  """
+
+  @doc "Sums `1..n` — the tail call rebinds parameters, no stack growth."
+  @doc_trans zh_CN: "求 `1..n` 之和——尾调用重绑参数,栈深恒定。"
+  @param n, "The upper bound; a million frames is fine."
+  @param_trans n, zh_CN: "上界;百万帧也没问题。"
+  @spec sum_to(integer()) :: integer()
+  def sum_to(n), do: sum_to(n, 0)
+  def sum_to(0, acc), do: acc
+  def sum_to(n, acc), do: sum_to(n - 1, acc + n)
+
+  @doc """
+  Counts down using `recur` — the explicit spelling: the compiler
+  rejects it outside tail position or with a wrong arity.
+  """
+  @doc_trans zh_CN: "用 `recur` 倒数——显式拼写:不在尾位置或元数不符会被编译器拒绝。"
+  @param n, "Where the countdown starts."
+  @param_trans n, zh_CN: "倒数的起点。"
+  @spec countdown(integer()) :: atom()
+  def countdown(n) do
+    if n <= 0 do
+      :done
+    else
+      recur(n - 1)
+    end
+  end
+
+  @doc """
+  Nesting depth of a list — structural recursion: the depth is bounded
+  by the data's shape, and `@allow :stack_recursion` records exactly
+  that intent where the lint would otherwise warn (GEP-0019-R007).
+  """
+  @doc_trans zh_CN: "列表的嵌套深度——结构递归:深度受数据形状约束,`@allow :stack_recursion` 在 lint 会告警之处记录这一意图。"
+  @param x, "Any value; lists recurse, everything else is depth 0."
+  @param_trans x, zh_CN: "任意值;列表递归,其余深度为 0。"
+  @spec depth(term()) :: integer()
+  @allow :stack_recursion
+  def depth([]), do: 1
+  def depth(x) when is_list(x), do: 1 + $builtins.max(for e <- x, do: depth(e))
+  def depth(_), do: 0
+
+  @doc "Runs the chapter: constant-stack recursion, then comprehensions."
+  @spec demo() :: nil
+  def demo() do
+    IO.puts("sum_to(1_000_000)    = #{sum_to(1_000_000)}")
+    IO.puts("countdown(1_000_000) = #{countdown(1_000_000)}")
+    IO.puts("depth([1, [2, [3]]]) = #{depth([1, [2, [3]]])}")
+
+    # comprehensions compile to native Python comprehensions
+    squares = for x <- [1, 2, 3, 4], rem(x, 2) == 0, do: x * x
+    pairs = for x <- [1, 2], y <- [10, 20], do: {x, y}
+    index = for {k, v} <- [{"a", 1}, :skipped, {"b", 2}], into: %{}, do: {k, v * 10}
+    IO.puts("squares = #{inspect(squares)}")
+    IO.puts("pairs   = #{inspect(pairs)}")
+    IO.puts("index   = #{inspect(index)}")
+
+    # closures capture creation-time values (GEP-0021) — even across
+    # comprehension iterations
+    fns = for x <- [1, 2, 3], do: fn -> x end
+    IO.puts("capture = #{inspect(for f <- fns, do: f.())}")
+  end
+end

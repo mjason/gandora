@@ -24,11 +24,13 @@ def create_user():
     return "created"
 
 
-def routes():
+def routes() -> list:
+    """Everything the userland annotation collected."""
     return [("get", "/users"), ("post", "/users")]
 
 
-def main():
+def main() -> None:
+    """Runs the chapter."""
     print(injected_greeting())
     print(f"answer = {answer()}, language = {language()}")
     print(f"routes = {repr(routes())}")

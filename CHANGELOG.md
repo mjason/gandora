@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.10.1 — 2026-08-03
+
+**The tour, tools, and std now practice everything they preach.**
+
+- **New tour chapter** `recursion + comprehensions`: tail recursion at a
+  million frames, checked `recur`, structural recursion with
+  `@allow :stack_recursion`, and `for` comprehensions with pattern-skip
+  and `into:` — every head fully `@doc`/`@spec`/`@param` annotated
+  (bilingual), so hovering it shows the compiled shape.
+- **Tour-wide annotation sweep**: every public function in every chapter
+  carries `@doc` + `@spec` (host types like `$pandas.DataFrame()` and
+  struct types like `App.Shop.t()` included) — the examples now
+  demonstrate the documentation standards, not just the syntax.
+- **Toolchain surface**: the runner, lsc, PyIntel, and the LSP's pure
+  helpers gained specs and docs; std was already at 100% (94/94).
+
 ## v0.10.0 — 2026-08-03
 
 **The tooling milestone: find-references, rename, quick fixes — for editors and AI alike.**

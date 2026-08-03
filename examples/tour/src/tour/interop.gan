@@ -8,10 +8,16 @@ defmodule Tour.Interop do
 
   # any Python decorator attaches with @decorate (GEP-0003)
   @decorate $functools.lru_cache(maxsize: 8)
+  @doc "Any Python decorator attaches with @decorate — here lru_cache."
+  @param a, "First addend."
+  @param b, "Second addend."
+  @spec cached_add(number(), number()) :: number()
   def cached_add(a, b) do
     a + b
   end
 
+  @doc "Runs the chapter."
+  @spec demo() :: nil
   def demo() do
     IO.puts("$math.pi           = #{$math.pi}")
     IO.puts("json with kwargs   = #{j.dumps(%{lang: "gandora", year: 2026}, sort_keys: true)}")

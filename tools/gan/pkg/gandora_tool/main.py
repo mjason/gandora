@@ -33,7 +33,8 @@ gitignore = "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n"
 hello_gan = "defmodule Main do\n  def main(), do: IO.puts(\"Hello from Gandora!\")\nend\n"
 
 
-def main():
+def main() -> None:
+    """The task-runner entry: one command per invocation (GEP-0013)."""
     args = gandora_std.enum.drop(builtins.list(sys.argv), 1)
     _gan_case0 = args
     match _gan_case0:
@@ -86,7 +87,8 @@ def _project_python():
         return sys.executable
 
 
-def version():
+def version() -> None:
+    """Runner and compiler-library versions."""
     print(f"gan {_runner_version()} (runner) / gandora-core {core.version()}")
     if _runner_version() != core.version():
         return print("warning: runner and gandora-core versions differ (GEP-0012-R007)")
@@ -98,7 +100,8 @@ def _runner_version():
     return importlib.metadata.version("gandora-tool")
 
 
-def build():
+def build() -> None:
+    """Compiles the project into outDir via gandora_core (GEP-0012)."""
     try:
         modules = core.build(_root())
         return print(f"compiled {gandora_std.enum.count(modules)} module(s)")
@@ -106,7 +109,8 @@ def build():
         return _compile_error(e)
 
 
-def check():
+def check() -> None:
+    """Full-pipeline analysis without writing output; exits 1 on findings."""
     diags = core.check(_root())
     def _gan_fn0(d):
         _gan_fstr18 = gandora_std.map.get(d, "severity")
@@ -122,7 +126,14 @@ def check():
         return sys.exit(1)
 
 
-def run(file, args):
+def run(file: str, args: list[str]) -> None:
+    """Compiles and executes `file` with the project Python (GEP-0013-R002).
+
+## Parameters
+
+  - file: The .gan entry file.
+  - args: Arguments passed through to the program.
+"""
     cache = _root() + "/.gandora/cache"
     try:
         modules = core.build(_root(), cache)
@@ -142,11 +153,18 @@ def run(file, args):
         return _compile_error(e)
 
 
-def exec_code(code):
+def exec_code(code: str) -> None:
+    """Compiles and runs one expression given on the command line.
+
+## Parameters
+
+  - code: The Gandora source text.
+"""
     return _eval_line(code, builtins.dict())
 
 
-def repl():
+def repl() -> None:
+    """An interactive loop over compile_snippet — state carries across lines."""
     print(f"gan repl (gandora-core {core.version()}) — Ctrl-D to exit")
     ns = builtins.dict()
     _repl_walk(ns)
@@ -192,7 +210,13 @@ def _pyproject_toml(name):
     return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\"]\n"
 
 
-def init(path):
+def init(path: str) -> None:
+    """Delegates project scaffolding to the ganc binary.
+
+## Parameters
+
+  - path: Where to create the project.
+"""
     p = pathlib.Path(path)
     if _gan_truthy(p.exists()):
         print(f"gan: {path} already exists")

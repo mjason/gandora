@@ -19,11 +19,13 @@ def evens_capped(xs: list[int], limit: int) -> list[int]:
     return ([x for x in (xs) if x % 2 == 0][:(limit)])
 
 
-def eex_docs():
+def eex_docs() -> str:
+    """`<%%=` escapes the splice marker, so templates can document templates."""
     return "Use <%= expr %> to splice a value; this line shows it literally."
 
 
-def main():
+def main() -> None:
+    """Runs the chapter."""
     print(sales_query(10))
     print(report("gandora", [12, 30, 7, 45]))
     print(f"evens_capped = {repr(evens_capped([1, 2, 3, 4, 5, 6, 7, 8], 3))}")

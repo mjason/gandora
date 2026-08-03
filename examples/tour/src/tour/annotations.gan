@@ -38,8 +38,13 @@ defmodule Tour.Annotations do
     end
   end
 
+  @doc "No annotation: the on_definition hook leaves it untouched."
+  @param x, "Any number."
+  @spec plain(number()) :: number()
   def plain(x), do: x + 1
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     IO.puts("fib(60) = #{fib(60)}")
     IO.puts("cache   = #{fib.cache_info()}")

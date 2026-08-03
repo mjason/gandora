@@ -33,7 +33,7 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.10.0", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.10.1", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
 
@@ -92,7 +92,7 @@ def _doc_and_line(params):
     return (doc, line)
 
 
-def _word_at(line, character):
+def _word_at(line: str, character: int) -> tuple[str, int] | None:
     def _gan_fn1(m, *, character=character):
         _gan_val1 = m.span()
         match _gan_val1:
@@ -114,7 +114,7 @@ def _word_at(line, character):
         return (hit.group(0).rstrip("."), s)
 
 
-def _module_of(source):
+def _module_of(source: str) -> str | None:
     m = re.compile("defmodule\\s+([A-Za-z0-9_.]+)").search(source)
     if (m is None):
         return None
@@ -122,7 +122,7 @@ def _module_of(source):
         return m.group(1)
 
 
-def _target_of(source, token):
+def _target_of(source: str, token: str) -> str | None:
     if _gan_truthy(gandora_std.string.match_p(token, re.compile("^[A-Z]"))):
         return token
     else:
@@ -216,7 +216,7 @@ def _py_name(name):
     return name.replace("?", "_p").replace("!", "_bang")
 
 
-def _root_path():
+def _root_path() -> str:
     return server.workspace.root_path
 
 
@@ -407,7 +407,7 @@ def _symbol_kind(*_gan_args):
     raise GanMatchError("no clause of symbol_kind/1 matched " + repr(_gan_args))
 
 
-def _fun_target_at(doc, line, character):
+def _fun_target_at(doc: object, line: str, character: int) -> str | None:
     hit = _word_at(line, character)
     if (hit is None):
         return None
@@ -425,7 +425,7 @@ def _fun_target_at(doc, line, character):
             return None
 
 
-def _ref_ranges(target):
+def _ref_ranges(target: str) -> list[dict]:
     fun = gandora_std.enum.at(target.split("."), -1)
     try:
         _gan_tmp36 = core.references(target, _root_path())

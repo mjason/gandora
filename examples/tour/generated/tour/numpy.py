@@ -5,7 +5,8 @@ Needs `uv sync` first, then: gan run src/tour/numpy.gan
 import numpy as np
 
 
-def demo():
+def demo() -> None:
+    """numpy without wrappers: arrays, broadcasting, reductions."""
     a = np.array([1.0, 2.0, 3.0, 4.0])
     print(f"a            = {a}")
     print(f"a * 10 + 1   = {(a * 10.0) + 1.0}")

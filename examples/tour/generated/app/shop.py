@@ -1,6 +1,7 @@
 """Structs + module attributes + a Flask-style decorator registry."""
 
 import builtins
+import collections.abc
 import dataclasses
 
 
@@ -24,7 +25,13 @@ class Shop:
 routes = {}
 
 
-def route(path):
+def route(path: str) -> collections.abc.Callable:
+    """A Flask-style decorator factory: registers `f` under `path`.
+
+## Parameters
+
+  - path: The route key.
+"""
     def _gan_fn0(f, *, path=path):
         routes.update({path: f})
         return f
@@ -32,11 +39,18 @@ def route(path):
 
 
 @route("/sale")
-def sale(item):
+def sale(item: Shop) -> Shop:
+    """Half price, tagged — struct update syntax under a decorator.
+
+## Parameters
+
+  - item: The item on sale.
+"""
     return dataclasses.replace(item, price=_gan_div(item.price, 2), tags=item.tags + ["sale"])
 
 
-def main():
+def main() -> None:
+    """Runs the chapter."""
     item = Shop(name="keyboard", price=100)
     _gan_case0 = item
     match _gan_case0:

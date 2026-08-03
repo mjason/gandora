@@ -5,6 +5,8 @@ defmodule Tour.Functions do
   defp map_list(xs, f), do: $builtins.list($builtins.map(f, xs))
   defp keep(xs, f), do: $builtins.list($builtins.filter(f, xs))
 
+  @doc "Runs the chapter."
+  @spec demo() :: nil
   def demo() do
     double = fn x -> x * 2 end
 

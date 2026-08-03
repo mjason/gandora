@@ -26,7 +26,8 @@ def _keep(xs, f):
     return builtins.list(builtins.filter(f, xs))
 
 
-def demo():
+def demo() -> None:
+    """Runs the chapter."""
     double = lambda x: x * 2
     def _gan_fn0(*_gan_args):
         match _gan_args:

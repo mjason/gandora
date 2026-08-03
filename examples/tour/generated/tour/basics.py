@@ -17,11 +17,13 @@ def _gan_rem(a, b):
     return a - _gan_div(a, b) * b
 
 
-def literals():
+def literals() -> list:
+    """One of every literal, in a list."""
     return [42, 1000000, 3.14, "ok", "quoted atom", "text", True, None, [1, 2, 3], ("pair", "tuple"), {"key": "value", "atom_key": 1}, [("name", "keyword"), ("list", True)]]
 
 
-def arithmetic():
+def arithmetic() -> tuple[int, float, int, int]:
+    """Elixir arithmetic semantics: `/` is true division, `//` and `rem` truncate."""
     a = 7 + (3 * 2)
     b = 10 / 4
     c = _gan_div(10, 4)
@@ -29,21 +31,34 @@ def arithmetic():
     return (a, b, c, d)
 
 
-def strings(name):
+def strings(name: str) -> tuple[str, str, str]:
+    """Interpolation, Python methods on strings, and `<>` concatenation.
+
+## Parameters
+
+  - name: Spliced into the greeting.
+"""
     greeting = f"Hello, {name}!"
     upper = greeting.upper()
     joined = "a b c" + " d"
     return (greeting, upper, joined)
 
 
-def truthiness(x):
+def truthiness(x: object) -> str:
+    """Only `false` and `nil` are falsy — 0 and empty containers are truthy.
+
+## Parameters
+
+  - x: Any value to test.
+"""
     if _gan_truthy(x):
         return f"truthy: {repr(x)}"
     else:
         return f"falsy: {repr(x)}"
 
 
-def demo():
+def demo() -> None:
+    """Runs the chapter."""
     print(f"literals:   {repr(literals())}")
     print(f"arithmetic: {repr(arithmetic())}")
     _gan_fstr0 = repr(strings("gandora"))

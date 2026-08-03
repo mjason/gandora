@@ -10,11 +10,19 @@ counter = collections.Counter("gandora")
 
 
 @functools.lru_cache(maxsize=8)
-def cached_add(a, b):
+def cached_add(a: int | float, b: int | float) -> int | float:
+    """Any Python decorator attaches with @decorate — here lru_cache.
+
+## Parameters
+
+  - a: First addend.
+  - b: Second addend.
+"""
     return a + b
 
 
-def demo():
+def demo() -> None:
+    """Runs the chapter."""
     print(f"$math.pi           = {math.pi}")
     _gan_fstr0 = j.dumps({"lang": "gandora", "year": 2026}, sort_keys=True)
     print(f"json with kwargs   = {_gan_fstr0}")

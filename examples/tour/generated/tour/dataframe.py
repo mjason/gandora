@@ -3,14 +3,22 @@ wrapper code. Needs `uv sync` first, then: gan run src/tour/dataframe.gan
 """
 
 import builtins
+import pandas
 import pandas as pd
 
 
-def sales():
+def sales() -> pandas.DataFrame:
+    """A demo frame — host types appear in specs as `$pandas.DataFrame()`."""
     return pd.DataFrame({"product": ["keyboard", "mouse", "monitor", "cable", "keyboard", "monitor"], "region": ["east", "east", "west", "west", "east", "west"], "units": [12, 30, 7, 45, 8, 5], "price": [100.0, 25.5, 300.0, 9.9, 100.0, 300.0]})
 
 
-def report(df):
+def report(df: pandas.DataFrame) -> pandas.DataFrame:
+    """Revenue per product, best first — a pandas fluent chain as a pipeline.
+
+## Parameters
+
+  - df: The sales frame.
+"""
     return _summarize(_with_revenue(df))
 
 
@@ -22,7 +30,8 @@ def _summarize(df):
     return df.groupby("product", as_index=False).agg({"units": "sum", "revenue": "sum"}).sort_values("revenue", ascending=False)
 
 
-def main():
+def main() -> None:
+    """Runs the chapter."""
     df = sales()
     print(f"rows = {builtins.len(df)}, columns = {df.columns.tolist()}")
     top = report(df)

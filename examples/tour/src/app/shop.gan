@@ -5,6 +5,9 @@ defmodule App.Shop do
 
   @routes %{}
 
+  @doc "A Flask-style decorator factory: registers `f` under `path`."
+  @param path, "The route key."
+  @spec route(string()) :: fun()
   def route(path) do
     fn f ->
       @routes.update(%{path => f})
@@ -12,11 +15,16 @@ defmodule App.Shop do
     end
   end
 
+  @doc "Half price, tagged — struct update syntax under a decorator."
+  @param item, "The item on sale."
+  @spec sale(App.Shop.t()) :: App.Shop.t()
   @decorate route("/sale")
   def sale(item) do
     %App.Shop{item | price: item.price // 2, tags: item.tags ++ [:sale]}
   end
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     item = %App.Shop{name: "keyboard", price: 100}
     case item do

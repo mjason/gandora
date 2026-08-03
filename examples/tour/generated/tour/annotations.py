@@ -16,11 +16,18 @@ def fib(n):
         return fib(n - 1) + fib(n - 2)
 
 
-def plain(x):
+def plain(x: int | float) -> int | float:
+    """No annotation: the on_definition hook leaves it untouched.
+
+## Parameters
+
+  - x: Any number.
+"""
     return x + 1
 
 
-def main():
+def main() -> None:
+    """Runs the chapter."""
     print(f"fib(60) = {fib(60)}")
     print(f"cache   = {fib.cache_info()}")
     _gan_fstr0 = repr(builtins.hasattr(plain, "cache_info"))

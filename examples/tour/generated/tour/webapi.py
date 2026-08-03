@@ -46,7 +46,8 @@ def _fact(*_gan_args):
     raise GanMatchError("no clause of fact/1 matched " + repr(_gan_args))
 
 
-def main():
+def main() -> None:
+    """Prints what each route returns."""
     client = fastapi.testclient.TestClient(app)
     resp = client.get("/")
     print(f"GET /                 -> {resp.status_code} {resp.json()}")

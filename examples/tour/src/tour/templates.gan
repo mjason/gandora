@@ -36,11 +36,15 @@ defmodule Tour.Templates do
     ~python([x for x in <%= xs %> if x % 2 == 0][:<%= limit %>])
   end
 
+  @doc "`<%%=` escapes the splice marker, so templates can document templates."
+  @spec eex_docs() :: string()
   def eex_docs() do
     # <%%= escapes a literal marker, so templates can document templates
     ~markdown(Use <%%= expr %> to splice a value; this line shows it literally.)
   end
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     IO.puts(sales_query(10))
     IO.puts(report("gandora", [12, 30, 7, 45]))

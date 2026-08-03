@@ -8,6 +8,7 @@ import tour.dsl
 import tour.functions
 import tour.interop
 import tour.patterns
+import tour.recursion
 import tour.templates
 
 
@@ -15,6 +16,7 @@ def main():
     _section("basics", tour.basics.demo)
     _section("patterns", tour.patterns.demo)
     _section("functions", tour.functions.demo)
+    _section("recursion + comprehensions", tour.recursion.demo)
     _section("interop", tour.interop.demo)
     _section("templates", tour.templates.main)
     _section("metaprogramming dsl", tour.dsl.main)

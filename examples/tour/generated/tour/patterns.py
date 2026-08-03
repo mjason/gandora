@@ -20,7 +20,13 @@ class GanMatchError(Exception):
     pass
 
 
-def describe(*_gan_args):
+def describe(*_gan_args) -> str:
+    """Multi-clause dispatch with guards, top to bottom.
+
+## Parameters
+
+  - n: The number to describe.
+"""
     match _gan_args:
         case (0,):
             return "zero"
@@ -33,7 +39,8 @@ def describe(*_gan_args):
     raise GanMatchError("no clause of describe/1 matched " + repr(_gan_args))
 
 
-def destructure():
+def destructure() -> tuple[str, int, list[int], str]:
+    """Destructuring with `=`: tuples, cons cells, and map keys."""
     _gan_val0 = ("ok", [1, 2, 3])
     match _gan_val0:
         case (status, payload) as _gan_t1 if isinstance(_gan_t1, tuple):
@@ -55,7 +62,14 @@ def destructure():
     return (status, first, rest, name)
 
 
-def handle(result, expected):
+def handle(result: object, expected: object) -> str:
+    """case with tuple patterns, a pinned value, nested maps, and a catch-all.
+
+## Parameters
+
+  - result: A `{:ok, _}` / `{:error, _}` shaped value.
+  - expected: Pinned: the clause matches only this exact payload.
+"""
     _gan_case5 = result
     match _gan_case5:
         case ("ok", _gan_pin6) as _gan_t7 if _gan_pin6 == expected and isinstance(_gan_t7, tuple):
@@ -68,7 +82,13 @@ def handle(result, expected):
             return "unknown shape"
 
 
-def bucket(score):
+def bucket(score: int | float) -> str:
+    """cond: the first truthy branch wins.
+
+## Parameters
+
+  - score: A grade from 0 to 100.
+"""
     if score >= 90:
         return "a"
     elif score >= 60:
@@ -77,7 +97,13 @@ def bucket(score):
         return "c"
 
 
-def parse_pair(text):
+def parse_pair(text: str) -> object:
+    """with: a chain of matches; the first failure falls to else.
+
+## Parameters
+
+  - text: Two integers separated by a comma.
+"""
     _gan_case10 = text.split(",")
     match _gan_case10:
         case [a, b] as _gan_l11 if isinstance(_gan_l11, list):
@@ -112,7 +138,8 @@ def _parse_int(s):
         return "error"
 
 
-def demo():
+def demo() -> None:
+    """Runs the chapter."""
     print(f"describe:    {repr([describe(0), describe(-3), describe(4), describe(7)])}")
     print(f"destructure: {repr(destructure())}")
     print(handle(("ok", 42), 42))

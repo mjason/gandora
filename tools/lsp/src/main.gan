@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.0",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.1",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -73,6 +73,7 @@ defmodule Main do
     {doc, line}
   end
 
+  @spec word_at(string(), integer()) :: tuple(string(), integer()) | nil
   # the reference whose span covers the column, with its start column
   defp word_at(line, character) do
     hit = Enum.find(@word_re.finditer(line), fn m ->
@@ -87,6 +88,7 @@ defmodule Main do
     end
   end
 
+  @spec module_of(string()) :: string() | nil
   defp module_of(source) do
     m = ~r/defmodule\s+([A-Za-z0-9_.]+)/.search(source)
     if is_nil(m) do
@@ -96,6 +98,7 @@ defmodule Main do
     end
   end
 
+  @spec target_of(string(), string()) :: string() | nil
   # "Stats.mean" as written; bare lowercase names resolve in-module
   defp target_of(source, token) do
     cond do
@@ -214,6 +217,7 @@ defmodule Main do
     name.replace("?", "_p").replace("!", "_bang")
   end
 
+  @spec root_path() :: string()
   defp root_path() do
     @server.workspace.root_path
   end
@@ -422,6 +426,7 @@ defmodule Main do
 
   # ---- references + rename (GEP-0015-R012) ---------------------------------
 
+  @spec fun_target_at(term(), string(), integer()) :: string() | nil
   # the Module.fun target under the cursor, or nil for non-functions
   defp fun_target_at(doc, line, character) do
     hit = word_at(line, character)
@@ -440,6 +445,7 @@ defmodule Main do
 
   # precise (path, line0, start_col, end_col) for each project reference —
   # the name token located on its source line
+  @spec ref_ranges(string()) :: list(map())
   defp ref_ranges(target) do
     fun = Enum.at(target.split("."), -1)
     refs = try do

@@ -19,6 +19,8 @@ defmodule Main do
     gan <plugin> ...        delegates to gan-<plugin>, then to ganc
   """
 
+  @doc "The task-runner entry: one command per invocation (GEP-0013)."
+  @spec main() :: nil
   def main() do
     args = $builtins.list($sys.argv) |> Enum.drop(1)
     case args do
@@ -59,6 +61,8 @@ defmodule Main do
     end
   end
 
+  @doc "Runner and compiler-library versions."
+  @spec version() :: nil
   def version() do
     IO.puts("gan #{runner_version()} (runner) / gandora-core #{core.version()}")
     if runner_version() != core.version() do
@@ -68,6 +72,8 @@ defmodule Main do
 
   defp runner_version(), do: $importlib.metadata.version("gandora-tool")
 
+  @doc "Compiles the project into outDir via gandora_core (GEP-0012)."
+  @spec build() :: nil
   def build() do
     try do
       modules = core.build(root())
@@ -77,6 +83,8 @@ defmodule Main do
     end
   end
 
+  @doc "Full-pipeline analysis without writing output; exits 1 on findings."
+  @spec check() :: nil
   def check() do
     diags = core.check(root())
     Enum.each(diags, fn d ->
@@ -90,6 +98,10 @@ defmodule Main do
     end
   end
 
+  @doc "Compiles and executes `file` with the project Python (GEP-0013-R002)."
+  @param file, "The .gan entry file."
+  @param args, "Arguments passed through to the program."
+  @spec run(string(), list(string())) :: nil
   def run(file, args) do
     cache = root() <> "/.gandora/cache"
     try do
@@ -115,10 +127,15 @@ defmodule Main do
     end
   end
 
+  @doc "Compiles and runs one expression given on the command line."
+  @param code, "The Gandora source text."
+  @spec exec_code(string()) :: nil
   def exec_code(code) do
     eval_line(code, $builtins.dict())
   end
 
+  @doc "An interactive loop over compile_snippet — state carries across lines."
+  @spec repl() :: nil
   def repl() do
     IO.puts("gan repl (gandora-core #{core.version()}) — Ctrl-D to exit")
     ns = $builtins.dict()
@@ -193,6 +210,9 @@ defmodule Main do
     """
   end
 
+  @doc "Delegates project scaffolding to the ganc binary."
+  @param path, "Where to create the project."
+  @spec init(string()) :: nil
   def init(path) do
     p = $pathlib.Path(path)
     if p.exists() do
