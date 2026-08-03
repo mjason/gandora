@@ -35,4 +35,4 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0020](0020-comprehensions.md) | Comprehensions | Standards Track | Accepted | 1 | [zh](local/zh/0020-comprehensions.md) |
 | [0021](0021-closure-capture.md) | Closure Capture Semantics | Standards Track | Accepted | 1 | [zh](local/zh/0021-closure-capture.md) |
 | [0022](0022-compiler-lints.md) | Compiler Lints | Standards Track | Accepted | 1 | [zh](local/zh/0022-compiler-lints.md) |
-| [0023](0023-the-sandbox.md) | The Sandbox | Standards Track | Accepted | 2 | [zh](local/zh/0023-the-sandbox.md) |
+| [0023](0023-the-sandbox.md) | The Sandbox | Standards Track | Accepted | 3 | [zh](local/zh/0023-the-sandbox.md) |

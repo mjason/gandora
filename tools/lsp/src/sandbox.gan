@@ -46,15 +46,16 @@ defmodule Sandbox do
   @spec help() :: string()
   def help() do
     """
-    gan lsc try - the Gandora sandbox (GEP-0023)
+    gan try - the Gandora sandbox (GEP-0023)
 
     Validate generated code BEFORE it touches a project. One JSON
     verdict: compile + lints + suggestions + sandboxed execution.
 
     USAGE
-      echo 'code' | gan lsc try - --root .      # stdin
-      gan lsc try snippet.gan --root .          # file
-      gan lsc try - --no-run --root . < f.gan   # verdict without executing
+      echo 'code' | gan try -                   # stdin (from the project root)
+      gan try snippet.gan                       # file
+      gan try - --no-run < f.gan                # verdict without executing
+      (gan try == gan lsc try; --root <dir> sets the project)
 
     Input is a full module (defmodule ... end) or bare statements.
     Exit code: 0 when ok, 1 otherwise - safe to chain in scripts.

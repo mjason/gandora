@@ -12,7 +12,7 @@ defmodule Main do
   pyimport lsprotocol.types, as: types
   pyimport os
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.11.1",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.11.2",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/

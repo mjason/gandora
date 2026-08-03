@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.2 — 2026-08-03
+
+- **`gan try`** — the sandbox gets its first-class spelling
+  (`gan lsc try` remains identical): `gan try --help`, `gan try -`,
+  `gan try snippet.gan [--no-run]`.
+
 ## v0.11.1 — 2026-08-03
 
 **The sandbox grows teeth — and learns when to stay silent.**

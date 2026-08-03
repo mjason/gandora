@@ -42,20 +42,20 @@ defmodule Sandbox do
     "unquote", "pyimport", "import", "require", "alias", "use", "recur", "when",
     "true", "false", "nil", "and", "or", "not", "raise", "if", "unless"]
 
-
   @doc "The skill guide printed by `gan lsc try` / `try --help`."
   @spec help() :: string()
   def help() do
     """
-    gan lsc try - the Gandora sandbox (GEP-0023)
+    gan try - the Gandora sandbox (GEP-0023)
 
     Validate generated code BEFORE it touches a project. One JSON
     verdict: compile + lints + suggestions + sandboxed execution.
 
     USAGE
-      echo 'code' | gan lsc try - --root .      # stdin
-      gan lsc try snippet.gan --root .          # file
-      gan lsc try - --no-run --root . < f.gan   # verdict without executing
+      echo 'code' | gan try -                   # stdin (from the project root)
+      gan try snippet.gan                       # file
+      gan try - --no-run < f.gan                # verdict without executing
+      (gan try == gan lsc try; --root <dir> sets the project)
 
     Input is a full module (defmodule ... end) or bare statements.
     Exit code: 0 when ok, 1 otherwise - safe to chain in scripts.
@@ -290,13 +290,13 @@ defmodule Sandbox do
   defp idiom_hints(source) do
     checks = [
       {~r/fn (\w+) -> ([a-z_][A-Za-z0-9_.]*[?!]?)\(\1\) end/,
-       "`fn x -> f(x) end` wraps a single call — the capture `&f/1` says the same thing."},
+        "`fn x -> f(x) end` wraps a single call — the capture `&f/1` says the same thing."},
       {~r/Enum\.count\([^)]*\)\s*==\s*0|length\([^)]*\)\s*==\s*0/,
-       "`... == 0` on a count — `Enum.empty?(xs)` reads better."},
+        "`... == 0` on a count — `Enum.empty?(xs)` reads better."},
       {~r/\|>\s*Enum\.map\([\s\S]{0,120}?\|>\s*Enum\.filter\(|\|>\s*Enum\.filter\([\s\S]{0,120}?\|>\s*Enum\.map\(/,
-       "A map+filter pipeline — a single `for x <- xs, cond, do: expr` comprehension often reads better and compiles to one pass (GEP-0020)."},
+        "A map+filter pipeline — a single `for x <- xs, cond, do: expr` comprehension often reads better and compiles to one pass (GEP-0020)."},
       {~r/, do: true, else: false/,
-       "`if cond, do: true, else: false` is just the condition (wrap with a boolean-shaped guard if needed)."}
+        "`if cond, do: true, else: false` is just the condition (wrap with a boolean-shaped guard if needed)."}
     ]
     hits = Enum.flat_map(checks, fn {pattern, advice} ->
       if is_nil(pattern.search(source)) do

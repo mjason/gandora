@@ -497,7 +497,8 @@ gan test                 # run @example doctests
 gan fmt src              # format in place    gan fmt --check src   # CI gate
 gan fmt --diff src       # show the diff      echo ... | gan fmt -  # stdin -> stdout
 gan doc Enum.take        # docs (+ --locale)  gan repl       # interactive
-gan expand src/x.gan     # macro output       gan init --package name
+gan expand src/x.gan     # macro output       gan try <file|->  # sandbox
+gan init --package name
 ```
 
 Packages publish as ordinary wheels (`gan build && uv build &&
@@ -527,7 +528,7 @@ And the **sandbox** — validate generated code before it touches the
 project (GEP-0023):
 
 ```console
-echo 'Enum.mpa([1,2], fn x -> x end)' | gan lsc try - --root .
+echo 'Enum.mpa([1,2], fn x -> x end)' | gan try -
 # -> {"ok": false, ..., "suggestions": [{"kind": "did_you_mean",
 #     "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?"}]}
 ```
@@ -538,7 +539,7 @@ echo 'Enum.mpa([1,2], fn x -> x end)' | gan lsc try - --root .
 a temp dir under a timeout — returning the generated Python, stdout,
 and a snippet's last value. `--no-run` skips execution.
 
-A productive loop for an agent: **generate → `gan lsc try -` → apply
+A productive loop for an agent: **generate → `gan try -` → apply
 the suggestions → `try` again → write into the project** → then
 `gan lsc check` (fix every finding) → `gan test` → `gan fmt src`.
 
