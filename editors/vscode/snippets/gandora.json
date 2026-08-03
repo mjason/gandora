@@ -1,0 +1,181 @@
+{
+  "defmodule": {
+    "prefix": "defmodule",
+    "body": [
+      "defmodule ${1:Name} do",
+      "  @moduledoc \"${2:What this module is for.}\"",
+      "",
+      "  $0",
+      "end"
+    ],
+    "description": "Module with @moduledoc"
+  },
+  "def (documented)": {
+    "prefix": "defd",
+    "body": [
+      "@doc \"${3:What it does.}\"",
+      "@param ${2:arg}, \"${4:What the argument means.}\"",
+      "@spec ${1:name}(${5:term()}) :: ${6:term()}",
+      "def ${1:name}(${2:arg}) do",
+      "  $0",
+      "end"
+    ],
+    "description": "Public function with @doc/@param/@spec (the annotation standard)"
+  },
+  "def": {
+    "prefix": "def",
+    "body": [
+      "def ${1:name}(${2:args}) do",
+      "  $0",
+      "end"
+    ],
+    "description": "Public function"
+  },
+  "def one-liner": {
+    "prefix": "defdo",
+    "body": ["def ${1:name}(${2:args}), do: ${3:expr}"],
+    "description": "Single-expression function"
+  },
+  "defp": {
+    "prefix": "defp",
+    "body": [
+      "defp ${1:name}(${2:args}) do",
+      "  $0",
+      "end"
+    ],
+    "description": "Private function"
+  },
+  "defmacro": {
+    "prefix": "defmacro",
+    "body": [
+      "defmacro ${1:name}(${2:args}) do",
+      "  quote do",
+      "    $0",
+      "  end",
+      "end"
+    ],
+    "description": "Macro returning quoted code"
+  },
+  "defstruct": {
+    "prefix": "defstruct",
+    "body": ["defstruct ${1:field}: ${2:nil}$0"],
+    "description": "Struct with defaulted fields"
+  },
+  "spec": {
+    "prefix": "@spec",
+    "body": ["@spec ${1:name}(${2:term()}) :: ${3:term()}"],
+    "description": "Typespec (GEP-0017)"
+  },
+  "doc (bilingual)": {
+    "prefix": "@doc",
+    "body": [
+      "@doc \"${1:What it does.}\"",
+      "@doc_trans zh_CN: \"${2:中文说明。}\""
+    ],
+    "description": "Bilingual documentation"
+  },
+  "param (bilingual)": {
+    "prefix": "@param",
+    "body": [
+      "@param ${1:name}, \"${2:What it means.}\"",
+      "@param_trans ${1:name}, zh_CN: \"${3:中文说明。}\""
+    ],
+    "description": "Bilingual parameter doc (GEP-0018)"
+  },
+  "example doctest": {
+    "prefix": "@example",
+    "body": [
+      "@example \"\"\"",
+      "    gan> ${1:call(args)}",
+      "    ${2:expected}",
+      "\"\"\""
+    ],
+    "description": "Runnable doctest (gan test)"
+  },
+  "allow stack recursion": {
+    "prefix": "@allow",
+    "body": ["@allow :${1|stack_recursion,unused_function|}"],
+    "description": "Acknowledge a compiler lint (GEP-0019-R007 / GEP-0022)"
+  },
+  "case": {
+    "prefix": "case",
+    "body": [
+      "case ${1:value} do",
+      "  ${2:pattern} -> ${3:result}",
+      "  _ -> ${4:fallback}",
+      "end"
+    ],
+    "description": "Pattern match"
+  },
+  "cond": {
+    "prefix": "cond",
+    "body": [
+      "cond do",
+      "  ${1:condition} -> ${2:result}",
+      "  true -> ${3:fallback}",
+      "end"
+    ],
+    "description": "First truthy branch"
+  },
+  "with": {
+    "prefix": "with",
+    "body": [
+      "with ${1:{:ok, x\\}} <- ${2:expr} do",
+      "  ${3:x}",
+      "else",
+      "  _ -> ${4::error}",
+      "end"
+    ],
+    "description": "Chained matches with else"
+  },
+  "for comprehension": {
+    "prefix": "for",
+    "body": ["for ${1:x} <- ${2:enum}${3:, ${4:filter}}, do: ${5:body}"],
+    "description": "Comprehension → native Python comprehension (GEP-0020)"
+  },
+  "for into map": {
+    "prefix": "forinto",
+    "body": ["for {${1:k}, ${2:v}} <- ${3:enum}, into: %{}, do: {${1:k}, ${4:value}}"],
+    "description": "Dict comprehension (GEP-0020-R003)"
+  },
+  "fn": {
+    "prefix": "fn",
+    "body": ["fn ${1:x} -> ${2:body} end"],
+    "description": "Anonymous function"
+  },
+  "try/rescue": {
+    "prefix": "try",
+    "body": [
+      "try do",
+      "  ${1:body}",
+      "rescue",
+      "  ${2:e} in ${3:$builtins.ValueError} -> ${4:fallback}",
+      "end"
+    ],
+    "description": "Exception handling (GEP-0014)"
+  },
+  "tail recursion": {
+    "prefix": "recurdef",
+    "body": [
+      "@spec ${1:walk}(${2:list()}, ${3:term()}) :: ${3:term()}",
+      "def ${1:walk}([], acc), do: acc",
+      "def ${1:walk}([${4:x} | rest], acc), do: ${1:walk}(rest, ${5:acc})"
+    ],
+    "description": "Accumulator tail recursion — compiles to a while loop (GEP-0019)"
+  },
+  "pyimport": {
+    "prefix": "pyimport",
+    "body": ["pyimport ${1:module}${2:, as: ${3:alias}}"],
+    "description": "Python import at module top (GEP-0003)"
+  },
+  "decorate": {
+    "prefix": "@decorate",
+    "body": ["@decorate $${1:functools}.${2:lru_cache}(${3:maxsize: 8})"],
+    "description": "Attach a Python decorator (GEP-0003)"
+  },
+  "verify case": {
+    "prefix": "vcase",
+    "body": ["{\"${1:what it checks}\", ${2:actual}, ${3:expected}},"],
+    "description": "A self-checking cases() tuple (playground convention)"
+  }
+}

@@ -3,6 +3,15 @@
   "brackets": [["(", ")"], ["[", "]"], ["{", "}"]],
   "autoClosingPairs": [
     { "open": "(", "close": ")" }, { "open": "[", "close": "]" },
-    { "open": "{", "close": "}" }, { "open": "\"", "close": "\"" }
-  ]
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""]
+  ],
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*[?!]?",
+  "indentationRules": {
+    "increaseIndentPattern": "(\\bdo\\s*$)|(\\bfn\\b(?!.*\\bend\\b).*$)|(->\\s*$)|(^\\s*(else|rescue|after)\\s*$)|([({\\[]\\s*$)",
+    "decreaseIndentPattern": "^\\s*(end\\b|else\\b|rescue\\b|after\\b|[)}\\]])"
+  }
 }

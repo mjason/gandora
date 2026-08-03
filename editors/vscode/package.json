@@ -1,15 +1,16 @@
 {
   "name": "gandora",
   "displayName": "Gandora",
-  "description": "Gandora language support via gan lsp",
-  "version": "0.1.6",
+  "description": "Gandora language support: LSP (diagnostics, hover with recursion shapes, references, rename, quick fixes), compiled-Python preview, run/test/REPL commands, snippets.",
+  "version": "0.2.0",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Snippets"
   ],
   "activationEvents": [
     "onLanguage:gandora"
@@ -47,6 +48,125 @@
         }
       }
     ],
+    "snippets": [
+      {
+        "language": "gandora",
+        "path": "./snippets/gandora.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "gandora.restartServer",
+        "title": "Restart Language Server",
+        "category": "Gandora"
+      },
+      {
+        "command": "gandora.runFile",
+        "title": "Run Current File",
+        "category": "Gandora",
+        "icon": "$(play)"
+      },
+      {
+        "command": "gandora.showCompiledPython",
+        "title": "Show Compiled Python",
+        "category": "Gandora",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "gandora.expandMacros",
+        "title": "Expand Macros (Quoted AST)",
+        "category": "Gandora"
+      },
+      {
+        "command": "gandora.checkProject",
+        "title": "Check Project (Diagnostics + Lints)",
+        "category": "Gandora"
+      },
+      {
+        "command": "gandora.runTests",
+        "title": "Run Doctests (gan test)",
+        "category": "Gandora"
+      },
+      {
+        "command": "gandora.openRepl",
+        "title": "Open REPL",
+        "category": "Gandora"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "gandora.runFile",
+          "when": "editorLangId == gandora",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "gandora.showCompiledPython",
+          "when": "editorLangId == gandora",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "gandora.showCompiledPython",
+          "when": "editorLangId == gandora",
+          "group": "gandora@1"
+        },
+        {
+          "command": "gandora.expandMacros",
+          "when": "editorLangId == gandora",
+          "group": "gandora@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "gandora.runFile",
+          "when": "editorLangId == gandora"
+        },
+        {
+          "command": "gandora.showCompiledPython",
+          "when": "editorLangId == gandora"
+        },
+        {
+          "command": "gandora.expandMacros",
+          "when": "editorLangId == gandora"
+        }
+      ]
+    },
+    "problemMatchers": [
+      {
+        "name": "gandora",
+        "owner": "gandora",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(?:warning: )?(.+?\\.gan):(\\d+):(?:(\\d+):)?\\s*(?:(error|warning):\\s*)?(.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "gan",
+        "required": [
+          "task"
+        ],
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "The gan subcommand to run (build, check, test, fmt --check src)."
+          }
+        }
+      }
+    ],
     "configuration": {
       "title": "Gandora",
       "properties": {
@@ -54,6 +174,21 @@
           "type": "string",
           "default": "gan",
           "description": "Path to the gan task runner used to start the language server (gan lsp)."
+        },
+        "gandora.preview.refreshOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh the compiled-Python preview whenever the source file is saved."
+        },
+        "gandora.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the messages between VS Code and the Gandora language server."
         }
       }
     }
