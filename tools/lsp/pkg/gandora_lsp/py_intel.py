@@ -20,7 +20,7 @@ def _gan_and(value, then):
 class GanMatchError(Exception):
     pass
 
-pyimport_re = re.compile("pyimport\\s+([A-Za-z0-9_.]+)\\s*,\\s*as:\\s*([a-z_][A-Za-z0-9_]*)")
+pyimport_re = re.compile("pyimport\\s+([A-Za-z0-9_.]+)(?:\\s*,\\s*as:\\s*([a-z_][A-Za-z0-9_]*))?")
 
 
 def aliases(source: str) -> dict[str, str]:
@@ -31,7 +31,12 @@ def aliases(source: str) -> dict[str, str]:
     def _gan_fn0(*_gan_args):
         match _gan_args:
             case ((mod, name) as _gan_t0, acc,) if isinstance(_gan_t0, tuple):
-                return gandora_std.map.put(acc, name, mod)
+                if name == "":
+                    _gan_tmp1 = gandora_std.enum.at(mod.split("."), 0)
+                else:
+                    _gan_tmp1 = name
+                key = _gan_tmp1
+                return gandora_std.map.put(acc, key, mod)
         raise GanMatchError("no clause of _gan_fn0/2 matched " + repr(_gan_args))
     return gandora_std.enum.reduce(pyimport_re.findall(source), {}, _gan_fn0)
 
@@ -66,11 +71,11 @@ def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
 """
     try:
         names = builtins.list(_script(root, import_line, expr).help(2, gandora_std.string.length(expr)))
-        _gan_case1 = names
-        match _gan_case1:
-            case [] as _gan_l2 if isinstance(_gan_l2, list):
+        _gan_case2 = names
+        match _gan_case2:
+            case [] as _gan_l3 if isinstance(_gan_l3, list):
                 return None
-            case [n, *_] as _gan_l3 if isinstance(_gan_l3, list):
+            case [n, *_] as _gan_l4 if isinstance(_gan_l4, list):
                 doc = n.docstring()
                 if doc.strip() == "":
                     return f"`{expr}` — Python `{n.type}`"
@@ -78,7 +83,7 @@ def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
                     shown = gandora_std.enum.join(gandora_std.enum.take(doc.split("\n"), 40), "\n")
                     return f"**`{expr}`** — Python {n.type}\n\n```text\n{shown.strip()}\n```"
             case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case1))
+                raise GanMatchError("no case clause matched: " + repr(_gan_case2))
     except Exception as _e:
         return None
 
@@ -105,17 +110,17 @@ def goto(root: str, import_line: str, expr: str) -> dict | None:
 """
     try:
         names = builtins.list(_script(root, import_line, expr).goto(2, gandora_std.string.length(expr), follow_imports=True))
-        _gan_case4 = names
-        match _gan_case4:
-            case [] as _gan_l5 if isinstance(_gan_l5, list):
+        _gan_case5 = names
+        match _gan_case5:
+            case [] as _gan_l6 if isinstance(_gan_l6, list):
                 return None
-            case [n, *_] as _gan_l6 if isinstance(_gan_l6, list):
+            case [n, *_] as _gan_l7 if isinstance(_gan_l7, list):
                 if (n.module_path is None) or (n.line is None):
                     return None
                 else:
                     return {"path": str(n.module_path), "line0": n.line - 1, "col0": _or_zero(n.column)}
             case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case4))
+                raise GanMatchError("no case clause matched: " + repr(_gan_case5))
     except Exception as _e:
         return None
 
@@ -155,21 +160,21 @@ def _find_and_infer(source_py, lines, start, var):
     if (hit is None):
         return None
     else:
-        _gan_val7 = hit
-        match _gan_val7:
-            case (line1, col) as _gan_t8 if isinstance(_gan_t8, tuple):
+        _gan_val8 = hit
+        match _gan_val8:
+            case (line1, col) as _gan_t9 if isinstance(_gan_t9, tuple):
                 pass
             case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val7))
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val8))
         names = builtins.list(jedi.Script(source_py).infer(line1, col))
-        _gan_case9 = names
-        match _gan_case9:
-            case [] as _gan_l10 if isinstance(_gan_l10, list):
+        _gan_case10 = names
+        match _gan_case10:
+            case [] as _gan_l11 if isinstance(_gan_l11, list):
                 return None
-            case [n, *_] as _gan_l11 if isinstance(_gan_l11, list):
+            case [n, *_] as _gan_l12 if isinstance(_gan_l12, list):
                 return n.name
             case _:
-                raise GanMatchError("no case clause matched: " + repr(_gan_case9))
+                raise GanMatchError("no case clause matched: " + repr(_gan_case10))
 
 
 def _scan_lines(i, start, lines, pattern, total):
@@ -184,12 +189,12 @@ def _scan_lines(i, start, lines, pattern, total):
                 i, start, lines, pattern, total = i + 1, start, lines, pattern, total
                 continue
             else:
-                _gan_val12 = m.span()
-                match _gan_val12:
-                    case (s, _e) as _gan_t13 if isinstance(_gan_t13, tuple):
+                _gan_val13 = m.span()
+                match _gan_val13:
+                    case (s, _e) as _gan_t14 if isinstance(_gan_t14, tuple):
                         pass
                     case _:
-                        raise GanMatchError("no match of right-hand side value: " + repr(_gan_val12))
+                        raise GanMatchError("no match of right-hand side value: " + repr(_gan_val13))
                 return (i + 1, s)
 
 

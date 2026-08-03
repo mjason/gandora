@@ -10,8 +10,9 @@ defmodule Main do
 
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
+  pyimport os
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.3",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.4",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -279,7 +280,7 @@ defmodule Main do
       _e -> nil
     end
     if is_nil(local) do
-      $(os).environ.get("GAN_DOC_LOCALE", "default")
+      os.environ.get("GAN_DOC_LOCALE", "default")
     else
       local
     end

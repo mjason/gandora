@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.10.4 — 2026-08-03
+
+**Interop housekeeping: pyimport over repeated boundary spellings.**
+
+- **GEP-0003 rev 6** tooling guidance: a module used repeatedly SHOULD
+  be a `pyimport` (bare binds the first segment; `as:` renames) —
+  bare-name attribute chains carry no import ambiguity, so repeated
+  `$(...)` spellings are a smell. The toolchain practices it: fmt's
+  six `$(sys)` sites and the LSP's `$(os)` became one `pyimport` each.
+- **LSP**: hover/jedi intelligence now resolves bare `pyimport sys`
+  names too (the alias map only knew `as:` forms).
+
 ## v0.10.3 — 2026-08-03
 
 **Hover polish: your language by choice, and method pipes explained.**

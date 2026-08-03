@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 5
+revision: 6
 requires: [1]
 replaces: []
 superseded-by: null
@@ -164,9 +164,14 @@ Python could do.
 
 ## Tooling and AI Usage
 
-Agents should prefer remote `$` references for one-off standard-library use and
-`pyimport ... as:` for libraries used repeatedly, and should not generate
-wrapper modules around Python APIs — the absence of wrappers is the design.
+Agents should prefer remote `$` references for one-off standard-library
+use and `pyimport` (bare or `as:`) for modules used repeatedly — a bare
+`pyimport sys` binds `sys` as a plain name, whose attribute chains
+(`sys.stderr.write(...)`) carry no import ambiguity, making repeated
+`$(...)` boundary spellings a smell. Deep chains used often can bind an
+attribute once: `@environ $(os).environ` (GEP-0004). Agents should not
+generate wrapper modules around Python APIs — the absence of wrappers
+is the design.
 
 ## Rejected Alternatives
 
@@ -198,6 +203,9 @@ a file referencing a nonexistent module succeeds).
 
 ## Change History
 
+- Revision 6, 2026-08-03: Tooling guidance — repeated module use
+  SHOULD be a bare or aliased `pyimport`, not repeated `$(...)`
+  boundary spellings.
 - Revision 5, 2026-08-03: R010 — the `$(...)` boundary lock now
   covers single-segment references (`$(sys)` was silently falling
   back to the heuristic); bounded-ness is preserved in the quoted

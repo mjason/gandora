@@ -7,14 +7,22 @@ defmodule PyIntel do
 
   pyimport jedi
 
-  @pyimport_re ~r/pyimport\s+([A-Za-z0-9_.]+)\s*,\s*as:\s*([a-z_][A-Za-z0-9_]*)/
+  @pyimport_re ~r/pyimport\s+([A-Za-z0-9_.]+)(?:\s*,\s*as:\s*([a-z_][A-Za-z0-9_]*))?/
 
   # alias -> module map from the file's pyimport declarations
   @param source, "The Gandora source holding pyimport declarations."
   @spec aliases(string()) :: map(string(), string())
   def aliases(source) do
+    # `as:` binds the alias; a bare pyimport binds the first segment
     @pyimport_re.findall(source)
-    |> Enum.reduce(%{}, fn {mod, name}, acc -> Map.put(acc, name, mod) end)
+    |> Enum.reduce(%{}, fn {mod, name}, acc ->
+      key = if name == "" do
+        Enum.at(mod.split("."), 0)
+      else
+        name
+      end
+      Map.put(acc, key, mod)
+    end)
   end
 
   # {import_line, expr} for a `$mod.chain` or aliased `np.chain` token
