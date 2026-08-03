@@ -1,6 +1,6 @@
 [project]
 name = "gandora-std"
-version = "0.9.0"
+version = "0.9.1"
 description = "The Gandora standard library: Enum, String, Map, List, Keyword (GEP-0010)"
 requires-python = ">=3.11"
 dependencies = []

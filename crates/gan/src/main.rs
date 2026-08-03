@@ -1,4 +1,4 @@
-use gandora_core::{ast, codegen, diag, expander, parser, printer, project};
+use gandora_core::{codegen, diag, expander, parser, printer, project};
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -578,113 +578,19 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
     if source.is_none() {
         source = project::find_installed_source(&config, &module_name);
     }
-    let Some(source) = source else {
+    let Some(_source) = source else {
         return Err(Diagnostic::new(
             "gan",
             Span::default(),
             format!("module {module_name} not found in project sources or installed packages"),
         ));
     };
-    let file = source.display().to_string();
-    let text = std::fs::read_to_string(&source).map_err(io_err(&source))?;
-    let term = parser::parse_file(&file, &text)?;
-
-    let mut module_doc: Option<codegen::DocInfo> = None;
-    let mut fun_doc: Option<codegen::DocInfo> = None;
-    let mut pending: Option<codegen::DocInfo> = None;
-    for stmt in term.as_block() {
-        if !stmt.is_call_named("defmodule") {
-            continue;
-        }
-        let ast::Term::Call(dm) = &stmt else { continue };
-        let Some(body) = ast::Term::keyword_arg(&dm.args, "do") else { continue };
-        for inner in body.as_block() {
-            let ast::Term::Call(c) = &inner else { continue };
-            let ast::Callee::Name(name) = &c.callee else { continue };
-            match name.as_str() {
-                "@moduledoc" => {
-                    let info = module_doc.get_or_insert_with(codegen::DocInfo::default);
-                    codegen::merge_doc_value(&file, c, info, "@moduledoc")?;
-                }
-                "@doc" => {
-                    let info = pending.get_or_insert_with(codegen::DocInfo::default);
-                    codegen::merge_doc_value(&file, c, info, "@doc")?;
-                }
-                "@param" => {
-                    if let (Some(ast::Term::Var(n, _)), Some(t)) = (c.args.first(), c.args.get(1)) {
-                        if let Some(text) = t.as_plain_str() {
-                            pending
-                                .get_or_insert_with(codegen::DocInfo::default)
-                                .params
-                                .push((n.clone(), vec![("default".to_string(), text)]));
-                        }
-                    }
-                }
-                "@param_trans" => {
-                    if let Some(ast::Term::Var(n, _)) = c.args.first() {
-                        if let Some(info) = pending.as_mut() {
-                            if let Some(entry) =
-                                info.params.iter_mut().find(|(pn, _)| pn == n)
-                            {
-                                for arg in c.args.iter().skip(1) {
-                                    if let ast::Term::Pair(locale, value) = arg {
-                                        if let Some(text) = value.as_plain_str() {
-                                            entry.1.push((locale.replace('_', "-"), text));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                "@spec" => {
-                    if let Some(v) = c.args.first() {
-                        pending
-                            .get_or_insert_with(codegen::DocInfo::default)
-                            .specs
-                            .push(format!("@spec {}", printer::print_expr(v)));
-                    }
-                }
-                "@doc_trans" => {
-                    if let Some(info) = pending.as_mut() {
-                        codegen::merge_doc_trans(&file, c, info, "@doc_trans")?;
-                    }
-                }
-                "@example" => {
-                    let ex = codegen::example_from_args(&file, c)?;
-                    pending
-                        .get_or_insert_with(codegen::DocInfo::default)
-                        .examples
-                        .push(ex);
-                }
-                "@moduledoc_trans" => {
-                    if let Some(info) = module_doc.as_mut() {
-                        codegen::merge_doc_trans(&file, c, info, "@moduledoc_trans")?;
-                    }
-                }
-                "def" | "defp" | "defmacro" => {
-                    let head_name = c.args.first().and_then(|h| match h {
-                        ast::Term::Call(hc) => match &hc.callee {
-                            ast::Callee::Name(n) => Some(n.clone()),
-                            _ => None,
-                        },
-                        ast::Term::Var(n, _) => Some(n.clone()),
-                        _ => None,
-                    });
-                    if let (Some(f), Some(h)) = (&fun, &head_name) {
-                        if f == h && fun_doc.is_none() {
-                            fun_doc = pending.take();
-                        }
-                    }
-                    pending = None;
-                }
-                _ => {}
-            }
-        }
-    }
-    let (label, info) = match &fun {
-        Some(f) => (format!("{module_name}.{f}"), fun_doc),
-        None => (module_name.clone(), module_doc),
+    // the walk itself lives in project::find_doc — one implementation
+    // shared with the LSP/lsc (specs, params, recursion shape, the lot)
+    let info = project::find_doc(&config, &module_name, fun.as_deref())?;
+    let label = match &fun {
+        Some(f) => format!("{module_name}.{f}"),
+        None => module_name.clone(),
     };
     print_doc(&label, info, locale.as_deref());
     Ok(())
@@ -696,6 +602,24 @@ fn print_doc(label: &str, info: Option<codegen::DocInfo>, locale: Option<&str>) 
         Some(info) => {
             for spec in &info.specs {
                 println!("{spec}");
+            }
+            if let Some(shape) = info.tco.as_deref() {
+                let zh = locale.is_some_and(|l| l.starts_with("zh"));
+                println!(
+                    "{}",
+                    match (shape, zh) {
+                        ("loop", false) => {
+                            "recursion: compiles to a while loop (tail call \
+                             optimized, constant stack)"
+                        }
+                        ("loop", true) => "递归:编译为 while 循环(尾调用已优化,常数栈)",
+                        (_, false) => {
+                            "recursion: compiles to native recursion (not in tail \
+                             position, uses the call stack)"
+                        }
+                        (_, true) => "递归:编译为原生递归(非尾位置,使用调用栈)",
+                    }
+                );
             }
             let prose = lookup_locale(&info, locale);
             let heading = match locale {

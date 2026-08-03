@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.9.0",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.9.1",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -127,9 +127,8 @@ defmodule Main do
     "try" => "Runs a body with `rescue` clauses matching Python exception types and an always-run `after` (GEP-0014).",
     "rescue" => "Clauses of a `try`: `e in $mod.Type -> ...` matches by exception class; a bare variable catches every Exception (GEP-0014).",
     "after" => "The cleanup section of `try`: always runs, contributes no value (GEP-0014).",
-    "loop" => "Binds a state pattern and repeats its body: `recur(new_state)` restarts, `break(value)` finishes — constant stack depth (GEP-0014).",
-    "recur" => "Rebinds the enclosing `loop` state and restarts its body (GEP-0014).",
-    "break" => "Ends the enclosing `loop` with the given value (GEP-0014).",
+    "recur" => "Restarts the enclosing function with new arguments — the explicit, compile-checked spelling of tail recursion: must be in tail position, arity must match a clause (GEP-0019-R005).",
+    "for" => "A comprehension: `for pat <- enum, filter, do: body` compiles to a native Python comprehension; non-matching patterns are skipped, `into: %{}` builds a map (GEP-0020).",
     "fn" => "An anonymous function: `fn x -> x * 2 end`, called with `f.(x)`; supports multiple clauses and guards (GEP-0001).",
     "pyimport" => "Declares a Python import at module top: `pyimport numpy, as: np` (GEP-0003).",
     "use" => "Invokes the target module's `__using__` macro to inject code here (GEP-0008).",
@@ -259,6 +258,11 @@ defmodule Main do
       nil
     else
       params = param_lines(info)
+      tco = case Map.get(info, "tco") do
+        "loop" -> ["\n♻ *tail recursion → compiles to a `while` loop (constant stack)*"]
+        "stack" -> ["\n⚠ *self-recursive → native call stack (not tail position)*"]
+        _ -> []
+      end
       sigs = Map.get(info, "signatures", [])
       |> Enum.uniq()
       |> Enum.join("\n")
@@ -276,7 +280,7 @@ defmodule Main do
       |> Enum.map(fn {k, v} -> "\n`#{k}`: #{v}" end)
       examples = Map.get(info, "examples", [])
       |> Enum.map(fn ex -> "\n```elixir\n#{ex.strip()}\n```" end)
-      body = [prose] ++ params ++ translations ++ meta ++ examples
+      body = [prose] ++ tco ++ params ++ translations ++ meta ++ examples
       |> Enum.reject(fn part -> is_nil(part) end)
       |> Enum.join("\n")
       if String.trim(body) == "" and sigs == "" do

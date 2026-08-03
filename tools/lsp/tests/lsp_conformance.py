@@ -177,6 +177,47 @@ def main():
             "formatting returns the canonical document (GEP-0015-R007)",
         )
 
+        # recursion-shape hover badge (GEP-0019-R006)
+        os.makedirs(f"{root}/src", exist_ok=True)
+        with open(f"{root}/gandora.jsonc", "w") as f:
+            f.write('{"source": ["src"], "outDir": "dist"}\n')
+        recur_src = (
+            "defmodule Main do\n"
+            "  def down(0), do: :done\n"
+            "  def down(n), do: down(n - 1)\n"
+            "end\n"
+        )
+        with open(f"{root}/src/main.gan", "w") as f:
+            f.write(recur_src)
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": {"uri": uri, "version": 4},
+                    "contentChanges": [{"text": recur_src}],
+                },
+            }
+        )
+        s.wait_for(lambda m: m.get("method") == "textDocument/publishDiagnostics")
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "textDocument/hover",
+                "params": {
+                    "textDocument": {"uri": uri},
+                    "position": {"line": 1, "character": 7},
+                },
+            }
+        )
+        hov = s.wait_for(lambda m: m.get("id") == 5).get("result") or {}
+        hover_text = (hov.get("contents") or {}).get("value", "")
+        check(
+            "while" in hover_text and "constant stack" in hover_text,
+            "hover shows the compiled recursion shape (GEP-0019-R006)",
+        )
+
         s.send(
             {
                 "jsonrpc": "2.0",

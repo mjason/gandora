@@ -25,7 +25,7 @@ routes = {}
 
 
 def route(path):
-    def _gan_fn0(f):
+    def _gan_fn0(f, *, path=path):
         routes.update({path: f})
         return f
     return _gan_fn0

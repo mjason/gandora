@@ -9,7 +9,7 @@ areas:
   - Language
 created: 2026-08-03
 updated: 2026-08-03
-revision: 2
+revision: 3
 requires: [1, 14]
 replaces: []
 superseded-by: null
@@ -85,6 +85,17 @@ Division of labor: natural Elixir tail recursion is optimized
 implicitly for portability; `recur` is the spelling that *asserts*
 constant stack.
 
+**GEP-0019-R006:** The compiled shape of every definition group is
+**observable**: doc queries report `"loop"` when tail recursion
+compiled to `while True:` rebinding, `"stack"` when the group is
+self-recursive only outside tail position, and nothing when it is
+not self-recursive. The shape MUST surface in `gan doc` (localized
+prose), LSP hover (a badge line), and `gan lsc doc` (a `tco` field)
+— an implicit optimization the developer cannot see is an implicit
+optimization they cannot trust. Closures created inside optimized
+loops keep per-iteration values via GEP-0021 snapshots; the
+optimization is never skipped on their account.
+
 ## Rationale
 
 Rebinding-plus-`continue` is exactly the compilation `loop/recur`
@@ -133,6 +144,9 @@ results before and after optimization for a reference function.
 
 ## Change History
 
+- Revision 3, 2026-08-03: R006 — the compiled recursion shape
+  (loop vs stack) is queryable in `gan doc`, LSP hover, and
+  `gan lsc doc`; closure interplay delegated to GEP-0021 snapshots.
 - Revision 2, 2026-08-03: `loop` retired (GEP-0014-R007) — removed it
   from R001's exclusion list, R005's scoping language, and the
   tooling advice; iteration guidance now points at `for`/Enum.

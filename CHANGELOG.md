@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.9.1 — 2026-08-03
+
+**Closures now capture by value, and you can see how recursion compiled.**
+
+- **GEP-0021**: closures snapshot the creation-time values of captured
+  locals — `lambda x, *, n=n: x + n`, Python's own idiom, keyword-only
+  so arity stays strict. Fixes a real semantic divergence: rebinding a
+  variable (or a TCO loop rebinding parameters) no longer leaks into
+  closures created earlier. Applies to `fn`, `&`, comprehension
+  bodies, and nested closures alike.
+- **GEP-0019 rev 3 (R006)**: the compiled shape of every recursive
+  function is observable — `gan doc` prints it, LSP hover shows a
+  badge (`while` loop vs native call stack), `gan lsc doc` returns a
+  `tco` field. An optimization you can't see is one you can't trust.
+- `gan doc` now shares the one documentation walk with the LSP
+  (`when`-guarded first clauses no longer hide their docs); dead
+  `loop` codegen removed.
+
 ## v0.9.0 — 2026-08-03
 
 **`for` comprehensions land, `loop` retires.**

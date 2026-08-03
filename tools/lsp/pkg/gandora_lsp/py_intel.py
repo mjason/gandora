@@ -139,7 +139,7 @@ def signatures(root: str, import_line: str, callee: str) -> list[dict]:
 def infer_type(source_py, fn_names, var):
     try:
         lines = source_py.split("\n")
-        start = gandora_std.enum.find_index(lines, lambda l: gandora_std.enum.any_p(fn_names, lambda n: l.startswith("def " + (n + "("))))
+        start = gandora_std.enum.find_index(lines, lambda l, *, fn_names=fn_names: gandora_std.enum.any_p(fn_names, lambda n: l.startswith("def " + (n + "("))))
         if (start is None):
             return None
         else:

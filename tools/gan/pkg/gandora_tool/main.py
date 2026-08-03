@@ -127,7 +127,7 @@ def run(file, args):
     try:
         modules = core.build(_root(), cache)
         abs = str(pathlib.Path(file).resolve())
-        target = gandora_std.enum.find(modules, lambda m: gandora_std.map.get(m, "source") == abs)
+        target = gandora_std.enum.find(modules, lambda m, *, abs=abs: gandora_std.map.get(m, "source") == abs)
         if (target is None):
             print(f"gan: {file} is not a module of this project")
             return sys.exit(1)

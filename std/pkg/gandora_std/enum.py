@@ -75,7 +75,7 @@ def reduce(xs: list[_T_a], acc: _T_b, f: collections.abc.Callable) -> _T_b:
     >>> reduce([1, 2, 3, 4], 0, lambda x, acc: acc + x)
     10
 """
-    return functools.reduce(lambda a, x: f(x, a), xs, acc)
+    return functools.reduce(lambda a, x, *, f=f: f(x, a), xs, acc)
 
 
 def sum(xs: list) -> int | float:

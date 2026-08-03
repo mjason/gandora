@@ -483,6 +483,20 @@ const PY_STDLIB_MODULES: &[&str] = &[
 /// (GEP-0007). Returns Ok(None) when the module or doc is absent.
 
 /// The function name of a def head, looking through a `when` guard.
+/// Arity of a definition head (`when`-wrapped or plain).
+fn def_head_arity(head: &crate::ast::Term) -> Option<usize> {
+    use crate::ast::{Callee, Term};
+    match head {
+        Term::Call(hc) => match &hc.callee {
+            Callee::Name(n) if n == "when" => hc.args.first().and_then(def_head_arity),
+            Callee::Name(_) => Some(hc.args.len()),
+            _ => None,
+        },
+        Term::Var(_, _) => Some(0),
+        _ => None,
+    }
+}
+
 fn def_head_name(head: &crate::ast::Term) -> Option<String> {
     use crate::ast::{Callee, Term};
     match head {
@@ -647,6 +661,8 @@ pub fn find_doc(
     let mut module_doc: Option<codegen::DocInfo> = None;
     let mut fun_doc: Option<codegen::DocInfo> = None;
     let mut pending: Option<codegen::DocInfo> = None;
+    let mut group_arities: std::collections::BTreeSet<usize> = Default::default();
+    let mut group_bodies: Vec<Term> = Vec::new();
     for stmt in term.as_block() {
         if !stmt.is_call_named("defmodule") {
             continue;
@@ -720,14 +736,31 @@ pub fn find_doc(
                 "def" | "defp" | "defmacro" => {
                     let head_name = c.args.first().and_then(def_head_name);
                     if let (Some(f), Some(h)) = (&fun, &head_name) {
-                        if *f == h.as_str() && fun_doc.is_none() {
-                            fun_doc = pending.take();
+                        if *f == h.as_str() {
+                            if fun_doc.is_none() {
+                                fun_doc = pending.take();
+                            }
+                            if let Some(a) = c.args.first().and_then(def_head_arity) {
+                                group_arities.insert(a);
+                            }
+                            if let Some(b) = Term::keyword_arg(&c.args, "do") {
+                                group_bodies.push(b.clone());
+                            }
                         }
                     }
                     pending = None;
                 }
                 _ => {}
             }
+        }
+    }
+    // compiled recursion shape of the group (GEP-0019-R006) — reported
+    // even for undocumented functions
+    if let Some(f) = fun {
+        let body_refs: Vec<&Term> = group_bodies.iter().collect();
+        if let Some(shape) = codegen::recursion_shape(f, &group_arities, &body_refs) {
+            fun_doc.get_or_insert_with(codegen::DocInfo::default).tco =
+                Some(shape.to_string());
         }
     }
     Ok(match fun {

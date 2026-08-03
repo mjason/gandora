@@ -30,7 +30,7 @@ def put(kw: list[tuple[str, object]], key: str, value: object) -> list[tuple[str
   - key: The key to set.
   - value: The value to store.
 """
-    def _gan_fn0(*_gan_args):
+    def _gan_fn0(*_gan_args, key=key):
         match _gan_args:
             case ((k, _) as _gan_t0,) if isinstance(_gan_t0, tuple):
                 return k == key
@@ -76,7 +76,7 @@ def has_key_p(kw: list[tuple[str, object]], key: str) -> bool:
   - kw: The keyword list.
   - key: The key to test.
 """
-    def _gan_fn3(*_gan_args):
+    def _gan_fn3(*_gan_args, key=key):
         match _gan_args:
             case ((k, _) as _gan_t3,) if isinstance(_gan_t3, tuple):
                 return k == key
@@ -92,7 +92,7 @@ def delete(kw: list[tuple[str, object]], key: str) -> list[tuple[str, object]]:
   - kw: The keyword list.
   - key: Every entry with this key is removed.
 """
-    def _gan_fn4(*_gan_args):
+    def _gan_fn4(*_gan_args, key=key):
         match _gan_args:
             case ((k, _) as _gan_t4,) if isinstance(_gan_t4, tuple):
                 return k == key
@@ -111,7 +111,7 @@ def merge(kw1: list[tuple[str, object]], kw2: list[tuple[str, object]]) -> list[
     >>> merge([("a", 1), ("b", 2)], [("b", 9), ("c", 3)])
     [('a', 1), ('b', 9), ('c', 3)]
 """
-    def _gan_fn5(*_gan_args):
+    def _gan_fn5(*_gan_args, kw2=kw2):
         match _gan_args:
             case ((k, _) as _gan_t5,) if isinstance(_gan_t5, tuple):
                 return has_key_p(kw2, k)

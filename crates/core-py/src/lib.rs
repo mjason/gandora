@@ -282,6 +282,7 @@ fn doc(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
     }
     let _ = out.set_item("meta", meta);
     let _ = out.set_item("specs", PyList::new_bound(py, &info.specs));
+    let _ = out.set_item("tco", info.tco.clone());
     let params = PyList::empty_bound(py);
     for (name, entries) in &info.params {
         let e = PyDict::new_bound(py);

@@ -44,7 +44,7 @@ def run(args: list[str]) -> None:
     if _gan_truthy(gandora_std.enum.empty_p(files)):
         print("gan fmt: no .gan files found")
         sys.exit(1)
-    results = gandora_std.enum.map(files, lambda f: _format_file(f, check))
+    results = gandora_std.enum.map(files, lambda f, *, check=check: _format_file(f, check))
     def _gan_fn0(*_gan_args):
         match _gan_args:
             case ((_, status) as _gan_t0,) if isinstance(_gan_t0, tuple):
@@ -238,7 +238,7 @@ def _multiline_p(t):
 def _interior_lines(toks):
     def _gan_fn4(t, acc):
         if _gan_truthy(_multiline_p(t)):
-            return gandora_std.enum.reduce(builtins.list(builtins.range(gandora_std.map.get(t, "line") + 1, gandora_std.map.get(t, "end_line") + 1)), acc, lambda l, a: gandora_std.map.put(a, l, gandora_std.map.get(t, "line")))
+            return gandora_std.enum.reduce(builtins.list(builtins.range(gandora_std.map.get(t, "line") + 1, gandora_std.map.get(t, "end_line") + 1)), acc, lambda l, a, *, t=t: gandora_std.map.put(a, l, gandora_std.map.get(t, "line")))
         else:
             return acc
     return gandora_std.enum.reduce(toks, {}, _gan_fn4)
@@ -339,7 +339,7 @@ def _pop_clauses(s, first, lt):
 
 
 def _advance(lt, stack, level):
-    def _gan_fn7(t, s):
+    def _gan_fn7(t, s, *, level=level):
         if _gan_truthy(_opener_tok_p(t)):
             return [{"kind": _struct_kind(t), "body": level + 1, "open": level}] + s
         elif _gan_truthy(_closer_p(t)):

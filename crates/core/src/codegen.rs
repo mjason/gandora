@@ -75,6 +75,9 @@ pub struct DocInfo {
     /// metadata from keyword-form `@doc since: "..."` lines (GEP-0007-R002)
     pub meta: Vec<(String, String)>,
     pub hidden: bool,
+    /// compiled recursion shape (GEP-0019-R006): "loop" — tail recursion
+    /// became `while True:`; "stack" — self-recursive on the call stack
+    pub tco: Option<String>,
 }
 
 impl DocInfo {
@@ -279,6 +282,9 @@ struct FnDef {
     decorators: Vec<Term>,
     clauses: Vec<(Vec<Term>, Option<Term>, Term)>, // params, guard, body
     span: Span,
+    /// enclosing locals a hoisted `fn` reads, snapshot as `name=name`
+    /// keyword-only defaults (GEP-0021); empty for module-level defs
+    captures: Vec<String>,
 }
 
 pub struct Codegen {
@@ -308,11 +314,12 @@ pub struct Codegen {
     /// true after `compile` when the module defines no runtime code
     /// (macros only) and should produce no Python file (GEP-0002-R009).
     pub compile_time_only: bool,
-    /// (state_var, result_var) of enclosing `loop`s (GEP-0014)
-    loop_stack: Vec<(String, String)>,
     tmp_counter: usize,
     tmp_names: Vec<String>,
     fn_counter: usize,
+    /// locals of each enclosing function scope, innermost last — the
+    /// names a closure may capture and must snapshot (GEP-0021)
+    scope_bound: Vec<BTreeSet<String>>,
 }
 
 impl Codegen {
@@ -337,10 +344,10 @@ impl Codegen {
             typevars: BTreeSet::new(),
             tail_ctx: None,
             compile_time_only: false,
-            loop_stack: Vec::new(),
             tmp_counter: 0,
             tmp_names: Vec::new(),
             fn_counter: 0,
+            scope_bound: Vec::new(),
         }
     }
 
@@ -653,6 +660,7 @@ impl Codegen {
                             decorators: std::mem::take(&mut pending_decorators),
                             clauses: Vec::new(),
                             span: call.span,
+                            captures: Vec::new(),
                         });
                         order.insert(key, funs.len() - 1);
                         funs.len() - 1
@@ -1196,6 +1204,32 @@ impl Codegen {
             .iter()
             .any(|(_, _, b)| self.has_tail_self(b, &f.name, &arity_set));
         let saved_tail = self.tail_ctx.take();
+        // this function's locals: what closures inside may capture
+        let mut fn_scope: BTreeSet<String> = f.captures.iter().cloned().collect();
+        for (params, _, body) in &f.clauses {
+            for p in params {
+                pattern_binds(p, &mut fn_scope);
+            }
+            scope_binders(body, &mut fn_scope);
+        }
+        self.scope_bound.push(fn_scope);
+        // keyword-only creation-time snapshots of captured locals
+        // (GEP-0021-R001): `def f(x, *, n=n):` / `def f(*_gan_args, n=n):`
+        let caps: Vec<String> = f.captures.iter().map(|c| format!("{c}={c}")).collect();
+        let with_caps = |base: String| -> String {
+            if caps.is_empty() {
+                base
+            } else if base.is_empty() {
+                format!("*, {}", caps.join(", "))
+            } else {
+                format!("{base}, *, {}", caps.join(", "))
+            }
+        };
+        let cap_star = if caps.is_empty() {
+            String::new()
+        } else {
+            format!(", {}", caps.join(", "))
+        };
         let simple = f.clauses.len() == 1
             && f.clauses[0].1.is_none()
             && f.clauses[0]
@@ -1218,12 +1252,20 @@ impl Codegen {
                         .zip(hints)
                         .map(|(n, h)| format!("{n}: {h}"))
                         .collect();
-                    lines.push(format!("def {py_name}({}) -> {ret}:", typed.join(", ")));
+                    lines.push(format!(
+                        "def {py_name}({}) -> {ret}:",
+                        with_caps(typed.join(", "))
+                    ));
                 }
                 Some((_, ret)) => {
-                    lines.push(format!("def {py_name}({}) -> {ret}:", names.join(", ")));
+                    lines.push(format!(
+                        "def {py_name}({}) -> {ret}:",
+                        with_caps(names.join(", "))
+                    ));
                 }
-                None => lines.push(format!("def {py_name}({}):", names.join(", "))),
+                None => {
+                    lines.push(format!("def {py_name}({}):", with_caps(names.join(", "))))
+                }
             }
             let mut body_lines = Vec::new();
             if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
@@ -1246,9 +1288,9 @@ impl Codegen {
         } else {
             match &spec_info {
                 Some((_, ret)) => {
-                    lines.push(format!("def {py_name}(*_gan_args) -> {ret}:"))
+                    lines.push(format!("def {py_name}(*_gan_args{cap_star}) -> {ret}:"))
                 }
-                None => lines.push(format!("def {py_name}(*_gan_args):")),
+                None => lines.push(format!("def {py_name}(*_gan_args{cap_star}):")),
             }
             let mut body_lines = Vec::new();
             if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
@@ -1315,6 +1357,7 @@ impl Codegen {
             }
             push_indented(&mut lines, &assembled);
         }
+        self.scope_bound.pop();
         self.tail_ctx = saved_tail;
         Ok(format!("\n{}\n", lines.join("\n")))
     }
@@ -1463,80 +1506,55 @@ impl Codegen {
                             ))
                         }
                         "recur" => {
-                            if self.loop_stack.is_empty() {
-                                if let Some((_, arities, params)) = self.tail_ctx.clone() {
-                                    if !matches!(dest, Dest::Return) {
-                                        return Err(self.err(
-                                            call.span,
-                                            "recur must be in tail position (GEP-0019-R005)",
-                                        ));
-                                    }
-                                    if !arities.contains(&call.args.len()) {
-                                        return Err(self.err(
-                                            call.span,
-                                            format!(
-                                                "recur/{} matches no clause of this \
-                                                 function (GEP-0019-R005)",
-                                                call.args.len()
-                                            ),
-                                        ));
-                                    }
-                                    let mut pre = Vec::new();
-                                    let args: Vec<String> = call
-                                        .args
-                                        .iter()
-                                        .map(|a| self.emit_expr(a, &mut pre))
-                                        .collect::<Result<_>>()?;
-                                    out.extend(pre);
-                                    match &params {
-                                        Some(ps)
-                                            if ps.len() == args.len() && !ps.is_empty() =>
-                                        {
-                                            out.push(format!(
-                                                "{} = {}",
-                                                ps.join(", "),
-                                                args.join(", ")
-                                            ));
-                                        }
-                                        Some(_) => {}
-                                        None => {
-                                            let trailing =
-                                                if args.len() == 1 { "," } else { "" };
-                                            out.push(format!(
-                                                "_gan_args = ({}{trailing})",
-                                                args.join(", ")
-                                            ));
-                                        }
-                                    }
-                                    out.push("continue".into());
-                                    return Ok(());
-                                }
+                            let Some((_, arities, params)) = self.tail_ctx.clone() else {
+                                return Err(self.err(
+                                    call.span,
+                                    "recur restarts the enclosing function and is only \
+                                     valid in a function tail; inside try it cannot be \
+                                     optimized (GEP-0014-R005, GEP-0019)",
+                                ));
+                            };
+                            if !matches!(dest, Dest::Return) {
+                                return Err(self.err(
+                                    call.span,
+                                    "recur must be in tail position (GEP-0019-R005)",
+                                ));
                             }
-                            let Some((state, result)) = self.loop_stack.last().cloned() else {
+                            if !arities.contains(&call.args.len()) {
                                 return Err(self.err(
                                     call.span,
                                     format!(
-                                        "{name} is only valid inside a loop body or, for \
-                                         recur, a function tail (GEP-0014-R005, GEP-0019)"
+                                        "recur/{} matches no clause of this \
+                                         function (GEP-0019-R005)",
+                                        call.args.len()
                                     ),
-                                ));
-                            };
-                            if call.args.len() != 1 {
-                                return Err(self.err(
-                                    call.span,
-                                    format!("{name} takes exactly one argument"),
                                 ));
                             }
                             let mut pre = Vec::new();
-                            let e = self.emit_expr(&call.args[0], &mut pre)?;
+                            let args: Vec<String> = call
+                                .args
+                                .iter()
+                                .map(|a| self.emit_expr(a, &mut pre))
+                                .collect::<Result<_>>()?;
                             out.extend(pre);
-                            if name == "recur" {
-                                out.push(format!("{state} = {e}"));
-                                out.push("continue".into());
-                            } else {
-                                out.push(format!("{result} = {e}"));
-                                out.push("break".into());
+                            match &params {
+                                Some(ps) if ps.len() == args.len() && !ps.is_empty() => {
+                                    out.push(format!(
+                                        "{} = {}",
+                                        ps.join(", "),
+                                        args.join(", ")
+                                    ));
+                                }
+                                Some(_) => {}
+                                None => {
+                                    let trailing = if args.len() == 1 { "," } else { "" };
+                                    out.push(format!(
+                                        "_gan_args = ({}{trailing})",
+                                        args.join(", ")
+                                    ));
+                                }
                             }
+                            out.push("continue".into());
                             return Ok(());
                         }
                         "raise" => {
@@ -1685,32 +1703,7 @@ impl Codegen {
 
     /// GEP-0019-R001: does this body end in a tail call to `name`?
     fn has_tail_self(&self, term: &Term, name: &str, arities: &BTreeSet<usize>) -> bool {
-        let stmts = term.as_block();
-        let Some(last) = stmts.last() else { return false };
-        let Term::Call(c) = last else { return false };
-        match &c.callee {
-            Callee::Name(n) if n == name && arities.contains(&c.args.len()) => true,
-            Callee::Name(n) if n == "recur" => true,
-            Callee::Name(n) => match n.as_str() {
-                "if" | "unless" | "with" => ["do", "else"].iter().any(|k| {
-                    Term::keyword_arg(&c.args, k)
-                        .is_some_and(|b| self.has_tail_self(b, name, arities))
-                }),
-                "case" | "cond" => Term::keyword_arg(&c.args, "do")
-                    .and_then(|b| self.clause_list(b, c.span).ok())
-                    .is_some_and(|cls| {
-                        cls.iter().any(|cl| match cl {
-                            Term::Call(cc) => cc
-                                .args
-                                .last()
-                                .is_some_and(|b| self.has_tail_self(b, name, arities)),
-                            _ => false,
-                        })
-                    }),
-                _ => false,
-            },
-            _ => false,
-        }
+        term_has_tail_self(term, name, arities)
     }
 
     fn clause_list<'t>(&self, block: &'t Term, span: Span) -> Result<Vec<&'t Term>> {
@@ -2180,91 +2173,6 @@ impl Codegen {
     }
 
     /// loop/recur/break (GEP-0014-R004..R006).
-    fn emit_loop(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
-        let saved_tail = self.tail_ctx.take();
-        let r = self.emit_loop_inner(call, dest, out);
-        self.tail_ctx = saved_tail;
-        return r;
-    }
-
-    fn emit_loop_inner(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
-        let head = call
-            .args
-            .first()
-            .ok_or_else(|| self.err(call.span, "loop requires `pattern = initial`"))?;
-        let (pat, init) = match head {
-            Term::Call(c) if matches!(&c.callee, Callee::Name(n) if n == "=") => {
-                (c.args[0].clone(), c.args[1].clone())
-            }
-            other => {
-                return Err(self.err(
-                    call.span,
-                    format!("loop requires `pattern = initial`, found {other:?}"),
-                ))
-            }
-        };
-        let body = Term::keyword_arg(&call.args, "do")
-            .ok_or_else(|| self.err(call.span, "loop requires a do block"))?
-            .clone();
-        let s = self.fresh_tmp("loop");
-        let state = self.tmp(s).to_string();
-        let r = self.fresh_tmp("res");
-        let result = self.tmp(r).to_string();
-        let mut pre = Vec::new();
-        let init_e = self.emit_expr(&init, &mut pre)?;
-        out.extend(pre);
-        out.push(format!("{state} = {init_e}"));
-        out.push(format!("{result} = None"));
-        out.push("while True:".into());
-        let mut inner: Vec<String> = Vec::new();
-        // rebind the state pattern each iteration (GEP-0014-R005)
-        match &pat {
-            Term::Var(n, ctx) if n != "_" => {
-                inner.push(format!("{} = {state}", hygienic_name(n, *ctx)));
-            }
-            _ => {
-                let mut guards = Vec::new();
-                let p = self.compile_pattern(&pat, &mut guards)?;
-                self.helpers.insert("match_error");
-                inner.push(format!("match {state}:"));
-                let case_line = if guards.is_empty() {
-                    format!("case {p}:")
-                } else {
-                    format!("case {p} if {}:", guards.join(" and "))
-                };
-                push_indented(&mut inner, &[case_line, "    pass".into()]);
-                push_indented(
-                    &mut inner,
-                    &[
-                        "case _:".into(),
-                        format!(
-                            "    raise GanMatchError(\"loop state did not match: \" + repr({state}))"
-                        ),
-                    ],
-                );
-            }
-        }
-        self.loop_stack.push((state.clone(), result.clone()));
-        let body_result = (|| -> Result<()> {
-            let stmts = body.as_block();
-            for (i, stmt) in stmts.iter().enumerate() {
-                if i + 1 == stmts.len() {
-                    let d = Dest::Assign(r);
-                    self.emit_stmt(stmt, d, &mut inner)?;
-                } else {
-                    self.emit_stmt(stmt, Dest::Ignore, &mut inner)?;
-                }
-            }
-            Ok(())
-        })();
-        self.loop_stack.pop();
-        body_result?;
-        inner.push("break".into());
-        push_indented(out, &inner);
-        self.finish_value(result, dest, out);
-        Ok(())
-    }
-
     // ---- expressions -----------------------------------------------------
 
     /// Emit an expression that will be used as a Python condition.
@@ -3061,7 +2969,11 @@ impl Codegen {
                                     _ => unreachable!(),
                                 })
                                 .collect();
-                            return Ok(format!("lambda {}: {e}", names.join(", ")));
+                            let caps = self.closure_captures(&fn_free_vars(clauses));
+                            return Ok(format!(
+                                "lambda {}: {e}",
+                                lambda_params(&names, &caps)
+                            ));
                         }
                     }
                 }
@@ -3070,12 +2982,14 @@ impl Codegen {
         // otherwise hoist a def
         let fname = format!("_gan_fn{}", self.fn_counter);
         self.fn_counter += 1;
+        let captures = self.closure_captures(&fn_free_vars(clauses));
         let fdef = FnDef {
             spec: None,
             name: fname.clone(),
             private: false,
             doc: None,
             decorators: Vec::new(),
+            captures,
             clauses: clauses
                 .iter()
                 .map(|clause| {
@@ -3148,8 +3062,22 @@ impl Codegen {
             ));
         }
         let params: Vec<String> = (1..=max).map(|i| format!("_gan_cap{i}")).collect();
-        pre.extend(Vec::<String>::new());
-        Ok(format!("lambda {}: {e}", params.join(", ")))
+        let mut reads = BTreeSet::new();
+        scope_reads(&renamed, &mut reads);
+        for p in &params {
+            reads.remove(p);
+        }
+        let caps = self.closure_captures(&reads);
+        Ok(format!("lambda {}: {e}", lambda_params(&params, &caps)))
+    }
+
+    /// The enclosing locals among a closure's free variables — the names
+    /// whose creation-time values the closure must snapshot (GEP-0021).
+    fn closure_captures(&self, free: &BTreeSet<String>) -> Vec<String> {
+        match self.scope_bound.last() {
+            Some(bound) => free.intersection(bound).cloned().collect(),
+            None => Vec::new(),
+        }
     }
 
     // ---- patterns --------------------------------------------------------
@@ -3349,6 +3277,98 @@ fn split_when(pat: &Term) -> (&Term, Option<&Term>) {
     (pat, None)
 }
 
+/// Whether a tail position of `term` calls `name` with an arity in
+/// `arities` (or spells `recur`) — the test that turns a definition
+/// group into a `while True:` loop (GEP-0019-R001/R002).
+pub fn term_has_tail_self(term: &Term, name: &str, arities: &BTreeSet<usize>) -> bool {
+    let stmts = term.as_block();
+    let Some(last) = stmts.last() else { return false };
+    let Term::Call(c) = last else { return false };
+    match &c.callee {
+        Callee::Name(n) if n == name && arities.contains(&c.args.len()) => true,
+        Callee::Name(n) if n == "recur" => true,
+        Callee::Name(n) => match n.as_str() {
+            "if" | "unless" | "with" => ["do", "else"].iter().any(|k| {
+                Term::keyword_arg(&c.args, k)
+                    .is_some_and(|b| term_has_tail_self(b, name, arities))
+            }),
+            "case" | "cond" => Term::keyword_arg(&c.args, "do")
+                .is_some_and(|b| match b {
+                    Term::Call(cl)
+                        if matches!(&cl.callee, Callee::Name(x) if x == "__clauses__") =>
+                    {
+                        cl.args.iter().any(|clause| match clause {
+                            Term::Call(cc) => cc
+                                .args
+                                .last()
+                                .is_some_and(|b| term_has_tail_self(b, name, arities)),
+                            _ => false,
+                        })
+                    }
+                    _ => false,
+                }),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// Whether `term` calls `name` with an arity in `arities` anywhere.
+fn calls_self(term: &Term, name: &str, arities: &BTreeSet<usize>) -> bool {
+    match term {
+        Term::Str(parts) => parts.iter().any(|p| match p {
+            StrPart::Interp(t) => calls_self(t, name, arities),
+            _ => false,
+        }),
+        Term::List(items) | Term::Tuple(items) => {
+            items.iter().any(|t| calls_self(t, name, arities))
+        }
+        Term::Map(entries) => entries
+            .iter()
+            .any(|(k, v)| calls_self(k, name, arities) || calls_self(v, name, arities)),
+        Term::Pair(_, v) => calls_self(v, name, arities),
+        Term::Call(c) => {
+            let own = match &c.callee {
+                Callee::Name(n) => n == name && arities.contains(&c.args.len()),
+                Callee::Dot { base, .. } => calls_self(base, name, arities),
+                Callee::Apply(t) => calls_self(t, name, arities),
+            };
+            own || c.args.iter().any(|t| calls_self(t, name, arities))
+        }
+        _ => false,
+    }
+}
+
+/// How a definition group compiles (GEP-0019-R006): `Some("loop")` when
+/// tail self-recursion collapses to `while True:` rebinding,
+/// `Some("stack")` when the group is self-recursive only outside tail
+/// position (native call stack), `None` when it is not self-recursive.
+pub fn recursion_shape(
+    name: &str,
+    arities: &BTreeSet<usize>,
+    bodies: &[&Term],
+) -> Option<&'static str> {
+    if bodies.iter().any(|b| term_has_tail_self(b, name, arities)) {
+        Some("loop")
+    } else if bodies.iter().any(|b| calls_self(b, name, arities)) {
+        Some("stack")
+    } else {
+        None
+    }
+}
+
+/// Parameter list of a generated lambda: declared params, then a bare
+/// `*` guarding keyword-only creation-time snapshots (GEP-0021-R002 —
+/// an extra positional argument must still raise, never bind a snapshot).
+fn lambda_params(params: &[String], caps: &[String]) -> String {
+    let snaps: Vec<String> = caps.iter().map(|c| format!("{c}={c}")).collect();
+    match (params.is_empty(), snaps.is_empty()) {
+        (_, true) => params.join(", "),
+        (true, false) => format!("*, {}", snaps.join(", ")),
+        (false, false) => format!("{}, *, {}", params.join(", "), snaps.join(", ")),
+    }
+}
+
 fn hygienic_name(name: &str, ctx: Option<u64>) -> String {
     match ctx {
         Some(id) => format!("{}__gan{id}", map_ident(name)),
@@ -3507,6 +3527,164 @@ fn dotted_name(t: &Term) -> Option<String> {
         },
         _ => None,
     }
+}
+
+/// Hygienic names a pattern binds; pins (`^x`) reference, never bind.
+fn pattern_binds(pat: &Term, out: &mut BTreeSet<String>) {
+    match pat {
+        Term::Var(n, ctx) => {
+            let h = hygienic_name(n, *ctx);
+            if h != "_" {
+                out.insert(h);
+            }
+        }
+        Term::List(items) | Term::Tuple(items) => {
+            items.iter().for_each(|p| pattern_binds(p, out));
+        }
+        Term::Map(entries) => entries.iter().for_each(|(_, v)| pattern_binds(v, out)),
+        Term::Pair(_, v) => pattern_binds(v, out),
+        Term::Call(c) => match &c.callee {
+            Callee::Name(n) if n == "^" => {}
+            Callee::Name(n) if n == "when" => {
+                if let Some(p) = c.args.first() {
+                    pattern_binds(p, out);
+                }
+            }
+            _ => c.args.iter().for_each(|p| pattern_binds(p, out)),
+        },
+        _ => {}
+    }
+}
+
+/// Hygienic names a term binds in the enclosing function scope: `=` and
+/// `<-` left sides plus `->` clause patterns, which all compile to Python
+/// assignments. `fn` bodies are their own scope; `cond` clause heads are
+/// conditions, not patterns.
+fn scope_binders(term: &Term, out: &mut BTreeSet<String>) {
+    match term {
+        Term::Str(parts) => {
+            for p in parts {
+                if let StrPart::Interp(t) = p {
+                    scope_binders(t, out);
+                }
+            }
+        }
+        Term::List(items) | Term::Tuple(items) => {
+            items.iter().for_each(|t| scope_binders(t, out));
+        }
+        Term::Map(entries) => entries.iter().for_each(|(k, v)| {
+            scope_binders(k, out);
+            scope_binders(v, out);
+        }),
+        Term::Pair(_, v) => scope_binders(v, out),
+        Term::Call(c) => {
+            match &c.callee {
+                Callee::Name(n) if n == "fn" => return,
+                Callee::Name(n) if (n == "=" || n == "<-") && c.args.len() == 2 => {
+                    pattern_binds(&c.args[0], out);
+                    scope_binders(&c.args[1], out);
+                    return;
+                }
+                Callee::Name(n) if n == "->" && c.args.len() == 2 => {
+                    if let Term::List(pats) = &c.args[0] {
+                        for p in pats {
+                            pattern_binds(split_when(p).0, out);
+                        }
+                    }
+                    scope_binders(&c.args[1], out);
+                    return;
+                }
+                Callee::Name(n) if n == "cond" => {
+                    if let Some(Term::Call(cl)) = Term::keyword_arg(&c.args, "do") {
+                        for clause in &cl.args {
+                            if let Term::Call(arrow) = clause {
+                                if let Some(body) = arrow.args.last() {
+                                    scope_binders(body, out);
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
+                Callee::Dot { base, .. } => scope_binders(base, out),
+                Callee::Apply(t) => scope_binders(t, out),
+                Callee::Name(_) => {}
+            }
+            c.args.iter().for_each(|t| scope_binders(t, out));
+        }
+        _ => {}
+    }
+}
+
+/// Every hygienic `Var` reference a term reads. Pattern binders show up
+/// too — callers subtract the binder set, so a name is a capture only
+/// when nothing in the scope binds it. Nested `fn` scopes contribute
+/// their own free vars.
+fn scope_reads(term: &Term, out: &mut BTreeSet<String>) {
+    match term {
+        Term::Var(n, ctx) => {
+            let h = hygienic_name(n, *ctx);
+            if h != "_" && !n.starts_with('&') {
+                out.insert(h);
+            }
+        }
+        Term::Str(parts) => {
+            for p in parts {
+                if let StrPart::Interp(t) = p {
+                    scope_reads(t, out);
+                }
+            }
+        }
+        Term::List(items) | Term::Tuple(items) => {
+            items.iter().for_each(|t| scope_reads(t, out));
+        }
+        Term::Map(entries) => entries.iter().for_each(|(k, v)| {
+            scope_reads(k, out);
+            scope_reads(v, out);
+        }),
+        Term::Pair(_, v) => scope_reads(v, out),
+        Term::Call(c) => {
+            match &c.callee {
+                Callee::Name(n) if n == "fn" => {
+                    out.extend(fn_free_vars(&c.args));
+                    return;
+                }
+                Callee::Dot { base, .. } => scope_reads(base, out),
+                Callee::Apply(t) => scope_reads(t, out),
+                Callee::Name(_) => {}
+            }
+            c.args.iter().for_each(|t| scope_reads(t, out));
+        }
+        _ => {}
+    }
+}
+
+/// Free variables of an `fn`: everything its clauses read minus
+/// everything they bind (params, `=`/`->` patterns). What remains
+/// resolves in the enclosing function and must be snapshot-captured
+/// (GEP-0021-R001).
+fn fn_free_vars(clauses: &[Term]) -> BTreeSet<String> {
+    let mut reads = BTreeSet::new();
+    let mut binds = BTreeSet::new();
+    for clause in clauses {
+        let Term::Call(c) = clause else { continue };
+        if c.args.len() != 2 {
+            continue;
+        }
+        if let Term::List(pats) = &c.args[0] {
+            for p in pats {
+                let (pat, guard) = split_when(p);
+                pattern_binds(pat, &mut binds);
+                scope_reads(pat, &mut reads);
+                if let Some(g) = guard {
+                    scope_reads(g, &mut reads);
+                }
+            }
+        }
+        scope_binders(&c.args[1], &mut binds);
+        scope_reads(&c.args[1], &mut reads);
+    }
+    &reads - &binds
 }
 
 /// Every variable bound in a parameter pattern (GEP-0018-R002).
@@ -3746,6 +3924,80 @@ mod tests {
         );
         assert!(py2.contains("n = n - 1"), "{py2}");
         assert!(py2.contains("continue"), "{py2}");
+    }
+
+    #[test]
+    fn closures_snapshot_captured_locals() {
+        // GEP-0021-R001: rebinding after creation must not leak in
+        let py = compile(
+            "defmodule M do\n  def straight do\n    x = 1\n    f = fn -> x end\n    x = 2\n    {f.(), x}\n  end\nend",
+        );
+        assert!(py.contains("lambda *, x=x: x"), "{py}");
+        // params stay positional; snapshots are keyword-only (R002)
+        let py2 = compile(
+            "defmodule M do\n  def make(n), do: fn x -> x + n end\nend",
+        );
+        assert!(py2.contains("lambda x, *, n=n: x + n"), "{py2}");
+        // hoisted multi-clause fn carries the snapshot on its def line
+        let py3 = compile(
+            "defmodule M do\n  def pick(a) do\n    fn\n      0 -> a\n      y -> y + a\n    end\n  end\nend",
+        );
+        assert!(py3.contains("def _gan_fn0(*_gan_args, a=a):"), "{py3}");
+        // & capture snapshots too
+        let py4 = compile(
+            "defmodule M do\n  def add(m), do: &(&1 + m)\nend",
+        );
+        assert!(py4.contains("lambda _gan_cap1, *, m=m: _gan_cap1 + m"), "{py4}");
+        // module-level names are not locals: nothing to snapshot
+        let py5 = compile(
+            "defmodule M do\n  def helper(x), do: x\n  def use_it, do: fn v -> helper(v) end\nend",
+        );
+        assert!(py5.contains("lambda v: helper(v)"), "{py5}");
+    }
+
+    #[test]
+    fn closures_in_tco_loops_capture_per_iteration() {
+        // GEP-0021 + GEP-0019: the amplified case — snapshots make
+        // rebind+continue frame-faithful
+        let py = compile(
+            "defmodule M do\n  def collect(0, acc), do: acc\n  def collect(n, acc), do: collect(n - 1, [fn -> n end] ++ acc)\nend",
+        );
+        assert!(py.contains("while True:"), "{py}");
+        assert!(py.contains("[lambda *, n=n: n] + acc"), "{py}");
+    }
+
+    #[test]
+    fn recursion_shape_is_reported() {
+        // GEP-0019-R006
+        use crate::parser::parse_file;
+        let src = "defmodule M do\n  def down(0), do: :done\n  def down(n), do: down(n - 1)\n  def fact(0), do: 1\n  def fact(n), do: n * fact(n - 1)\n  def plain(x), do: x\nend";
+        let term = parse_file("t.gan", src).unwrap();
+        let shape = |name: &str, arity: usize| {
+            let mut bodies = Vec::new();
+            let arities: BTreeSet<usize> = [arity].into();
+            for stmt in term.as_block() {
+                let Term::Call(dm) = &stmt else { continue };
+                let Some(body) = Term::keyword_arg(&dm.args, "do") else { continue };
+                for inner in body.as_block() {
+                    if let Term::Call(c) = &inner {
+                        if inner.is_call_named("def") {
+                            if let Some(Term::Call(h)) = c.args.first() {
+                                if matches!(&h.callee, Callee::Name(n) if n == name) {
+                                    bodies.push(
+                                        Term::keyword_arg(&c.args, "do").unwrap().clone(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let refs: Vec<&Term> = bodies.iter().collect();
+            recursion_shape(name, &arities, &refs).map(|s| s.to_string())
+        };
+        assert_eq!(shape("down", 1).as_deref(), Some("loop"));
+        assert_eq!(shape("fact", 1).as_deref(), Some("stack"));
+        assert_eq!(shape("plain", 1), None);
     }
 
     #[test]

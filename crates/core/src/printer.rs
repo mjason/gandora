@@ -59,7 +59,6 @@ fn is_operator(name: &str) -> bool {
             | "|>"
             | "when"
             | "<-"
-            | "|"
     )
 }
 
