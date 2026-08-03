@@ -523,9 +523,24 @@ gan lsc ast src/x.gan --root .          # parse tree (Elixir encoding)
 gan lsc pydoc numpy.array --root .      # Python-side docs via jedi
 ```
 
-A productive loop for an agent: edit → `gan lsc check` (fix every
-finding) → `gan lsc compile` when unsure what something generates →
-`gan test` → `gan fmt src`.
+And the **sandbox** — validate generated code before it touches the
+project (GEP-0023):
+
+```console
+echo 'Enum.mpa([1,2], fn x -> x end)' | gan lsc try - --root .
+# -> {"ok": false, ..., "suggestions": [{"kind": "did_you_mean",
+#     "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?"}]}
+```
+
+`try` compiles, lints, spell-checks names against real symbols
+(edit-distance), flags cross-language habits (`return`, `lambda`,
+`None`, Python `def ...():` …) with the Gandora spelling, then runs in
+a temp dir under a timeout — returning the generated Python, stdout,
+and a snippet's last value. `--no-run` skips execution.
+
+A productive loop for an agent: **generate → `gan lsc try -` → apply
+the suggestions → `try` again → write into the project** → then
+`gan lsc check` (fix every finding) → `gan test` → `gan fmt src`.
 
 ## Style checklist for agents
 

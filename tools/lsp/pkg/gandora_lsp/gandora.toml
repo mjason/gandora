@@ -1,5 +1,5 @@
 schema = 1
-compiler = "0.10.3"
+compiler = "0.10.4"
 
 [[modules]]
 name = "Lsc"
@@ -15,3 +15,8 @@ source = "gandora_lsp/_gan/gandora_lsp/main.gan"
 name = "PyIntel"
 python = "gandora_lsp/py_intel.py"
 source = "gandora_lsp/_gan/gandora_lsp/py_intel.gan"
+
+[[modules]]
+name = "Sandbox"
+python = "gandora_lsp/sandbox.py"
+source = "gandora_lsp/_gan/gandora_lsp/sandbox.gan"

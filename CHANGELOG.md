@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.11.0 — 2026-08-03
+
+**The sandbox: AI writes it, `gan lsc try` verdicts it — and teaches.**
+
+- **GEP-0023**: `gan lsc try <file|-> [--no-run]` — one JSON verdict
+  for generated code: compile + lints, then execution in a temp dir
+  with the project interpreter under a hard timeout (stdout + the
+  snippet's last value captured), plus the generated Python itself.
+- **Did-you-mean** (edit-distance over real candidates): `Enum.mpa` →
+  `Enum.map` (checked against actual module symbols), `valeu` →
+  `value` (the snippet's own identifiers), `defmodul` → `defmodule`.
+- **Migration hints** for cross-language habits: `return`, `while`,
+  `lambda`, `None/True/False`, Python `def ...():`, `import`,
+  `&&`/`||`, `+=`, f-strings, `self.`, `switch`, `== nil` — each
+  answered with the Gandora spelling.
+- **Practice hints**: public defs missing `@spec`; repeated `$mod`
+  where a `pyimport` is the idiom.
+- The manual's AI toolbox documents the loop: generate → try → apply
+  suggestions → try → write.
+
 ## v0.10.4 — 2026-08-03
 
 **Interop housekeeping: pyimport over repeated boundary spellings.**

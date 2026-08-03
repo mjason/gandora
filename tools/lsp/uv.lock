@@ -26,12 +26,12 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.10.4"
+version = "0.11.0"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lsp"
-version = "0.10.4"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
@@ -52,12 +52,12 @@ requires-dist = [
 
 [[package]]
 name = "gandora-std"
-version = "0.10.4"
+version = "0.11.0"
 source = { directory = "../../std" }
 
 [[package]]
 name = "gandora-tool"
-version = "0.10.4"
+version = "0.11.0"
 source = { directory = "../gan" }
 dependencies = [
     { name = "gandora-core" },

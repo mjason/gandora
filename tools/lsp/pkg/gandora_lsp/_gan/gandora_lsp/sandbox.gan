@@ -1,0 +1,303 @@
+defmodule Sandbox do
+  @moduledoc """
+  The AI sandbox (GEP-0023): one query that answers "is this Gandora
+  code right, and if not, what did I probably mean?" — parse, compile,
+  lint, spell-check module members with fuzzy search, flag common
+  cross-language mistakes, then execute with a timeout. One JSON value
+  out; nothing touches the project.
+  """
+
+  pyimport gandora_core, as: core
+  pyimport difflib
+  pyimport re
+  pyimport subprocess
+  pyimport tempfile
+  pyimport sys
+  pyimport os
+
+  # cross-language habits that do not survive the border, each with the
+  # Gandora spelling to reach for instead (GEP-0023-R003)
+  @mistakes [
+    {~r/^\s*return\b/, "Gandora has no `return` — a function's value is its last expression."},
+    {~r/^\s*while\b/, "There is no `while` — use tail recursion (constant stack) or `for`/Enum (GEP-0019/0020)."},
+    {~r/\belif\b/, "`elif` is spelled as another `cond do` branch, or a `case` clause."},
+    {~r/^\s*def .*\):\s*$/, "Python `def ...():` — a Gandora head has no colon: `def f(x) do ... end` or `def f(x), do: expr`."},
+    {~r/\blambda\b/, "`lambda` is spelled `fn x -> ... end`, called with `f.(x)`."},
+    {~r/\bNone\b/, "`None` is spelled `nil`."},
+    {~r/\bTrue\b|\bFalse\b/, "Booleans are lowercase: `true` / `false` (only `false` and `nil` are falsy)."},
+    {~r/^\s*import\s+[a-z]/, "Python `import x` is `pyimport x` at module top, or an inline `$x` reference (GEP-0003)."},
+    {~r/^\s*from\s+\w+\s+import\b/, "`from x import y` has no direct spelling — `pyimport x` then `x.y`, or `$x.y` inline."},
+    {~r/\bprint\(/, "Prefer `IO.puts(...)` (falls through to Python print, but IO.puts is the idiom)."},
+    {~r/\bself\./, "There is no `self` — Gandora functions are module functions over plain data."},
+    {~r/&&|\|\|(?!>)/, "Boolean operators are the words `and` / `or` / `not`."},
+    {~r/\+=|-=|\*=/, "No augmented assignment — rebind: `x = x + 1`."},
+    {~r/\bf"/, "f-strings are plain strings — interpolation is built in: \"total " <> "#" <> "{n}\"."},
+    {~r/\bswitch\b/, "`switch` is `case ... do pattern -> ... end`."},
+    {~r/\bnil\s*==|==\s*nil\b/, "Prefer `is_nil(x)` over comparing with nil."},
+    {~r/\$"[A-Za-z0-9_.]+"/, "Quoted module refs were retired: write $(a.b) (GEP-0003-R010)."}
+  ]
+
+  @keywords ["defmodule", "def", "defp", "defmacro", "defstruct", "case", "cond",
+    "with", "for", "fn", "try", "rescue", "after", "else", "end", "do", "quote",
+    "unquote", "pyimport", "import", "require", "alias", "use", "recur", "when",
+    "true", "false", "nil", "and", "or", "not", "raise", "if", "unless"]
+
+  @doc """
+  Runs the whole verdict pipeline over `source`. Returns a map:
+  ok / stage (parse|compile|lint|run|ok) / diagnostics / suggestions /
+  python / stdout / value.
+  """
+  @param source, "The Gandora code to check — a full module or bare statements."
+  @param root, "Project root for module resolution (std is always known)."
+  @param run, "Execute after a clean compile (with a timeout) when true."
+  @spec try_source(string(), string(), boolean()) :: map()
+  def try_source(source, root, run) do
+    suggestions = common_mistakes(source) ++ practice_hints(source)
+    module_mode = String.match?(source, ~r/(?m)^\s*defmodul\w*\s/)
+    compiled = try do
+      if module_mode do
+        {:ok, core.compile_string(source, "sandbox.gan", root)}
+      else
+        {:ok, core.compile_snippet(source, root)}
+      end
+    rescue
+      e in core.CompileError ->
+        {:error, $builtins.list(e.args)}
+    end
+    case compiled do
+      {:error, args} ->
+        msg = Enum.at(args, 0)
+        line = Enum.at(args, 2)
+        %{
+          "ok" => false,
+          "stage" => "compile",
+          "diagnostics" => [%{"severity" => "error", "line" => line,
+            "col" => Enum.at(args, 3), "message" => msg}],
+          "suggestions" => suggestions ++ error_suggestions(source, msg, line),
+          "python" => nil, "stdout" => nil, "value" => nil
+        }
+      {:ok, python} ->
+        lints = if module_mode do
+          try do
+            core.diagnostics(source, "sandbox.gan", root)
+          rescue
+            _e -> []
+          end
+        else
+          []
+        end
+        member_sugg = member_suggestions(source, root)
+        lint_sugg = Enum.flat_map(lints, fn d -> lint_suggestions(source, d) end)
+        all_sugg = suggestions ++ member_sugg ++ lint_sugg
+        if run do
+          {out, value, err} = execute(python, module_mode, source, root)
+          ok = is_nil(err) and Enum.empty?(lints)
+          %{
+            "ok" => ok,
+            "stage" => if is_nil(err) do "ok" else "run" end,
+            "diagnostics" => lints ++ run_diag(err),
+            "suggestions" => all_sugg,
+            "python" => python, "stdout" => out, "value" => value
+          }
+        else
+          %{
+            "ok" => Enum.empty?(lints),
+            "stage" => if Enum.empty?(lints) do "ok" else "lint" end,
+            "diagnostics" => lints,
+            "suggestions" => all_sugg,
+            "python" => python, "stdout" => nil, "value" => nil
+          }
+        end
+    end
+  end
+
+  defp run_diag(err) do
+    if is_nil(err) do
+      []
+    else
+      [%{"severity" => "error", "line" => 0, "col" => 0, "message" => err}]
+    end
+  end
+
+  # ---- suggestion engine ---------------------------------------------------
+
+  defp common_mistakes(source) do
+    lines = source.split("\n")
+    Enum.flat_map(@mistakes, fn {pattern, advice} ->
+      hit = Enum.find_index(lines, fn l -> not is_nil(pattern.search(l)) end)
+      if is_nil(hit) do
+        []
+      else
+        [%{"kind" => "migration", "line" => hit + 1, "message" => advice}]
+      end
+    end)
+  end
+
+  # public defs without @spec, repeated $mod: the standards in
+  # docs/syntax.md, advisory here rather than compiler warnings
+  defp practice_hints(source) do
+    heads = ~r/(?m)^\s*def ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
+    specs = ~r/(?m)^\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
+    missing = Enum.uniq(Enum.filter(heads, fn h -> not Enum.member?(specs, h) end))
+    spec_hint = if Enum.empty?(missing) or not String.match?(source, ~r/defmodule/) do
+      []
+    else
+      [%{"kind" => "practice", "line" => 0,
+        "message" => "Public defs without @spec: #{missing |> Enum.join(", ")} — the standard is @doc + @spec on every public def (docs/syntax.md)."}]
+    end
+    refs = ~r/\$([a-z_][a-z0-9_]*)/.findall(source)
+    counts = Enum.reduce(refs, %{}, fn m, acc -> Map.put(acc, m, Map.get(acc, m, 0) + 1) end)
+    py_hint = counts.items()
+    |> Enum.filter(fn {_, n} -> n >= 3 end)
+    |> Enum.map(fn {m, n} ->
+      %{"kind" => "practice", "line" => 0,
+        "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name (GEP-0003 rev 6)."}
+    end)
+    spec_hint ++ py_hint
+  end
+
+  # fuzzy candidates for a compile error: the token at the error line
+  # against keywords and known module functions (GEP-0023-R002)
+  defp error_suggestions(source, msg, line) do
+    from_msg = ~r/'([A-Za-z_][A-Za-z0-9_.!?]*)'/.findall(to_string(msg))
+    at_line = if is_nil(line) or line == 0 do
+      # no span on the error: sweep every word in the snippet
+      ~r/[A-Za-z_][A-Za-z0-9_]*/.findall(source)
+    else
+      l = Enum.at(source.split("\n"), line - 1)
+      if is_nil(l) do
+        []
+      else
+        ~r/[A-Za-z_][A-Za-z0-9_]*/.findall(l)
+      end
+    end
+    (from_msg ++ at_line)
+    |> Enum.uniq()
+    |> Enum.flat_map(fn word ->
+      near = difflib.get_close_matches(word, @keywords, n: 1, cutoff: 0.8)
+      if Enum.empty?(near) or Enum.member?(@keywords, word) do
+        []
+      else
+        [%{"kind" => "did_you_mean", "line" => line,
+          "message" => "`#{word}` — did you mean `#{Enum.at(near, 0)}`?"}]
+      end
+    end)
+  end
+
+  # `Mod.fun` calls whose function does not exist on the module: the
+  # classic AI typo (Enum.mpa). Checked against real module symbols.
+  defp member_suggestions(source, root) do
+    calls = ~r/\b([A-Z][A-Za-z0-9_.]*)\.([a-z_][A-Za-z0-9_]*[?!]?)\(/.findall(source)
+    Enum.uniq(calls)
+    |> Enum.flat_map(fn {mod, fun} ->
+      names = module_functions(mod, root)
+      cond do
+        Enum.empty?(names) -> []
+        Enum.member?(names, fun) -> []
+        true ->
+          near = difflib.get_close_matches(fun, names, n: 3, cutoff: 0.6)
+          hint = if Enum.empty?(near) do
+            "no close match; see `gan lsc symbols #{mod}`"
+          else
+            "did you mean #{near |> Enum.map(fn n -> "`#{mod}.#{n}`" end) |> Enum.join(" / ")}?"
+          end
+          [%{"kind" => "did_you_mean", "line" => 0,
+            "message" => "`#{mod}.#{fun}` is not a function of #{mod} — #{hint}"}]
+      end
+    end)
+  end
+
+  defp module_functions(mod, root) do
+    syms = try do
+      core.symbols(mod, root)
+    rescue
+      _e -> []
+    end
+    Enum.map(syms, fn s -> Map.get(s, "name") end)
+  end
+
+  # undefined-variable lints get fuzzy candidates from the snippet's
+  # own identifiers
+  defp lint_suggestions(source, d) do
+    m = ~r/variable ([A-Za-z0-9_?!]+) is never bound/.search(Map.get(d, "message", ""))
+    if is_nil(m) do
+      []
+    else
+      word = m.group(1)
+      idents = ~r/[a-z_][A-Za-z0-9_]*/.findall(source) |> Enum.uniq()
+      near = difflib.get_close_matches(word, idents, n: 3, cutoff: 0.7)
+      |> Enum.filter(fn n -> n != word end)
+      if Enum.empty?(near) do
+        []
+      else
+        [%{"kind" => "did_you_mean", "line" => Map.get(d, "line"),
+          "message" => "`#{word}` — did you mean #{near |> Enum.map(fn n -> "`#{n}`" end) |> Enum.join(" / ")}?"}]
+      end
+    end
+  end
+
+  # ---- execution -----------------------------------------------------------
+
+  defp sandbox_python(root) do
+    venv = os.path.abspath(os.path.join(root, ".venv", "bin", "python"))
+    if os.path.exists(venv) do
+      venv
+    else
+      sys.executable
+    end
+  end
+
+  # run the compiled program in a temp dir with a hard timeout;
+  # {stdout, value_repr, error}
+  defp execute(python, module_mode, source, root) do
+    dir = tempfile.mkdtemp(prefix: "gan-sandbox-")
+    path = os.path.join(dir, "sandbox_mod.py")
+    has_main = module_mode and String.match?(source, ~r/(?m)^\s*def main\(/)
+    has_guard = String.contains?(python, "if __name__ ==")
+    code = cond do
+      has_main and not has_guard ->
+        python <> "\n\nmain()\n"
+      module_mode -> python
+      true ->
+        python <> "\ntry:\n    print(\"__gan_value__\", repr(_))\nexcept NameError:\n    pass\n"
+    end
+    $pathlib.Path(path).write_text(code)
+    result = try do
+      {:ok, subprocess.run([sandbox_python(root), path], capture_output: true,
+        text: true, timeout: 10, cwd: dir)}
+    rescue
+      _e in $subprocess.TimeoutExpired -> :timeout
+    end
+    case result do
+      :timeout -> {nil, nil, "execution timed out after 10s"}
+      {:ok, r} ->
+        {out, value} = split_value(r.stdout)
+        if r.returncode == 0 do
+          {out, value, nil}
+        else
+          {out, value, last_error_line(r.stderr)}
+        end
+    end
+  end
+
+  defp split_value(stdout) do
+    lines = stdout.split("\n")
+    marked = Enum.find(lines, fn l -> String.starts_with?(l, "__gan_value__ ") end)
+    plain = lines
+    |> Enum.reject(fn l -> String.starts_with?(l, "__gan_value__ ") end)
+    |> Enum.join("\n")
+    value = if is_nil(marked) do
+      nil
+    else
+      String.replace(marked, "__gan_value__ ", "")
+    end
+    {plain, value}
+  end
+
+  # the informative tail of a Python traceback
+  defp last_error_line(stderr) do
+    stderr.strip().split("\n")
+    |> Enum.reject(fn l -> l.strip() == "" end)
+    |> Enum.at(-1)
+  end
+end

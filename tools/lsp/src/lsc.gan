@@ -24,6 +24,7 @@ defmodule Lsc do
     references <Mod>.<fun>      every project call site (+ definitions)
     wsymbols [<query>]          project-wide symbol search
     check                       whole-project diagnostics, lints included
+    try <file|-> [--no-run]     sandbox: compile, lint, suggest, execute
     pydoc <mod.chain>           Python docstring for a $-style reference
     pycomplete <mod.prefix>     Python member completions
     pygoto <mod.chain>          Python source location
@@ -78,6 +79,13 @@ defmodule Lsc do
         emit(core.wsymbols("", root))
       ["check" | _] ->
         emit(core.check(root))
+      ["try", target | rest] ->
+        source = if target == "-" do
+          $(sys).stdin.read()
+        else
+          read(target)
+        end
+        emit(Sandbox.try_source(source, root, not Enum.member?(rest, "--no-run")))
       ["pydoc", chain | _] ->
         emit(PyIntel.hover_markdown(root, import_line(chain), chain))
       ["pycomplete", chain | _] ->
