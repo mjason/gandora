@@ -323,7 +323,7 @@ fn cmd_check(args: &[String]) -> Result<(), Diagnostic> {
     let modules = project::compile_files(&sources, Some(&config))?;
     for m in &modules {
         for w in &m.warnings {
-            eprintln!("warning: {w}");
+            eprintln!("warning: {}:{}: {}", w.file, w.span.line, w.message);
         }
     }
     println!("checked {} module(s), no errors", modules.len());
@@ -339,7 +339,7 @@ fn cmd_build() -> Result<(), Diagnostic> {
     }
     for m in &modules {
         for w in &m.warnings {
-            eprintln!("warning: {w}");
+            eprintln!("warning: {}:{}: {}", w.file, w.span.line, w.message);
         }
     }
     let out_root = config.root.join(&config.out_dir);

@@ -391,7 +391,7 @@ fn diagnostics(py: Python, source: &str, path: &str, root: Option<&str>) -> PyRe
                 Err(d) => push(&out, d.span.line, d.span.col, "error", &d.message),
                 Ok(_) => {
                     for w in &cg.warnings {
-                        push(&out, 0, 0, "warning", w);
+                        push(&out, w.span.line, w.span.col, "warning", &w.message);
                     }
                 }
             }
@@ -522,10 +522,10 @@ fn check(py: Python, root: &str) -> PyResult<PyObject> {
             for m in &modules {
                 for w in &m.warnings {
                     let e = PyDict::new_bound(py);
-                    e.set_item("message", w)?;
-                    e.set_item("path", m.source.display().to_string())?;
-                    e.set_item("line", 0u32)?;
-                    e.set_item("col", 0u32)?;
+                    e.set_item("message", &w.message)?;
+                    e.set_item("path", &w.file)?;
+                    e.set_item("line", w.span.line)?;
+                    e.set_item("col", w.span.col)?;
                     e.set_item("severity", "warning")?;
                     let _ = out.append(e);
                 }

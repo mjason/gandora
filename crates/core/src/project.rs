@@ -260,8 +260,9 @@ pub struct CompiledModule {
     pub python: String,
     /// macros-only module: no Python file is written (GEP-0002-R009)
     pub compile_time_only: bool,
-    /// non-fatal notices, printed by check/build (GEP-0007-R005)
-    pub warnings: Vec<String>,
+    /// non-fatal notices, printed by check/build and surfaced as editor
+    /// warning diagnostics (GEP-0007-R005, GEP-0019-R007)
+    pub warnings: Vec<Diagnostic>,
 }
 
 /// Parse, expand, and compile every module of a project.
@@ -418,11 +419,15 @@ pub fn compile_files(
                 };
                 if let Some(stem) = py_path.strip_suffix(".py") {
                     if !stem.contains('/') && PY_STDLIB_MODULES.contains(&stem) {
-                        warnings.push(format!(
-                            "module {} compiles to {stem}.py, shadowing Python's \
-                             standard-library module '{stem}' for everything on the \
-                             project path; rename the module or set pyPackage",
-                            p.module.join(".")
+                        warnings.push(Diagnostic::new(
+                            p.path.display().to_string(),
+                            Span::default(),
+                            format!(
+                                "module {} compiles to {stem}.py, shadowing Python's \
+                                 standard-library module '{stem}' for everything on the \
+                                 project path; rename the module or set pyPackage",
+                                p.module.join(".")
+                            ),
                         ));
                     }
                 }

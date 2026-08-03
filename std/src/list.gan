@@ -25,6 +25,7 @@ defmodule List do
   @param xs, "Nested lists collapse to one level."
   @param_trans xs, zh_CN: "要完全展平的嵌套列表。"
   @spec flatten(list()) :: list()
+  @allow :stack_recursion
   def flatten(xs) do
     Enum.flat_map(xs, fn x ->
       if is_list(x) do

@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.9.2 — 2026-08-03
+
+**Stack recursion now warns — with a way to say "I meant it."**
+
+- **GEP-0019 rev 4 (R007)**: a self-recursive function that is never
+  in tail position gets a compile warning pinned to its definition —
+  in `gan check`, `gan build`, and as an editor Warning squiggle. It
+  will grow the Python call stack (~1000 frames); the fix is the
+  accumulator form, or `recur` if you want the guarantee checked.
+- **`@allow :stack_recursion`**: structural recursion (tree walks,
+  nested flattening) is depth-bounded and legitimate — acknowledge it
+  at the definition site and the warning goes away, leaving the intent
+  documented. Typos in the allow target are compile errors.
+- Warnings are now spanned diagnostics everywhere (the stdlib-shadow
+  notice included), so editor squiggles land on the offending line
+  instead of the top of the file.
+
 ## v0.9.1 — 2026-08-03
 
 **Closures now capture by value, and you can see how recursion compiled.**

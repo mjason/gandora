@@ -218,6 +218,38 @@ def main():
             "hover shows the compiled recursion shape (GEP-0019-R006)",
         )
 
+        # stack-recursion warning arrives as a Warning diagnostic on the
+        # def line (GEP-0019-R007)
+        fact_src = (
+            "defmodule Main do\n"
+            "  def fact(0), do: 1\n"
+            "  def fact(n), do: n * fact(n - 1)\n"
+            "end\n"
+        )
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": {"uri": uri, "version": 5},
+                    "contentChanges": [{"text": fact_src}],
+                },
+            }
+        )
+        wdiag = s.wait_for(
+            lambda m: m.get("method") == "textDocument/publishDiagnostics"
+        )
+        witems = wdiag["params"]["diagnostics"]
+        check(
+            any(
+                "GEP-0019-R007" in d["message"]
+                and d["severity"] == 2
+                and d["range"]["start"]["line"] == 1
+                for d in witems
+            ),
+            "stack recursion warns on the def line (GEP-0019-R007)",
+        )
+
         s.send(
             {
                 "jsonrpc": "2.0",

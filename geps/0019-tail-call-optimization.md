@@ -9,7 +9,7 @@ areas:
   - Language
 created: 2026-08-03
 updated: 2026-08-03
-revision: 3
+revision: 4
 requires: [1, 14]
 replaces: []
 superseded-by: null
@@ -96,6 +96,18 @@ optimization they cannot trust. Closures created inside optimized
 loops keep per-iteration values via GEP-0021 snapshots; the
 optimization is never skipped on their account.
 
+**GEP-0019-R007:** A definition group whose shape is `"stack"`
+(self-recursive, never in tail position) raises a compile **warning**
+spanning the definition: it will grow the Python call stack
+(~1000 frames). Structural recursion whose depth is bounded by the
+data's shape — tree walks, nested-list flattening — is legitimate;
+the author acknowledges it with `@allow :stack_recursion` before the
+first clause, which silences the warning and documents the intent at
+the definition site. An unrecognized `@allow` target is a compile
+error, so a typo cannot silently re-enable the warning it meant to
+acknowledge. Warnings carry spans and surface in `gan check`,
+`gan build`, and as editor Warning diagnostics.
+
 ## Rationale
 
 Rebinding-plus-`continue` is exactly the compilation `loop/recur`
@@ -144,6 +156,9 @@ results before and after optimization for a reference function.
 
 ## Change History
 
+- Revision 4, 2026-08-03: R007 — non-tail self-recursion warns at the
+  definition (spanned, in check/build/editor); acknowledged with
+  `@allow :stack_recursion`; unknown allow targets error.
 - Revision 3, 2026-08-03: R006 — the compiled recursion shape
   (loop vs stack) is queryable in `gan doc`, LSP hover, and
   `gan lsc doc`; closure interplay delegated to GEP-0021 snapshots.

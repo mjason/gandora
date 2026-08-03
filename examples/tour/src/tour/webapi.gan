@@ -23,6 +23,7 @@ defmodule Tour.Webapi do
     %{n: n, fact: fact($builtins.int(n))}
   end
 
+  @allow :stack_recursion
   defp fact(0), do: 1
   defp fact(n), do: n * fact(n - 1)
 

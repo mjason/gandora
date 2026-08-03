@@ -21,6 +21,7 @@ defmodule App.Mathy do
       3628800
   """
   @spec fact(integer()) :: integer()
+  @allow :stack_recursion
   def fact(0), do: 1
   def fact(n) when n > 0, do: n * fact(n - 1)
 

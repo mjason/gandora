@@ -97,6 +97,7 @@ defmodule Fmt do
     |> Enum.map(fn t -> Map.get(t, "value").rstrip() end)
   end
 
+  @allow :stack_recursion
   defp strip_meta(t) do
     cond do
       $builtins.isinstance(t, $builtins.tuple) and $builtins.len(t) == 3 ->

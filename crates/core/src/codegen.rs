@@ -285,6 +285,8 @@ struct FnDef {
     /// enclosing locals a hoisted `fn` reads, snapshot as `name=name`
     /// keyword-only defaults (GEP-0021); empty for module-level defs
     captures: Vec<String>,
+    /// acknowledged lints from `@allow :target` (GEP-0019-R007)
+    allows: BTreeSet<String>,
 }
 
 pub struct Codegen {
@@ -309,8 +311,9 @@ pub struct Codegen {
     /// installed marker names -> dotted python paths (GEP-0006-R005A)
     pub installed_modules: BTreeMap<String, String>,
     struct_fields: Option<Vec<(String, Term)>>,
-    /// non-fatal notices surfaced by `gan check`/`gan build`
-    pub warnings: Vec<String>,
+    /// non-fatal notices surfaced by `gan check`/`gan build` and, with
+    /// their spans, as editor warning diagnostics
+    pub warnings: Vec<crate::diag::Diagnostic>,
     /// true after `compile` when the module defines no runtime code
     /// (macros only) and should produce no Python file (GEP-0002-R009).
     pub compile_time_only: bool,
@@ -408,6 +411,7 @@ impl Codegen {
         let mut pending_spec: Option<Term> = None;
         let mut pending_params: Vec<(String, Vec<(String, String)>)> = Vec::new();
         let mut pending_decorators: Vec<Term> = Vec::new();
+        let mut pending_allows: BTreeSet<String> = BTreeSet::new();
         let mut funs: Vec<FnDef> = Vec::new();
         let mut order: BTreeMap<String, usize> = BTreeMap::new();
         let mut attrs: Vec<(String, Term)> = Vec::new();
@@ -555,6 +559,33 @@ impl Codegen {
                         pending_decorators.push(e.clone());
                     }
                 }
+                "@allow" => {
+                    // lint acknowledgment for the next definition
+                    // (GEP-0019-R007); unknown targets are typos
+                    for a in &call.args {
+                        match a {
+                            Term::Atom(s) if s == "stack_recursion" => {
+                                pending_allows.insert(s.clone());
+                            }
+                            Term::Atom(s) => {
+                                return Err(self.err(
+                                    call.span,
+                                    format!(
+                                        "@allow does not recognize :{s}; known \
+                                         targets: :stack_recursion (GEP-0019-R007)"
+                                    ),
+                                ));
+                            }
+                            _ => {
+                                return Err(self.err(
+                                    call.span,
+                                    "@allow takes atom targets, e.g. \
+                                     @allow :stack_recursion (GEP-0019-R007)",
+                                ));
+                            }
+                        }
+                    }
+                }
                 "pyimport" => self.collect_pyimport(call)?,
                 "alias" => {
                     let segs = match call.args.first() {
@@ -637,10 +668,12 @@ impl Codegen {
                             || pending_spec.is_some()
                             || !pending_params.is_empty()
                             || !pending_decorators.is_empty()
+                            || !pending_allows.is_empty()
                         {
                             return Err(self.err(
                                 call.span,
-                                "@doc/@spec/@decorate must precede the first clause of a function",
+                                "@doc/@spec/@decorate/@allow must precede the first \
+                                 clause of a function",
                             ));
                         }
                         i
@@ -661,6 +694,7 @@ impl Codegen {
                             clauses: Vec::new(),
                             span: call.span,
                             captures: Vec::new(),
+                            allows: std::mem::take(&mut pending_allows),
                         });
                         order.insert(key, funs.len() - 1);
                         funs.len() - 1
@@ -1203,6 +1237,27 @@ impl Codegen {
             .clauses
             .iter()
             .any(|(_, _, b)| self.has_tail_self(b, &f.name, &arity_set));
+        // self-recursive but never in tail position: it will grow the
+        // Python call stack — say so where the developer can see it
+        // (GEP-0019-R007; same predicate as the "stack" doc shape)
+        if !tail
+            && !f.allows.contains("stack_recursion")
+            && f.clauses
+                .iter()
+                .any(|(_, _, b)| calls_self(b, &f.name, &arity_set))
+        {
+            self.warnings.push(crate::diag::Diagnostic::new(
+                &self.file,
+                f.span,
+                format!(
+                    "{}/{arity_label} is self-recursive outside tail position: \
+                     it grows the Python call stack (~1000 frames); make the \
+                     self-call the last expression (accumulator form) or assert \
+                     constant stack with recur (GEP-0019-R007)",
+                    f.name
+                ),
+            ));
+        }
         let saved_tail = self.tail_ctx.take();
         // this function's locals: what closures inside may capture
         let mut fn_scope: BTreeSet<String> = f.captures.iter().cloned().collect();
@@ -1376,10 +1431,11 @@ impl Codegen {
         let mut parts: Vec<String> = Vec::new();
         if let Some(text) = info.default_text() {
             if text.lines().any(|l| l.trim_start().starts_with("gan> ")) {
-                self.warnings.push(format!(
-                    "{}:{}: doc text contains a gan> line; it will not be \
-                     tested — move examples into @example (GEP-0007-R005)",
-                    self.file, span.line
+                self.warnings.push(crate::diag::Diagnostic::new(
+                    &self.file,
+                    span,
+                    "doc text contains a gan> line; it will not be tested — \
+                     move examples into @example (GEP-0007-R005)",
                 ));
             }
             parts.push(text.trim_end().to_string());
@@ -2990,6 +3046,7 @@ impl Codegen {
             doc: None,
             decorators: Vec::new(),
             captures,
+            allows: BTreeSet::new(),
             clauses: clauses
                 .iter()
                 .map(|clause| {
@@ -3967,6 +4024,51 @@ mod tests {
     }
 
     #[test]
+    fn stack_recursion_warns_unless_allowed() {
+        // GEP-0019-R007: non-tail self-recursion gets a spanned warning
+        let src = "defmodule M do\n  def fact(0), do: 1\n  def fact(n), do: n * fact(n - 1)\nend";
+        let module = crate::parser::parse_file("t.gan", src).unwrap();
+        let macros = collect_macros("t.gan", &module).unwrap();
+        let mut ex = Expander::new("t.gan", macros);
+        let expanded = ex.expand_module(&module).unwrap();
+        let mut cg = Codegen::new("t.gan", vec![]);
+        cg.compile(&expanded).unwrap();
+        let w = cg
+            .warnings
+            .iter()
+            .find(|w| w.message.contains("GEP-0019-R007"))
+            .expect("expected a stack-recursion warning");
+        assert_eq!(w.span.line, 2, "{w:?}");
+        // acknowledged intent silences it
+        let src2 = "defmodule M do\n  @allow :stack_recursion\n  def fact(0), do: 1\n  def fact(n), do: n * fact(n - 1)\nend";
+        let module2 = crate::parser::parse_file("t.gan", src2).unwrap();
+        let macros2 = collect_macros("t.gan", &module2).unwrap();
+        let mut ex2 = Expander::new("t.gan", macros2);
+        let expanded2 = ex2.expand_module(&module2).unwrap();
+        let mut cg2 = Codegen::new("t.gan", vec![]);
+        cg2.compile(&expanded2).unwrap();
+        assert!(
+            !cg2.warnings.iter().any(|w| w.message.contains("GEP-0019-R007")),
+            "{:?}",
+            cg2.warnings
+        );
+        // tail recursion never warns
+        let src3 = "defmodule M do\n  def down(0), do: :done\n  def down(n), do: down(n - 1)\nend";
+        let module3 = crate::parser::parse_file("t.gan", src3).unwrap();
+        let macros3 = collect_macros("t.gan", &module3).unwrap();
+        let mut ex3 = Expander::new("t.gan", macros3);
+        let expanded3 = ex3.expand_module(&module3).unwrap();
+        let mut cg3 = Codegen::new("t.gan", vec![]);
+        cg3.compile(&expanded3).unwrap();
+        assert!(cg3.warnings.is_empty(), "{:?}", cg3.warnings);
+        // a typo in the allow target is an error, not a silent no-op
+        let err = compile_err(
+            "defmodule M do\n  @allow :stack_recursoin\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("does not recognize"), "{err}");
+    }
+
+    #[test]
     fn recursion_shape_is_reported() {
         // GEP-0019-R006
         use crate::parser::parse_file;
@@ -4616,7 +4718,11 @@ mod doc_merge_tests {
         // not compiled, passes through verbatim
         assert!(py.contains("gan> f(1)"), "{py}");
         assert!(!py.contains(">>>"), "{py}");
-        assert!(cg.warnings.iter().any(|w| w.contains("GEP-0007-R005")), "{:?}", cg.warnings);
+        assert!(
+            cg.warnings.iter().any(|w| w.message.contains("GEP-0007-R005")),
+            "{:?}",
+            cg.warnings
+        );
     }
 
     #[test]

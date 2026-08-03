@@ -29,6 +29,7 @@ defmodule Tour.Annotations do
   @on_definition Tour.Annotations.on_def
 
   @cache 128
+  @allow :stack_recursion
   def fib(n) do
     if n < 2 do
       n
