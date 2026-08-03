@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-03
 updated: 2026-08-03
-revision: 1
+revision: 2
 requires: [12, 15, 22]
 replaces: []
 superseded-by: null
@@ -75,10 +75,26 @@ recognized textually and answered with the Gandora spelling —
 the retired `$"a.b"`. Suggestions carry `"kind": "migration"`; they
 are advisory and never block a verdict.
 
-**GEP-0023-R004 (practice hints):** The documented standards surface
-as `"kind": "practice"` suggestions where the compiler stays silent:
-public `def`s without `@spec`, and a `$module` referenced repeatedly
-where a `pyimport` is the idiom (GEP-0003 rev 6).
+**GEP-0023-R004 (practice hints):** AI rarely misspells — it gets
+lazy. The documented standards surface as `"kind": "practice"`
+suggestions where the compiler stays silent: a consolidated
+annotation-coverage report (`@spec`/`@doc`/`@moduledoc`, plus a
+missing-`@example` note), concrete `list()`/`map()` in `@spec`
+parameter position ("abstract in, concrete out"), map+filter
+pipelines that want a `for`, `fn x -> f(x) end` that wants `&f/1`,
+`count == 0` that wants `Enum.empty?`, a bare `rescue` that wants
+specific exception types, and repeated `$module` that wants a
+`pyimport` (GEP-0003 rev 6).
+
+**GEP-0023-R005 (trust):** String, heredoc, sigil, and comment
+content is masked (delimiters preserved) before any textual check —
+prose can never trip a code pattern, and an idiomatic module MUST
+yield `"suggestions": []`. Suggestions are deduplicated by message.
+
+**GEP-0023-R006 (ergonomics):** `gan lsc try` with no target (or
+`--help`) prints the skill guide — usage, the JSON contract,
+suggestion kinds, and the agent loop. The exit code is 0 when `ok`
+and 1 otherwise, so verdicts chain in scripts.
 
 ## Rationale
 
@@ -121,11 +137,15 @@ where candidates (symbols, identifiers) are already indexed.
 
 ## Conformance
 
-Tests MUST cover: a clean snippet run capturing stdout and value; a
-member typo suggesting the real function; migration hints for Python
-habits; undefined-variable and keyword did-you-mean; a practice hint;
-single execution of `main/0`; and `--no-run`.
+A BDD scenario suite (Given source / When tried / Then verdict) MUST
+cover: clean runs (stdout, value, single `main/0`), run crashes and
+the timeout, `--no-run`; every did-you-mean class; every migration
+pattern; every practice hint; lint pass-through; and the silence
+guarantees of R005 (idiomatic module, prose, comments, doc text).
 
 ## Change History
 
+- Revision 2, 2026-08-03: R004 expanded for AI-laziness patterns;
+  R005 literal masking + silence guarantee; R006 skill-style help and
+  exit codes; BDD conformance.
 - Revision 1, 2026-08-03: Initial version.

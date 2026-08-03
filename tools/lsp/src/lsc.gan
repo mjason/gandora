@@ -79,13 +79,21 @@ defmodule Lsc do
         emit(core.wsymbols("", root))
       ["check" | _] ->
         emit(core.check(root))
+      ["try"] ->
+        IO.puts(Sandbox.help())
+      ["try", "--help" | _] ->
+        IO.puts(Sandbox.help())
       ["try", target | rest] ->
         source = if target == "-" do
           $(sys).stdin.read()
         else
           read(target)
         end
-        emit(Sandbox.try_source(source, root, not Enum.member?(rest, "--no-run")))
+        verdict = Sandbox.try_source(source, root, not Enum.member?(rest, "--no-run"))
+        emit(verdict)
+        if not Map.get(verdict, "ok") do
+          $sys.exit(1)
+        end
       ["pydoc", chain | _] ->
         emit(PyIntel.hover_markdown(root, import_line(chain), chain))
       ["pycomplete", chain | _] ->

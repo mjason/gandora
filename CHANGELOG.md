@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.11.1 — 2026-08-03
+
+**The sandbox grows teeth — and learns when to stay silent.**
+
+- **Practice engine rebuilt for how AI actually fails** (rarely typos,
+  often shortcuts): consolidated annotation-coverage report
+  (@spec/@doc/@moduledoc/@example), "abstract in, concrete out" on
+  @spec parameters, map+filter chains → `for`, `fn x -> f(x) end` →
+  `&f/1`, `count == 0` → `Enum.empty?`, bare rescue → specific types.
+- **Silence guarantee**: strings, heredocs, sigils, and comments are
+  masked before any check — prose can never trip a pattern, and an
+  idiomatic module returns zero suggestions.
+- **Skill-style help**: `gan lsc try` (no args / --help) prints the
+  full guide — JSON contract, suggestion kinds, the agent loop.
+  Exit code 0/1 makes verdicts scriptable.
+- **BDD conformance**: 39 Given/When/Then scenarios across six
+  features (execution, did-you-mean, migration, practice, lints,
+  silence) — `tools/lsp/tests/sandbox_bdd.py`.
+
 ## v0.11.0 — 2026-08-03
 
 **The sandbox: AI writes it, `gan lsc try` verdicts it — and teaches.**

@@ -34,13 +34,66 @@ defmodule Sandbox do
     {~r/\bf"/, "f-strings are plain strings — interpolation is built in: \"total " <> "#" <> "{n}\"."},
     {~r/\bswitch\b/, "`switch` is `case ... do pattern -> ... end`."},
     {~r/\bnil\s*==|==\s*nil\b/, "Prefer `is_nil(x)` over comparing with nil."},
-    {~r/\$"[A-Za-z0-9_.]+"/, "Quoted module refs were retired: write $(a.b) (GEP-0003-R010)."}
+    {~r/\$"/, "Quoted module refs were retired: write $(a.b) (GEP-0003-R010)."}
   ]
 
   @keywords ["defmodule", "def", "defp", "defmacro", "defstruct", "case", "cond",
     "with", "for", "fn", "try", "rescue", "after", "else", "end", "do", "quote",
     "unquote", "pyimport", "import", "require", "alias", "use", "recur", "when",
     "true", "false", "nil", "and", "or", "not", "raise", "if", "unless"]
+
+
+  @doc "The skill guide printed by `gan lsc try` / `try --help`."
+  @spec help() :: string()
+  def help() do
+    """
+    gan lsc try - the Gandora sandbox (GEP-0023)
+
+    Validate generated code BEFORE it touches a project. One JSON
+    verdict: compile + lints + suggestions + sandboxed execution.
+
+    USAGE
+      echo 'code' | gan lsc try - --root .      # stdin
+      gan lsc try snippet.gan --root .          # file
+      gan lsc try - --no-run --root . < f.gan   # verdict without executing
+
+    Input is a full module (defmodule ... end) or bare statements.
+    Exit code: 0 when ok, 1 otherwise - safe to chain in scripts.
+
+    OUTPUT (one JSON object)
+      ok           true = compiled clean, no lints, ran without error
+      stage        compile | lint | run | ok - where it stopped
+      diagnostics  compiler errors + GEP-0022 lints, with line/col
+      suggestions  see KINDS below
+      python       the generated Python (inspect what your code becomes)
+      stdout       captured program output (10s timeout, temp dir)
+      value        repr of the last expression (bare-statement mode)
+
+    SUGGESTION KINDS
+      did_you_mean  fuzzy match against REAL candidates:
+                    Enum.mpa -> Enum.map (actual module symbols),
+                    valeu -> value (your own identifiers),
+                    defmodul -> defmodule (keywords)
+      migration     a cross-language habit with the Gandora spelling:
+                    return / while / lambda / None / import / self. /
+                    && / += / f"..." / Python def-colon / switch
+      practice      the documented standards (docs/syntax.md):
+                    annotation coverage (@doc/@spec/@moduledoc/@example),
+                    abstract containers in @spec parameters,
+                    map+filter chains -> for, fn x -> f(x) end -> &f/1,
+                    count == 0 -> Enum.empty?, bare rescue,
+                    repeated $mod -> pyimport
+
+    THE LOOP (for agents)
+      generate -> try -> apply every suggestion -> try again -> only
+      then write into the project. Then: gan lsc check, gan test,
+      gan fmt src. A clean module returns "suggestions": [] - treat
+      anything else as work.
+
+    Strings, docs, and comments never trigger suggestions - only code.
+    Nothing is written outside a temp directory.
+    """
+  end
 
   @doc """
   Runs the whole verdict pipeline over `source`. Returns a map:
@@ -73,7 +126,7 @@ defmodule Sandbox do
           "stage" => "compile",
           "diagnostics" => [%{"severity" => "error", "line" => line,
             "col" => Enum.at(args, 3), "message" => msg}],
-          "suggestions" => suggestions ++ error_suggestions(source, msg, line),
+          "suggestions" => dedupe(suggestions ++ error_suggestions(source, msg, line)),
           "python" => nil, "stdout" => nil, "value" => nil
         }
       {:ok, python} ->
@@ -88,7 +141,7 @@ defmodule Sandbox do
         end
         member_sugg = member_suggestions(source, root)
         lint_sugg = Enum.flat_map(lints, fn d -> lint_suggestions(source, d) end)
-        all_sugg = suggestions ++ member_sugg ++ lint_sugg
+        all_sugg = dedupe(suggestions ++ member_sugg ++ lint_sugg)
         if run do
           {out, value, err} = execute(python, module_mode, source, root)
           ok = is_nil(err) and Enum.empty?(lints)
@@ -111,6 +164,19 @@ defmodule Sandbox do
     end
   end
 
+  @spec dedupe(list(map())) :: list(map())
+  defp dedupe(suggestions) do
+    {out, _} = Enum.reduce(suggestions, {[], []}, fn s, {acc, seen} ->
+      msg = Map.get(s, "message")
+      if Enum.member?(seen, msg) do
+        {acc, seen}
+      else
+        {acc ++ [s], seen ++ [msg]}
+      end
+    end)
+    out
+  end
+
   defp run_diag(err) do
     if is_nil(err) do
       []
@@ -121,8 +187,24 @@ defmodule Sandbox do
 
   # ---- suggestion engine ---------------------------------------------------
 
+  # blank out string/heredoc/sigil/comment content (newlines kept) so
+  # prose can never trip a code pattern (GEP-0023-R003)
+  @spec mask_literals(string()) :: string()
+  defp mask_literals(source) do
+    spaces = fn text -> re.sub("\\S", " ", text) end
+    masked = re.sub("\"\"\"([\\s\\S]*?)\"\"\"",
+      fn m -> "\"\"\"" <> spaces.(m.group(1)) <> "\"\"\"" end, source)
+    masked = re.sub("(~[a-zA-Z]+\\()([^)]*)\\)",
+      fn m -> m.group(1) <> spaces.(m.group(2)) <> ")" end, masked)
+    masked = re.sub("(~[a-zA-Z]+/)([^/\\n]*)/",
+      fn m -> m.group(1) <> spaces.(m.group(2)) <> "/" end, masked)
+    masked = re.sub("\"((?:[^\"\\\\\\n]|\\\\.)*)\"",
+      fn m -> "\"" <> spaces.(m.group(1)) <> "\"" end, masked)
+    re.sub("#(?!\\{)([^\\n]*)", fn m -> "#" <> spaces.(m.group(1)) end, masked)
+  end
+
   defp common_mistakes(source) do
-    lines = source.split("\n")
+    lines = mask_literals(source).split("\n")
     Enum.flat_map(@mistakes, fn {pattern, advice} ->
       hit = Enum.find_index(lines, fn l -> not is_nil(pattern.search(l)) end)
       if is_nil(hit) do
@@ -133,27 +215,116 @@ defmodule Sandbox do
     end)
   end
 
-  # public defs without @spec, repeated $mod: the standards in
-  # docs/syntax.md, advisory here rather than compiler warnings
-  defp practice_hints(source) do
-    heads = ~r/(?m)^\s*def ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
-    specs = ~r/(?m)^\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
-    missing = Enum.uniq(Enum.filter(heads, fn h -> not Enum.member?(specs, h) end))
-    spec_hint = if Enum.empty?(missing) or not String.match?(source, ~r/defmodule/) do
+  # The standards in docs/syntax.md, advisory here rather than
+  # compiler warnings. AI rarely misspells — it gets lazy: annotation
+  # coverage, container choice, and idiom shortcuts are where verdicts
+  # earn their keep (GEP-0023-R004).
+  defp practice_hints(raw) do
+    source = mask_literals(raw)
+    in_module = String.match?(source, ~r/defmodule/)
+    coverage_hints(raw, source, in_module) ++
+      spec_container_hints(source) ++
+      idiom_hints(source) ++
+      pyimport_hints(source)
+  end
+
+  # one consolidated annotation-coverage report, not one nag per def
+  defp coverage_hints(raw, source, in_module) do
+    if not in_module do
+      []
+    else
+      heads = Enum.uniq(~r/(?m)^\s*def ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source))
+      specs = ~r/(?m)^\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
+      docs = count_attr_blocks(source, "@doc")
+      no_spec = Enum.filter(heads, fn h -> not Enum.member?(specs, h) end)
+      missing = []
+      missing = if Enum.empty?(no_spec) do
+        missing
+      else
+        missing ++ ["@spec on: #{no_spec |> Enum.join(", ")}"]
+      end
+      missing = if docs >= Enum.count(heads) do
+        missing
+      else
+        missing ++ ["@doc on #{Enum.count(heads) - docs} public def(s)"]
+      end
+      missing = if String.contains?(source, "@moduledoc") do
+        missing
+      else
+        missing ++ ["@moduledoc"]
+      end
+      example_hint = if Enum.count(heads) > 0 and not String.contains?(raw, "@example") do
+        [%{"kind" => "practice", "line" => 0,
+          "message" => "No @example doctests — `gan test` verifies them; every function with interesting behavior deserves one (GEP-0007)."}]
+      else
+        []
+      end
+      head_hint = if Enum.empty?(missing) do
+        []
+      else
+        [%{"kind" => "practice", "line" => 0,
+          "message" => "Annotation coverage: missing #{missing |> Enum.join("; ")} — the standard is @doc + @spec (+ @param) on every public def (docs/syntax.md)."}]
+      end
+      head_hint ++ example_hint
+    end
+  end
+
+  defp count_attr_blocks(source, attr) do
+    Enum.count(~r/(?m)^\s*#{attr} /.findall(source))
+  end
+
+  # parameter positions want abstract containers (GEP-0017 guidance)
+  defp spec_container_hints(source) do
+    offenders = ~r/(?m)^\s*@spec\s+([a-z_][A-Za-z0-9_]*[?!]?)\(([^)]*(?:list|map)\()/.findall(source)
+    |> Enum.map(fn {name, _} -> name end)
+    |> Enum.uniq()
+    if Enum.empty?(offenders) do
       []
     else
       [%{"kind" => "practice", "line" => 0,
-        "message" => "Public defs without @spec: #{missing |> Enum.join(", ")} — the standard is @doc + @spec on every public def (docs/syntax.md)."}]
+        "message" => "Concrete `list()`/`map()` in parameter position of @spec #{offenders |> Enum.join(", ")} — accept `sequence(t)`/`iterable(t)`/`mapping(k, v)`, return concrete (\"abstract in, concrete out\", docs/syntax.md)."}]
     end
+  end
+
+  # idiom shortcuts an agent skips when hurrying
+  defp idiom_hints(source) do
+    checks = [
+      {~r/fn (\w+) -> ([a-z_][A-Za-z0-9_.]*[?!]?)\(\1\) end/,
+       "`fn x -> f(x) end` wraps a single call — the capture `&f/1` says the same thing."},
+      {~r/Enum\.count\([^)]*\)\s*==\s*0|length\([^)]*\)\s*==\s*0/,
+       "`... == 0` on a count — `Enum.empty?(xs)` reads better."},
+      {~r/\|>\s*Enum\.map\([\s\S]{0,120}?\|>\s*Enum\.filter\(|\|>\s*Enum\.filter\([\s\S]{0,120}?\|>\s*Enum\.map\(/,
+       "A map+filter pipeline — a single `for x <- xs, cond, do: expr` comprehension often reads better and compiles to one pass (GEP-0020)."},
+      {~r/, do: true, else: false/,
+       "`if cond, do: true, else: false` is just the condition (wrap with a boolean-shaped guard if needed)."}
+    ]
+    hits = Enum.flat_map(checks, fn {pattern, advice} ->
+      if is_nil(pattern.search(source)) do
+        []
+      else
+        [%{"kind" => "practice", "line" => 0, "message" => advice}]
+      end
+    end)
+    rescue_only_bare = String.match?(source, ~r/rescue\s*\n\s*[a-z_][A-Za-z0-9_]* ->/) and
+      not String.match?(source, ~r/rescue[\s\S]{0,200}? in /)
+    bare_hint = if rescue_only_bare do
+      [%{"kind" => "practice", "line" => 0,
+        "message" => "A bare `rescue e ->` catches every Exception — rescue specific types first: `e in $builtins.ValueError -> ...` (GEP-0014)."}]
+    else
+      []
+    end
+    hits ++ bare_hint
+  end
+
+  defp pyimport_hints(source) do
     refs = ~r/\$([a-z_][a-z0-9_]*)/.findall(source)
     counts = Enum.reduce(refs, %{}, fn m, acc -> Map.put(acc, m, Map.get(acc, m, 0) + 1) end)
-    py_hint = counts.items()
+    counts.items()
     |> Enum.filter(fn {_, n} -> n >= 3 end)
     |> Enum.map(fn {m, n} ->
       %{"kind" => "practice", "line" => 0,
         "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name (GEP-0003 rev 6)."}
     end)
-    spec_hint ++ py_hint
   end
 
   # fuzzy candidates for a compile error: the token at the error line
@@ -186,7 +357,8 @@ defmodule Sandbox do
 
   # `Mod.fun` calls whose function does not exist on the module: the
   # classic AI typo (Enum.mpa). Checked against real module symbols.
-  defp member_suggestions(source, root) do
+  defp member_suggestions(raw, root) do
+    source = mask_literals(raw)
     calls = ~r/\b([A-Z][A-Za-z0-9_.]*)\.([a-z_][A-Za-z0-9_]*[?!]?)\(/.findall(source)
     Enum.uniq(calls)
     |> Enum.flat_map(fn {mod, fun} ->

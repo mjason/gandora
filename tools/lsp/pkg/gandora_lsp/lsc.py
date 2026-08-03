@@ -11,6 +11,7 @@ import sys
 import gandora_lsp.py_intel
 import gandora_lsp.sandbox
 import gandora_std.enum
+import gandora_std.map
 
 
 def _gan_truthy(value):
@@ -68,20 +69,29 @@ def _dispatch(args, root):
             return _emit(core.wsymbols("", root))
         case ["check", *_] as _gan_l15 if isinstance(_gan_l15, list):
             return _emit(core.check(root))
-        case ["try", target, *rest] as _gan_l16 if isinstance(_gan_l16, list):
+        case ["try"] as _gan_l16 if isinstance(_gan_l16, list):
+            return print(gandora_lsp.sandbox.help())
+        case ["try", "--help", *_] as _gan_l17 if isinstance(_gan_l17, list):
+            return print(gandora_lsp.sandbox.help())
+        case ["try", target, *rest] as _gan_l18 if isinstance(_gan_l18, list):
             if target == "-":
-                _gan_tmp17 = sys.stdin.read()
+                _gan_tmp19 = sys.stdin.read()
             else:
-                _gan_tmp17 = _read(target)
-            source = _gan_tmp17
-            return _emit(gandora_lsp.sandbox.try_source(source, root, not (_gan_truthy(gandora_std.enum.member_p(rest, "--no-run")))))
-        case ["pydoc", chain, *_] as _gan_l18 if isinstance(_gan_l18, list):
+                _gan_tmp19 = _read(target)
+            source = _gan_tmp19
+            verdict = gandora_lsp.sandbox.try_source(source, root, not (_gan_truthy(gandora_std.enum.member_p(rest, "--no-run"))))
+            _emit(verdict)
+            if not (_gan_truthy(gandora_std.map.get(verdict, "ok"))):
+                return sys.exit(1)
+            else:
+                return None
+        case ["pydoc", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
             return _emit(gandora_lsp.py_intel.hover_markdown(root, _import_line(chain), chain))
-        case ["pycomplete", chain, *_] as _gan_l19 if isinstance(_gan_l19, list):
+        case ["pycomplete", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
             return _emit(gandora_lsp.py_intel.complete(root, _import_line(chain), chain))
-        case ["pygoto", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
+        case ["pygoto", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
             return _emit(gandora_lsp.py_intel.goto(root, _import_line(chain), chain))
-        case ["pysig", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
+        case ["pysig", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
             return _emit(gandora_lsp.py_intel.signatures(root, _import_line(chain), chain))
         case _:
             print(usage)
@@ -93,8 +103,8 @@ def _import_line(chain):
 
 
 def _take_root(args):
-    _gan_case22 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case22:
+    _gan_case24 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case24:
         case None:
             return (os.getcwd(), args)
         case i:
