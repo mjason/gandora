@@ -11,7 +11,8 @@ pub enum Tok {
     Sigil(String, Vec<LexStrPart>),
     Atom(String),
     /// `$module` / `$"dotted.module"` — a Python module reference (GEP-0003)
-    PyRef(String),
+    /// (text, bounded): bounded is the explicit `$(...)` form
+    PyRef(String, bool),
     /// lowercase identifier, possibly ending in `?` or `!`
     Ident(String),
     /// Uppercase-leading module segment
@@ -47,6 +48,17 @@ pub struct Lexer<'a> {
     line: u32,
     col: u32,
     keep_comments: bool,
+}
+
+/// Rebase a span lexed from an interpolation fragment onto the file
+/// position where the fragment starts, so diagnostics, hover, and
+/// references inside `#{...}` land on real source lines.
+fn rebase_span(s: Span, base_line: u32, base_col: u32) -> Span {
+    if s.line <= 1 {
+        Span::new(base_line, base_col + s.col.saturating_sub(1))
+    } else {
+        Span::new(base_line + s.line - 1, s.col)
+    }
 }
 
 impl<'a> Lexer<'a> {
@@ -239,7 +251,7 @@ impl<'a> Lexer<'a> {
                 if text.is_empty() {
                     return Err(self.err("$(...) takes a dotted module name (GEP-0003-R010)"));
                 }
-                return Ok((Tok::PyRef(text), span));
+                return Ok((Tok::PyRef(text, true), span));
             }
             if self.peek_at(1) == Some('"') {
                 return Err(self.err(
@@ -249,7 +261,7 @@ impl<'a> Lexer<'a> {
             if matches!(self.peek_at(1), Some(c2) if is_ident_start(c2) || c2.is_uppercase()) {
                 self.bump();
                 let name = self.lex_ident_chars();
-                return Ok((Tok::PyRef(name), span));
+                return Ok((Tok::PyRef(name, false), span));
             }
             return Err(self.err("expected a module name after '$' (GEP-0003-R001)"));
         }
@@ -419,6 +431,7 @@ impl<'a> Lexer<'a> {
                     }
                     self.bump();
                     self.bump();
+                    let (base_line, base_col) = (self.line, self.col);
                     let mut depth = 1usize;
                     let mut inner = String::new();
                     loop {
@@ -454,7 +467,11 @@ impl<'a> Lexer<'a> {
                         }
                         inner.push(self.bump().unwrap());
                     }
-                    let toks = Lexer::new(self.file, &inner).tokenize()?;
+                    let toks = Lexer::new(self.file, &inner)
+                        .tokenize()?
+                        .into_iter()
+                        .map(|(t, s)| (t, rebase_span(s, base_line, base_col)))
+                        .collect();
                     parts.push(LexStrPart::Interp(toks));
                 }
                 _ => {
@@ -559,6 +576,7 @@ impl<'a> Lexer<'a> {
                 }
                 self.bump();
                 self.bump();
+                let (base_line, base_col) = (self.line, self.col);
                 let mut idepth = 1usize;
                 let mut inner = String::new();
                 loop {
@@ -576,7 +594,11 @@ impl<'a> Lexer<'a> {
                     }
                     inner.push(self.bump().unwrap());
                 }
-                let toks = Lexer::new(self.file, &inner).tokenize()?;
+                let toks = Lexer::new(self.file, &inner)
+                    .tokenize()?
+                    .into_iter()
+                    .map(|(t, s)| (t, rebase_span(s, base_line, base_col)))
+                    .collect();
                 parts.push(LexStrPart::Interp(toks));
                 continue;
             }
@@ -655,6 +677,27 @@ mod tests {
                 Tok::Eof
             ]
         );
+    }
+
+    #[test]
+    fn interpolation_spans_are_file_relative() {
+        // the fragment lexes on line 2 at the `#{` offset, not line 1
+        let t = Lexer::new("t.gan", "x =\n  \"v: #{foo(1)}\"")
+            .tokenize()
+            .unwrap();
+        let interp = t
+            .iter()
+            .find_map(|(tok, _)| match tok {
+                Tok::Str(parts) => parts.iter().find_map(|p| match p {
+                    LexStrPart::Interp(ts) => Some(ts.clone()),
+                    _ => None,
+                }),
+                _ => None,
+            })
+            .expect("interpolation tokens");
+        let (_, span) = &interp[0];
+        assert_eq!(span.line, 2, "{interp:?}");
+        assert!(span.col > 8, "{interp:?}");
     }
 
     #[test]

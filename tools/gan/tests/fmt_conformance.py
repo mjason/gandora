@@ -58,6 +58,27 @@ with tempfile.TemporaryDirectory() as tmp:
     r = run(["fmt", "--check", "src"], tmp)
     check(r.returncode == 0, "--check exits 0 on a formatted tree")
 
+    # R009: stdin to stdout, canonical, exit 0
+    messy = "defmodule S do\n    def a(x),   do: x\nend\n"
+    r = subprocess.run(
+        [GAN, "fmt", "-"], input=messy, cwd=tmp, capture_output=True, text=True
+    )
+    check(
+        r.returncode == 0 and "def a(x), do: x" in r.stdout,
+        f"`gan fmt -` formats stdin and exits 0 (R009, code {r.returncode})",
+    )
+    # R010: --diff prints a unified diff and rewrites nothing
+    mpath = os.path.join(src, "messy.gan")
+    with open(mpath, "w") as f:
+        f.write(messy)
+    r = run(["fmt", "--diff", "src/messy.gan"], tmp)
+    check(
+        r.returncode == 1 and "-    def a(x)" in r.stdout
+        and open(mpath).read() == messy,
+        "--diff shows changes without touching the file (R010)",
+    )
+    os.remove(mpath)
+
 # R006: a corrupted rewrite is refused (white-box via the compiled module)
 if PY:
     code = (

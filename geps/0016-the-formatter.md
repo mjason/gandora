@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 1
+revision: 2
 requires: [1, 12, 13]
 replaces: []
 superseded-by: null
@@ -105,6 +105,17 @@ is parenthesized: `&$math.sqrt/1` becomes `&($math.sqrt/1)` — the
 one token-inserting rewrite, covered by the R006 parse check. Other
 capture spellings are left as written.
 
+**GEP-0016-R009:** `gan fmt -` reads a document from stdin and writes
+its canonical form to stdout — the pipe- and editor-integration
+spelling. R006 verification still gates the output: on failure the
+input passes through unchanged, a note goes to stderr, and the exit
+code is 2. A clean run exits 0 whether or not anything changed.
+
+**GEP-0016-R010:** `gan fmt --diff [path ...]` prints a unified diff
+of what formatting would change and rewrites nothing; it exits 1 when
+any file would change, 0 otherwise, mirroring `--check`'s contract
+with evidence attached.
+
 ## Rationale
 
 Token-verified conservatism over a pretty-printer: a full formatter
@@ -147,8 +158,13 @@ else.
 Tests MUST cover: fixture files exercising every R003/R004/R005 rule;
 idempotency on every fixture and on the repository's own sources;
 R006 verification (a deliberately broken rewrite is refused); `--check`
-exit codes; and heredoc value preservation under re-indentation.
+exit codes; heredoc value preservation under re-indentation; an R009
+stdin round-trip with exit codes; and an R010 diff run that leaves
+files untouched.
 
 ## Change History
 
+- Revision 2, 2026-08-03: R009 `gan fmt -` (stdin to stdout, verified,
+  exit 0/2), R010 `--diff` (unified diff, no rewrite, exit 1 when
+  changes exist).
 - Revision 1, 2026-08-02: Initial version.

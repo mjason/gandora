@@ -18,8 +18,10 @@ pub enum Term {
     Str(Vec<StrPart>),
     Atom(String),
     /// `$module` — a Python module reference, a first-class module
-    /// object at runtime (GEP-0003-R001/R002).
-    PyRef(String),
+    /// object at runtime (GEP-0003-R001/R002). The flag records the
+    /// explicit-boundary form `$(...)`, which the dotted-chain
+    /// heuristic must never extend (GEP-0003-R010).
+    PyRef(String, bool),
     /// A lowercase identifier reference. `ctx` is the hygiene context:
     /// `None` for user-written code, `Some(id)` for macro-template names.
     Var(String, Option<u64>),

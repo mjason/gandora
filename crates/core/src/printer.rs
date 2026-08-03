@@ -154,8 +154,10 @@ fn print_term(term: &Term, level: usize, out: &mut String) {
             }
             out.push('}');
         }
-        Term::PyRef(m) => {
-            let plain = !m.is_empty()
+        Term::PyRef(m, bounded) => {
+            // the explicit boundary must survive a print round-trip
+            let plain = !bounded
+                && !m.is_empty()
                 && m.chars().all(|c| c.is_alphanumeric() || c == '_')
                 && !m.starts_with(|c: char| c.is_ascii_digit());
             if plain {

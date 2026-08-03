@@ -102,6 +102,10 @@ def main():
             ("documentSymbolProvider", "R008"),
             ("completionProvider", "R008"),
             ("signatureHelpProvider", "R010"),
+            ("referencesProvider", "R012"),
+            ("renameProvider", "R012"),
+            ("workspaceSymbolProvider", "R013"),
+            ("codeActionProvider", "R014"),
         ]:
             check(bool(caps.get(cap)), f"announces {cap} (GEP-0015-{rule})")
         s.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
@@ -218,6 +222,57 @@ def main():
             "hover shows the compiled recursion shape (GEP-0019-R006)",
         )
 
+        # references + rename + workspace symbols (GEP-0015-R012/R013)
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "textDocument/references",
+                "params": {
+                    "textDocument": {"uri": uri},
+                    "position": {"line": 1, "character": 7},
+                    "context": {"includeDeclaration": True},
+                },
+            }
+        )
+        refs = s.wait_for(lambda m: m.get("id") == 6).get("result") or []
+        check(
+            len(refs) >= 3
+            and any(r["range"]["start"]["line"] == 2 for r in refs),
+            f"references finds call sites and declarations ({len(refs)} found)",
+        )
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "textDocument/rename",
+                "params": {
+                    "textDocument": {"uri": uri},
+                    "position": {"line": 1, "character": 7},
+                    "newName": "descend",
+                },
+            }
+        )
+        ren = s.wait_for(lambda m: m.get("id") == 7).get("result") or {}
+        edits = (ren.get("changes") or {}).get(uri, [])
+        check(
+            len(edits) >= 3 and all(e["newText"] == "descend" for e in edits),
+            f"rename edits every occurrence ({len(edits)} edits)",
+        )
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "workspace/symbol",
+                "params": {"query": "down"},
+            }
+        )
+        wsyms = s.wait_for(lambda m: m.get("id") == 8).get("result") or []
+        check(
+            any(w["name"].endswith(".down") for w in wsyms),
+            "workspace/symbol finds project definitions (GEP-0015-R013)",
+        )
+
         # stack-recursion warning arrives as a Warning diagnostic on the
         # def line (GEP-0019-R007)
         fact_src = (
@@ -248,6 +303,34 @@ def main():
                 for d in witems
             ),
             "stack recursion warns on the def line (GEP-0019-R007)",
+        )
+
+        # a lint diagnostic carries a one-click quick fix (GEP-0015-R014)
+        warn = next(d for d in witems if "GEP-0019-R007" in d["message"])
+        s.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "textDocument/codeAction",
+                "params": {
+                    "textDocument": {"uri": uri},
+                    "range": warn["range"],
+                    "context": {"diagnostics": [warn]},
+                },
+            }
+        )
+        actions = s.wait_for(lambda m: m.get("id") == 9).get("result") or []
+        fix = next(
+            (a for a in actions if "stack_recursion" in a.get("title", "")), None
+        )
+        new_texts = []
+        if fix:
+            for edit_list in (fix.get("edit") or {}).get("changes", {}).values():
+                new_texts.extend(e.get("newText", "") for e in edit_list)
+        check(
+            fix is not None
+            and any("@allow :stack_recursion" in t for t in new_texts),
+            "code action offers the @allow quick fix (GEP-0015-R014)",
         )
 
         s.send(

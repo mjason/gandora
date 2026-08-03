@@ -45,10 +45,14 @@ fn term_to_py(py: Python, t: &Term) -> PyObject {
         Term::Nil => py.None(),
         Term::Atom(a) => a.into_py(py),
         // {:__pyref__, [], ["math"]} — a $module reference (GEP-0003-R001)
-        Term::PyRef(m) => {
+        Term::PyRef(m, bounded) => {
             let name: PyObject = "__pyref__".into_py(py);
             let meta = PyList::empty_bound(py).into_py(py);
-            let args: PyObject = PyList::new_bound(py, [m.into_py(py)]).into_py(py);
+            let args: PyObject = if *bounded {
+                PyList::new_bound(py, [m.into_py(py), true.into_py(py)]).into_py(py)
+            } else {
+                PyList::new_bound(py, [m.into_py(py)]).into_py(py)
+            };
             PyTuple::new_bound(py, [name, meta, args]).into_py(py)
         }
         Term::Str(parts) => match t.as_plain_str() {
@@ -221,7 +225,7 @@ fn tokens(py: Python, source: &str, path: &str) -> PyResult<PyObject> {
             Tok::Str(parts) => ("str", format!("{parts:?}")),
             Tok::Sigil(name, parts) => ("sigil", format!("~{name}{parts:?}")),
             Tok::Atom(a) => ("atom", a.clone()),
-            Tok::PyRef(m) => ("pyref", m.clone()),
+            Tok::PyRef(m, _) => ("pyref", m.clone()),
             Tok::Ident(i) => ("ident", i.clone()),
             Tok::UpIdent(i) => ("upident", i.clone()),
             Tok::KwKey(k) => ("kwkey", k.clone()),
@@ -338,6 +342,63 @@ fn definition(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject
             Ok(out.into_py(py))
         }
     }
+}
+
+/// Every reference to `Module.fun` across the project (GEP-0015-R012):
+/// [{"path","line","col","is_def"}] in source order.
+#[pyfunction]
+#[pyo3(signature = (target, root = None))]
+fn references(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject> {
+    let segs: Vec<&str> = target.split('.').collect();
+    let (module_name, fun) = match segs.last() {
+        Some(last) if last.chars().next().is_some_and(|c| c.is_lowercase()) => {
+            (segs[..segs.len() - 1].join("."), (*last).to_string())
+        }
+        _ => return Ok(PyList::empty_bound(py).into_py(py)),
+    };
+    if module_name.is_empty() {
+        return Ok(PyList::empty_bound(py).into_py(py));
+    }
+    let root_dir = std::path::Path::new(root.unwrap_or("."));
+    let config =
+        compiler::project::load_config(&root_dir.join("gandora.jsonc")).map_err(raise)?;
+    let list = PyList::empty_bound(py);
+    for (path, line, col, is_def) in
+        compiler::project::find_references(&config, &module_name, &fun).map_err(raise)?
+    {
+        let e = PyDict::new_bound(py);
+        let _ = e.set_item("path", path);
+        let _ = e.set_item("line", line);
+        let _ = e.set_item("col", col);
+        let _ = e.set_item("is_def", is_def);
+        let _ = list.append(e);
+    }
+    Ok(list.into_py(py))
+}
+
+/// Project-wide symbol search (GEP-0015-R013):
+/// [{"module","path","name","kind","line","head","doc"}].
+#[pyfunction]
+#[pyo3(signature = (query, root = None))]
+fn wsymbols(py: Python, query: &str, root: Option<&str>) -> PyResult<PyObject> {
+    let root_dir = std::path::Path::new(root.unwrap_or("."));
+    let config =
+        compiler::project::load_config(&root_dir.join("gandora.jsonc")).map_err(raise)?;
+    let list = PyList::empty_bound(py);
+    for (module, path, s) in
+        compiler::project::workspace_symbols(&config, query).map_err(raise)?
+    {
+        let e = PyDict::new_bound(py);
+        let _ = e.set_item("module", module);
+        let _ = e.set_item("path", path);
+        let _ = e.set_item("name", s.name);
+        let _ = e.set_item("kind", s.kind);
+        let _ = e.set_item("line", s.line);
+        let _ = e.set_item("head", s.head);
+        let _ = e.set_item("doc", s.doc_head);
+        let _ = list.append(e);
+    }
+    Ok(list.into_py(py))
 }
 
 /// Every definition of a module, for outlines and completion
@@ -460,6 +521,8 @@ fn gandora_core(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(doc, m)?)?;
     m.add_function(wrap_pyfunction!(definition, m)?)?;
     m.add_function(wrap_pyfunction!(symbols, m)?)?;
+    m.add_function(wrap_pyfunction!(references, m)?)?;
+    m.add_function(wrap_pyfunction!(wsymbols, m)?)?;
     m.add_function(wrap_pyfunction!(compile_snippet, m)?)?;
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
     m.add_function(wrap_pyfunction!(build, m)?)?;

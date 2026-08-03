@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.10.0 — 2026-08-03
+
+**The tooling milestone: find-references, rename, quick fixes — for editors and AI alike.**
+
+- **LSP (GEP-0015 rev 7)**: `references` (call sites across the project,
+  alias- and `&`-capture-aware, exact name-token ranges — string
+  interpolations included), cross-file `rename` (refuses targets defined
+  outside the project), `workspace/symbol` search, and quick-fix code
+  actions that insert `@allow :...` or the `_` prefix right from a lint
+  squiggle.
+- **lsc**: `references`, `wsymbols`, and `check` — whole-project
+  diagnostics with lints as one JSON value, the AI-agent workhorse.
+- **fmt (GEP-0016 rev 2)**: `gan fmt -` (stdin→stdout, verified, exit
+  0/2) and `--diff` (unified diff, rewrites nothing, exit 1).
+- **Fixed (GEP-0003 rev 5)**: `$(sys)` — the single-segment explicit
+  boundary — was silently falling back to the dotted-chain heuristic
+  (`$(sys).stderr.write` imported `sys.stderr`); bounded-ness now
+  travels through the AST. Also fixed: spans inside `#{...}`
+  interpolations were fragment-relative; diagnostics, hover, and
+  references inside interpolations now land on real source lines.
+
 ## v0.9.3 — 2026-08-03
 
 **Rust-style lints: the compiler now proves your code unsafe before Python does.**

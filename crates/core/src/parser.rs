@@ -272,7 +272,7 @@ impl Parser {
         match self.bump() {
             Tok::Int(n) => Ok(Term::Int(n)),
             Tok::Float(f) => Ok(Term::Float(f)),
-            Tok::PyRef(name) => Ok(Term::PyRef(name)),
+            Tok::PyRef(name, bounded) => Ok(Term::PyRef(name, bounded)),
             Tok::Kw("true") => Ok(Term::Bool(true)),
             Tok::Kw("false") => Ok(Term::Bool(false)),
             Tok::Kw("nil") => Ok(Term::Nil),
@@ -626,7 +626,7 @@ impl Parser {
                 | Tok::Str(_)
                 | Tok::Sigil(_, _)
                 | Tok::Atom(_)
-                | Tok::PyRef(_)
+                | Tok::PyRef(..)
                 | Tok::Ident(_)
                 | Tok::UpIdent(_)
                 | Tok::KwKey(_)
@@ -892,7 +892,7 @@ mod tests {
         match &t {
             Term::Call(c) => match &c.callee {
                 Callee::Dot { base, name, is_call } => {
-                    assert_eq!(**base, Term::PyRef("math".into()));
+                    assert_eq!(**base, Term::PyRef("math".into(), false));
                     assert_eq!(name, "sqrt");
                     assert!(is_call);
                 }
@@ -904,12 +904,12 @@ mod tests {
 
     #[test]
     fn bare_pyref_and_quoted_pyref() {
-        assert_eq!(parse("$math"), Term::PyRef("math".into()));
+        assert_eq!(parse("$math"), Term::PyRef("math".into(), false));
         let t = parse("$(os.path).join(a, b)");
         match &t {
             Term::Call(c) => match &c.callee {
                 Callee::Dot { base, .. } => {
-                    assert_eq!(**base, Term::PyRef("os.path".into()));
+                    assert_eq!(**base, Term::PyRef("os.path".into(), true));
                 }
                 other => panic!("{other:?}"),
             },

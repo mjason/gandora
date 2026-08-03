@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 6
+revision: 7
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -147,6 +147,27 @@ Additive; new distribution.
 
 ## Security and Determinism
 
+**GEP-0015-R012:** `textDocument/references` returns every project
+call site of the function under the cursor — bare calls in the
+defining or importing module, alias-resolved `Mod.fun` calls, `&`
+captures, and (per `includeDeclaration`) the clause heads — with
+ranges covering the exact name token, string interpolations included.
+`textDocument/rename` applies the same resolution as a cross-file
+`WorkspaceEdit`; it validates the new name and refuses targets whose
+definition lives outside the project. `gan lsc references
+<Mod>.<fun>` mirrors the raw site list.
+
+**GEP-0015-R013:** `workspace/symbol` searches every project
+definition by case-insensitive substring; `gan lsc wsymbols [query]`
+mirrors it, and `gan lsc check` mirrors whole-project diagnostics —
+compiler lints included — as one JSON value.
+
+**GEP-0015-R014:** Compiler lints with a mechanical remedy surface as
+quick-fix code actions on their diagnostics: inserting
+`@allow :stack_recursion` / `@allow :unused_function` above the
+definition (GEP-0019-R007, GEP-0022-R005), and the `_` prefix for an
+unused binding (GEP-0022-R002).
+
 The server compiles buffers it is sent and executes nothing.
 
 ## Tooling and AI Usage
@@ -170,10 +191,14 @@ None for this revision.
 Tests MUST cover a scripted stdio session: initialize handshake, a
 didOpen with an erroneous buffer producing publishDiagnostics with
 the right span, a didChange that fixes it producing an empty list,
-didClose clearing, and shutdown/exit terminating with code 0.
+didClose clearing, and shutdown/exit terminating with code 0; the
+R012 references/rename round-trip; an R013 workspace-symbol query;
+and an R014 quick fix carrying the @allow edit.
 
 ## Change History
 
+- Revision 7, 2026-08-03: R012 references + rename, R013 workspace
+  symbols + `lsc check`, R014 lint quick fixes.
 - Revision 6, 2026-08-02: lsc mirrors the full capability set (R001A
   updated): doc/definition/symbols and the pydoc/pycomplete/pygoto/
   pysig Python queries.

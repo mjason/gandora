@@ -612,6 +612,202 @@ pub fn find_definition(
     Ok(None)
 }
 
+/// Every reference to `module_name.fun` across the project's sources
+/// (GEP-0015-R012): bare calls in the defining/importing module,
+/// `Alias.fun` calls resolved through each file's aliases, `&fun/n` and
+/// `&Mod.fun/n` captures, and the definition heads themselves
+/// (`is_def = true`). `(file, line, col, is_def)` in source order.
+pub fn find_references(
+    config: &Config,
+    module_name: &str,
+    fun: &str,
+) -> crate::diag::Result<Vec<(String, u32, u32, bool)>> {
+    use crate::ast::{Callee, StrPart, Term};
+    let mut out: Vec<(String, u32, u32, bool)> = Vec::new();
+    for (path, module) in discover_sources(config)? {
+        let file = path.display().to_string();
+        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        let Ok(term) = parse_file(&file, &text) else { continue };
+        let this_module = module.join(".");
+        // in scope as a bare name: same module, or `import Target`
+        let mut bare = this_module == module_name;
+        // Short alias names that resolve to the target module
+        // the fully qualified path always resolves; short names only
+        // when an alias statement introduces them
+        let mut alias_hits: std::collections::BTreeSet<String> = Default::default();
+        alias_hits.insert(module_name.to_string());
+        for stmt in term.as_block() {
+            let Term::Call(dm) = &stmt else { continue };
+            let Some(body) = Term::keyword_arg(&dm.args, "do") else { continue };
+            for inner in body.as_block() {
+                let Term::Call(c) = &inner else { continue };
+                let Callee::Name(name) = &c.callee else { continue };
+                match name.as_str() {
+                    "alias" => {
+                        if let Some(Term::Alias(segs)) = c.args.first() {
+                            if segs.join(".") == module_name {
+                                let short = match Term::keyword_arg(&c.args, "as") {
+                                    Some(Term::Alias(s)) if s.len() == 1 => {
+                                        s[0].clone()
+                                    }
+                                    _ => segs.last().unwrap().clone(),
+                                };
+                                alias_hits.insert(short);
+                            }
+                        }
+                    }
+                    "import" => {
+                        if let Some(Term::Alias(segs)) = c.args.first() {
+                            if segs.join(".") == module_name {
+                                bare = true;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        fn walk(
+            t: &Term,
+            fun: &str,
+            bare: bool,
+            alias_hits: &std::collections::BTreeSet<String>,
+            file: &str,
+            out: &mut Vec<(String, u32, u32, bool)>,
+        ) {
+            match t {
+                Term::Str(parts) => {
+                    for p in parts {
+                        if let StrPart::Interp(e) = p {
+                            walk(e, fun, bare, alias_hits, file, out);
+                        }
+                    }
+                }
+                Term::List(items) | Term::Tuple(items) => {
+                    items.iter().for_each(|i| walk(i, fun, bare, alias_hits, file, out));
+                }
+                Term::Map(entries) => entries.iter().for_each(|(k, v)| {
+                    walk(k, fun, bare, alias_hits, file, out);
+                    walk(v, fun, bare, alias_hits, file, out);
+                }),
+                Term::Pair(_, v) => walk(v, fun, bare, alias_hits, file, out),
+                Term::Call(c) => {
+                    match &c.callee {
+                        Callee::Name(n)
+                            if matches!(n.as_str(), "def" | "defp" | "defmacro") =>
+                        {
+                            if let Some(head) = c.args.first() {
+                                if def_head_name(head).as_deref() == Some(fun) {
+                                    out.push((
+                                        file.to_string(),
+                                        c.span.line,
+                                        c.span.col,
+                                        true,
+                                    ));
+                                }
+                            }
+                            // walk body and non-head args for nested refs
+                            for a in c.args.iter().skip(1) {
+                                walk(a, fun, bare, alias_hits, file, out);
+                            }
+                            return;
+                        }
+                        Callee::Name(n) if n == fun && bare => {
+                            out.push((file.to_string(), c.span.line, c.span.col, false));
+                        }
+                        Callee::Name(n) if n == "&" => {
+                            // &fun/1 or &Mod.fun/1
+                            if let Some(Term::Call(inner)) = c.args.first() {
+                                if matches!(&inner.callee, Callee::Name(x) if x == "/") {
+                                    match inner.args.first() {
+                                        Some(Term::Var(v, _)) if v == fun && bare => {
+                                            out.push((
+                                                file.to_string(),
+                                                c.span.line,
+                                                c.span.col,
+                                                false,
+                                            ));
+                                        }
+                                        Some(Term::Call(cc)) => {
+                                            if let Callee::Dot { base, name, .. } =
+                                                &cc.callee
+                                            {
+                                                if name == fun {
+                                                    if let Term::Alias(segs) = &**base {
+                                                        if alias_hits
+                                                            .contains(&segs.join("."))
+                                                        {
+                                                            out.push((
+                                                                file.to_string(),
+                                                                c.span.line,
+                                                                c.span.col,
+                                                                false,
+                                                            ));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                        Callee::Dot { base, name, .. } if name == fun => {
+                            if let Term::Alias(segs) = &**base {
+                                if alias_hits.contains(&segs.join(".")) {
+                                    out.push((
+                                        file.to_string(),
+                                        c.span.line,
+                                        c.span.col,
+                                        false,
+                                    ));
+                                }
+                            }
+                            walk(base, fun, bare, alias_hits, file, out);
+                        }
+                        Callee::Dot { base, .. } => {
+                            walk(base, fun, bare, alias_hits, file, out)
+                        }
+                        Callee::Apply(a) => walk(a, fun, bare, alias_hits, file, out),
+                        Callee::Name(_) => {}
+                    }
+                    c.args
+                        .iter()
+                        .for_each(|a| walk(a, fun, bare, alias_hits, file, out));
+                }
+                _ => {}
+            }
+        }
+        walk(&term, fun, bare, &alias_hits, &file, &mut out);
+    }
+    Ok(out)
+}
+
+/// Project-wide symbol search (GEP-0015-R013): every definition whose
+/// name contains `query` (case-insensitive; empty matches all), as
+/// `(module, file, SymbolInfo)`.
+pub fn workspace_symbols(
+    config: &Config,
+    query: &str,
+) -> crate::diag::Result<Vec<(String, String, SymbolInfo)>> {
+    let q = query.to_lowercase();
+    let mut out = Vec::new();
+    for (path, module) in discover_sources(config)? {
+        let module_name = module.join(".");
+        let file = path.display().to_string();
+        for sym in module_symbols(config, &module_name)? {
+            if q.is_empty()
+                || sym.name.to_lowercase().contains(&q)
+                || format!("{module_name}.{}", sym.name).to_lowercase().contains(&q)
+            {
+                out.push((module_name.clone(), file.clone(), sym));
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// Locate and parse a module's source: project first, then installed.
 fn load_module_term(
     config: &Config,

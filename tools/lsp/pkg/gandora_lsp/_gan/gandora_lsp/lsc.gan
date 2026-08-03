@@ -21,6 +21,9 @@ defmodule Lsc do
     doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples
     definition <Mod>[.<fun>]    defining source path/line/col
     symbols <Mod>               every definition with rendered heads
+    references <Mod>.<fun>      every project call site (+ definitions)
+    wsymbols [<query>]          project-wide symbol search
+    check                       whole-project diagnostics, lints included
     pydoc <mod.chain>           Python docstring for a $-style reference
     pycomplete <mod.prefix>     Python member completions
     pygoto <mod.chain>          Python source location
@@ -65,6 +68,14 @@ defmodule Lsc do
         emit(core.definition(target, root))
       ["symbols", module | _] ->
         emit(core.symbols(module, root))
+      ["references", target | _] ->
+        emit(core.references(target, root))
+      ["wsymbols", query | _] ->
+        emit(core.wsymbols(query, root))
+      ["wsymbols"] ->
+        emit(core.wsymbols("", root))
+      ["check" | _] ->
+        emit(core.check(root))
       ["pydoc", chain | _] ->
         emit(PyIntel.hover_markdown(root, import_line(chain), chain))
       ["pycomplete", chain | _] ->

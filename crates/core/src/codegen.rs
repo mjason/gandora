@@ -1121,9 +1121,9 @@ impl Codegen {
                 },
                 Callee::Dot { base, name, .. } => match base.as_ref() {
                     chain_base if pyref_chain(chain_base).is_some() => {
-                        let mut segs = pyref_chain(chain_base).unwrap();
+                        let (mut segs, bounded) = pyref_chain(chain_base).unwrap();
                         segs.push(name.clone());
-                        self.py_imports.insert(pyref_import_path(&segs));
+                        self.py_imports.insert(pyref_import_path(&segs, bounded));
                         let path = segs.join(".");
                         if c.args.is_empty() {
                             Ok(path)
@@ -1138,7 +1138,7 @@ impl Codegen {
                     }
                     // $mod.Type — the host's own types at the boundary;
                     // $mod.Type(t, ...) parametrizes: mod.Type[t, ...]
-                    Term::PyRef(m) => {
+                    Term::PyRef(m, _) => {
                         self.py_imports.insert(m.clone());
                         if c.args.is_empty() {
                             Ok(format!("{m}.{name}"))
@@ -2448,7 +2448,7 @@ impl Codegen {
             Term::Bool(b) => Ok(if *b { "True" } else { "False" }.to_string()),
             Term::Nil => Ok("None".to_string()),
             Term::Atom(a) => Ok(py_str_lit(a)),
-            Term::PyRef(m) => {
+            Term::PyRef(m, _) => {
                 // first-class module reference (GEP-0003-R002)
                 self.py_imports.insert(m.clone());
                 Ok(m.clone())
@@ -2604,9 +2604,9 @@ impl Codegen {
                     // $mod.sub.Type.member chains: the lowercase prefix is the
                     // module path, imported whole (GEP-0003-R010)
                     chain_base if pyref_chain(chain_base).is_some() => {
-                        let mut segs = pyref_chain(chain_base).unwrap();
+                        let (mut segs, bounded) = pyref_chain(chain_base).unwrap();
                         segs.push(name.clone());
-                        self.py_imports.insert(pyref_import_path(&segs));
+                        self.py_imports.insert(pyref_import_path(&segs, bounded));
                         let mut path: Vec<String> = segs[..segs.len() - 1].to_vec();
                         path.push(map_ident(name));
                         let path = path.join(".");
@@ -2618,7 +2618,7 @@ impl Codegen {
                         }
                     }
                     // $module.fun(...) — remote reference (GEP-0003-R001/R002)
-                    Term::PyRef(module) => {
+                    Term::PyRef(module, _) => {
                         self.py_imports.insert(module.clone());
                         let f = map_ident(name);
                         if *is_call {
@@ -3453,7 +3453,7 @@ impl Codegen {
                 Span::default(),
                 "module names are not valid patterns",
             )),
-            Term::PyRef(_) => Err(self.err(
+            Term::PyRef(..) => Err(self.err(
                 Span::default(),
                 "module references are not valid patterns",
             )),
@@ -4077,18 +4077,18 @@ pub fn params_section(info: &DocInfo, locale: &str, heading: &str) -> Option<Str
 
 /// Fold a `$mod.seg.seg...` attribute chain rooted at a PyRef.
 /// Returns (segments) when the whole chain is plain attribute access.
-fn pyref_chain(term: &Term) -> Option<Vec<String>> {
+fn pyref_chain(term: &Term) -> Option<(Vec<String>, bool)> {
     match term {
-        Term::PyRef(m) => Some(vec![m.clone()]),
+        Term::PyRef(m, bounded) => Some((vec![m.clone()], *bounded)),
         Term::Call(c) => match &c.callee {
             Callee::Dot {
                 base,
                 name,
                 is_call: false,
             } if c.args.is_empty() => {
-                let mut segs = pyref_chain(base)?;
+                let (mut segs, bounded) = pyref_chain(base)?;
                 segs.push(name.clone());
-                Some(segs)
+                Some((segs, bounded))
             }
             _ => None,
         },
@@ -4099,10 +4099,10 @@ fn pyref_chain(term: &Term) -> Option<Vec<String>> {
 /// The import path for a folded chain (GEP-0003-R010): the leading run of
 /// lowercase segments, stopping before the final segment — dotted
 /// submodules import whole, members resolve as attributes.
-fn pyref_import_path(segs: &[String]) -> String {
-    // a dotted first segment comes from the quoted form `$"a.b"`: the
-    // module boundary is explicit and the heuristic must not extend it
-    if segs[0].contains('.') {
+fn pyref_import_path(segs: &[String], bounded: bool) -> String {
+    // `$(...)` declares the boundary explicitly — single-segment or
+    // dotted, the heuristic must not extend it (GEP-0003-R010)
+    if bounded || segs[0].contains('.') {
         return segs[0].clone();
     }
     let mut end = 1;
@@ -4305,6 +4305,23 @@ mod tests {
         );
         assert!(py.contains("while True:"), "{py}");
         assert!(py.contains("[lambda *, n=n: n] + acc"), "{py}");
+    }
+
+    #[test]
+    fn bounded_single_segment_pyref_locks_the_boundary() {
+        // GEP-0003-R010: $(sys).stderr.write must import sys, not
+        // sys.stderr — the explicit boundary survives the chain walk
+        let py = compile(
+            "defmodule M do\n  def w(s), do: $(sys).stderr.write(s)\nend",
+        );
+        assert!(py.contains("import sys\n"), "{py}");
+        assert!(!py.contains("import sys.stderr"), "{py}");
+        assert!(py.contains("sys.stderr.write(s)"), "{py}");
+        // the unbounded spelling keeps the R010 heuristic
+        let py2 = compile(
+            "defmodule M do\n  def v(x), do: $importlib.metadata.version(x)\nend",
+        );
+        assert!(py2.contains("import importlib.metadata"), "{py2}");
     }
 
     fn warnings_of(src: &str) -> Vec<String> {

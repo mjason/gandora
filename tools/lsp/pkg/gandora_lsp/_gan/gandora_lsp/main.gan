@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.9.3",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.0",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -419,6 +419,205 @@ defmodule Main do
   defp symbol_kind("defmacro"), do: $lsprotocol.types.SymbolKind.Constructor
   defp symbol_kind("defp"), do: $lsprotocol.types.SymbolKind.Method
   defp symbol_kind(_), do: $lsprotocol.types.SymbolKind.Function
+
+  # ---- references + rename (GEP-0015-R012) ---------------------------------
+
+  # the Module.fun target under the cursor, or nil for non-functions
+  defp fun_target_at(doc, line, character) do
+    hit = word_at(line, character)
+    if is_nil(hit) do
+      nil
+    else
+      {token, _start} = hit
+      last = Enum.at(token.split("."), -1)
+      if String.match?(last, ~r/^[a-z_]/) do
+        target_of(doc.source, token)
+      else
+        nil
+      end
+    end
+  end
+
+  # precise (path, line0, start_col, end_col) for each project reference —
+  # the name token located on its source line
+  defp ref_ranges(target) do
+    fun = Enum.at(target.split("."), -1)
+    refs = try do
+      core.references(target, root_path())
+    rescue
+      _e -> []
+    end
+    Enum.map(refs, fn r ->
+      path = Map.get(r, "path")
+      line0 = Enum.max([Map.get(r, "line") - 1, 0])
+      col0 = Enum.max([Map.get(r, "col") - 1, 0])
+      text = try do
+        $pathlib.Path(path).read_text(encoding: "utf-8")
+      rescue
+        _e -> ""
+      end
+      l = Enum.at(text.split("\n"), line0)
+      l = if is_nil(l) do "" else l end
+      idx = l.find(fun, col0)
+      idx = if idx < 0 do l.find(fun) else idx end
+      start = if idx < 0 do col0 else idx end
+      %{path: path, line: line0, start: start,
+        stop: start + String.length(fun), is_def: Map.get(r, "is_def")}
+    end)
+  end
+
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_REFERENCES)
+  def references(params) do
+    {doc, line} = doc_and_line(params)
+    target = fun_target_at(doc, line, params.position.character)
+    if is_nil(target) do
+      nil
+    else
+      include_defs = params.context.include_declaration
+      ref_ranges(target)
+      |> Enum.filter(fn r -> include_defs or not Map.get(r, "is_def") end)
+      |> Enum.map(fn r ->
+        types.Location(
+          uri: "file://" <> Map.get(r, "path"),
+          range: types.Range(
+            types.Position(line: Map.get(r, "line"), character: Map.get(r, "start")),
+            types.Position(line: Map.get(r, "line"), character: Map.get(r, "stop"))
+          )
+        )
+      end)
+    end
+  end
+
+  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_RENAME)
+  def rename(params) do
+    {doc, line} = doc_and_line(params)
+    target = fun_target_at(doc, line, params.position.character)
+    new_name = params.new_name
+    cond do
+      is_nil(target) -> nil
+      not String.match?(new_name, ~r/^[a-z_][A-Za-z0-9_]*[?!]?$/) -> nil
+      true ->
+        ranges = ref_ranges(target)
+        # only rename what this project defines — a target without a
+        # definition here lives in a dependency
+        if Enum.any?(ranges, fn r -> Map.get(r, "is_def") end) do
+          edits = Enum.reduce(ranges, %{}, fn r, acc ->
+            uri = "file://" <> Map.get(r, "path")
+            edit = types.TextEdit(
+              range: types.Range(
+                types.Position(line: Map.get(r, "line"), character: Map.get(r, "start")),
+                types.Position(line: Map.get(r, "line"), character: Map.get(r, "stop"))
+              ),
+              new_text: new_name
+            )
+            Map.put(acc, uri, Map.get(acc, uri, []) ++ [edit])
+          end)
+          types.WorkspaceEdit(changes: edits)
+        else
+          nil
+        end
+    end
+  end
+
+  # ---- workspace symbols (GEP-0015-R013) -----------------------------------
+
+  @decorate @server.feature($lsprotocol.types.WORKSPACE_SYMBOL)
+  def workspace_symbol(params) do
+    syms = try do
+      core.wsymbols(params.query, root_path())
+    rescue
+      _e -> []
+    end
+    Enum.map(syms, fn s ->
+      line = Enum.max([Map.get(s, "line") - 1, 0])
+      pos = types.Position(line: line, character: 0)
+      types.SymbolInformation(
+        name: Map.get(s, "module") <> "." <> Map.get(s, "name"),
+        kind: symbol_kind(Map.get(s, "kind")),
+        location: types.Location(
+          uri: "file://" <> Map.get(s, "path"),
+          range: types.Range(pos, pos)
+        )
+      )
+    end)
+  end
+
+  # ---- quick fixes for compiler lints (GEP-0015-R014) ----------------------
+
+  @decorate @server.feature(
+    $lsprotocol.types.TEXT_DOCUMENT_CODE_ACTION,
+    $lsprotocol.types.CodeActionOptions(
+      code_action_kinds: [$lsprotocol.types.CodeActionKind.QuickFix]
+    )
+  )
+  def code_action(params) do
+    uri = params.text_document.uri
+    doc = @server.workspace.get_text_document(uri)
+    $builtins.list(params.context.diagnostics)
+    |> Enum.flat_map(fn d ->
+      msg = d.message
+      cond do
+        String.contains?(msg, "GEP-0019-R007") ->
+          [allow_action(uri, doc, d, "stack_recursion")]
+        String.contains?(msg, "GEP-0022-R005") ->
+          [allow_action(uri, doc, d, "unused_function")]
+        String.contains?(msg, "GEP-0022-R002") ->
+          underscore_actions(uri, doc, d, msg)
+        true -> []
+      end
+    end)
+  end
+
+  defp allow_action(uri, doc, d, target) do
+    line0 = d.range.start.line
+    l = Enum.at(doc.source.split("\n"), line0)
+    l = if is_nil(l) do "" else l end
+    indent = String.slice(l, 0, String.length(l) - String.length(l.lstrip()))
+    pos = types.Position(line: line0, character: 0)
+    types.CodeAction(
+      title: "Acknowledge with @allow :" <> target,
+      kind: $lsprotocol.types.CodeActionKind.QuickFix,
+      diagnostics: [d],
+      edit: types.WorkspaceEdit(changes: %{
+        uri => [types.TextEdit(
+          range: types.Range(pos, pos),
+          new_text: indent <> "@allow :" <> target <> "\n"
+        )]
+      })
+    )
+  end
+
+  defp underscore_actions(uri, doc, d, msg) do
+    m = ~r/variable ([A-Za-z0-9_?!]+) is bound/.search(msg)
+    if is_nil(m) do
+      []
+    else
+      var = m.group(1)
+      line0 = d.range.start.line
+      l = Enum.at(doc.source.split("\n"), line0)
+      l = if is_nil(l) do "" else l end
+      hit = ~r/\b#{$re.escape(var)}\b/.search(l)
+      if is_nil(hit) do
+        []
+      else
+        {s, e} = hit.span()
+        [types.CodeAction(
+          title: "Rename to _" <> var,
+          kind: $lsprotocol.types.CodeActionKind.QuickFix,
+          diagnostics: [d],
+          edit: types.WorkspaceEdit(changes: %{
+            uri => [types.TextEdit(
+              range: types.Range(
+                types.Position(line: line0, character: s),
+                types.Position(line: line0, character: e)
+              ),
+              new_text: "_" <> var
+            )]
+          })
+        )]
+      end
+    end
+  end
 
   # ---- completion: `Module.` members (GEP-0015-R008) -----------------------
 

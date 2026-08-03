@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 4
+revision: 5
 requires: [1]
 replaces: []
 superseded-by: null
@@ -83,9 +83,11 @@ The parenthesized form `$(a.b)` is the explicit override for the
 cases the heuristic cannot see: a bare reference whose final
 lowercase segment is itself a submodule (`$(importlib.metadata)` as a
 value), an uppercase-named submodule (`$(PIL.Image).open(f)`), and a
-lowercase attribute continuing past the module (`$(os.path).sep`).
-The boundary is locked: segments after `)` are always attribute
-access. The former quoted spelling `$"a.b"` is a compile error naming
+lowercase attribute continuing past the module (`$(os.path).sep`),
+including the single-segment case (`$(sys).stderr.write(s)` imports
+`sys`, never `sys.stderr`). The boundary is locked: segments after
+`)` are always attribute access, and the quoted AST records the
+boundary as `{:__pyref__, [], [text, true]}`. The former quoted spelling `$"a.b"` is a compile error naming
 this rule.
 
 **GEP-0003-R009:** Atoms are pure data (GEP-0001-R010) and never name
@@ -196,6 +198,10 @@ a file referencing a nonexistent module succeeds).
 
 ## Change History
 
+- Revision 5, 2026-08-03: R010 — the `$(...)` boundary lock now
+  covers single-segment references (`$(sys)` was silently falling
+  back to the heuristic); bounded-ness is preserved in the quoted
+  encoding.
 - Revision 4, 2026-08-03: The explicit module boundary is the
   parenthesized `$(a.b)` (sigil-delimiter semantics); the quoted
   spelling is retired with a directed error.
