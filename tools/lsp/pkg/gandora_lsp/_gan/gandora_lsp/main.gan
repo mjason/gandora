@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.2",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.3",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -150,12 +150,20 @@ defmodule Main do
       {token, start} = hit
       pyref = start > 0 and String.slice(line, start - 1, 1) == "$"
       bounded = start > 1 and String.slice(line, start - 2, 2) == "$("
+      # `|> .method()` / `"lit".method()`: a Python method on the value
+      # to the left — a construct card, not a variable to infer
+      postfix = start > 0 and String.slice(line, start - 1, 1) == "." and not pyref
       py = if bounded do
         {"import " <> token, token}
       else
         PyIntel.target(doc.source, token, pyref)
       end
       cond do
+        postfix and is_nil(py) ->
+          markdown_hover(
+            "`.#{token}()` — calls the Python method `#{token}` on the value " <>
+              "to its left; `|> .#{token}()` pipes into it (GEP-0001 postfix chain)."
+          )
         not is_nil(py) ->
           {import_line, expr} = py
           md = PyIntel.hover_markdown(root_path(), import_line, expr)
@@ -204,7 +212,8 @@ defmodule Main do
         base = py_name(Map.get(holder, "name"))
         py_var = py_name(token)
         t = PyIntel.infer_type(compiled, [base, "_" <> base], py_var)
-        if is_nil(t) do
+        # jedi echoing the name back means it found nothing to infer
+        if is_nil(t) or t == py_var or t == token do
           nil
         else
           markdown_hover("`#{token}`: `#{t}` *(inferred)*")
@@ -259,7 +268,9 @@ defmodule Main do
 
   # hover locale preference (GEP-0015-R015): the developer-local
   # project file first, then the environment (which the VS Code
-  # setting feeds); "all" shows every language in sections
+  # setting feeds). Unset means the default language only; a set
+  # locale renders that language with per-item fallback to the
+  # default; "all" opts into every language in sections.
   @spec doc_locale() :: string()
   defp doc_locale() do
     local = try do
@@ -268,7 +279,7 @@ defmodule Main do
       _e -> nil
     end
     if is_nil(local) do
-      $(os).environ.get("GAN_DOC_LOCALE", "all")
+      $(os).environ.get("GAN_DOC_LOCALE", "default")
     else
       local
     end

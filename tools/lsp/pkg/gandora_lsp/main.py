@@ -34,7 +34,7 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.10.2", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.10.3", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
 
@@ -154,12 +154,15 @@ def hover(params):
                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val7))
         pyref = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == "$")
         bounded = (start > 1) and (gandora_std.string.slice(line, start - 2, 2) == "$(")
+        postfix = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == ".") and not (_gan_truthy(pyref))
         if _gan_truthy(bounded):
             _gan_tmp9 = ("import " + token, token)
         else:
             _gan_tmp9 = gandora_lsp.py_intel.target(doc.source, token, pyref)
         py = _gan_tmp9
-        if not ((py is None)):
+        if _gan_truthy(_gan_and(postfix, lambda: (py is None))):
+            return _markdown_hover(f"`.{token}()` — calls the Python method `{token}` on the value " + f"to its left; `|> .{token}()` pipes into it (GEP-0001 postfix chain).")
+        elif not ((py is None)):
             _gan_val10 = py
             match _gan_val10:
                 case (import_line, expr) as _gan_t11 if isinstance(_gan_t11, tuple):
@@ -207,7 +210,7 @@ def _var_hover(doc, token, cursor_line):
             base = _py_name(gandora_std.map.get(holder, "name"))
             py_var = _py_name(token)
             t = gandora_lsp.py_intel.infer_type(compiled, [base, "_" + base], py_var)
-            if (t is None):
+            if (t is None) or (t == py_var) or (t == token):
                 return None
             else:
                 return _markdown_hover(f"`{token}`: `{t}` *(inferred)*")
@@ -255,7 +258,7 @@ def _doc_locale() -> str:
         _gan_tmp15 = None
     local = _gan_tmp15
     if (local is None):
-        return os.environ.get("GAN_DOC_LOCALE", "all")
+        return os.environ.get("GAN_DOC_LOCALE", "default")
     else:
         return local
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.10.3 — 2026-08-03
+
+**Hover polish: your language by choice, and method pipes explained.**
+
+- **GEP-0015 rev 9**: with no locale set anywhere, hovers show the
+  default language only — translations stay out of the way until a
+  `gandora.local.jsonc` / `GAN_DOC_LOCALE` / editor setting asks for
+  them ("all" is now the explicit opt-in for every-language sections).
+- **`|> .method()` hover**: postfix method-pipe tokens get a proper
+  construct card (a Python method on the piped value) instead of
+  falling into local-variable inference.
+- Local-variable hover no longer echoes junk when jedi has nothing to
+  say (`upper : upper (inferred)` is gone).
+
 ## v0.10.2 — 2026-08-03
 
 **Docs in your language, examples on every std function.**

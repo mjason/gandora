@@ -1,6 +1,6 @@
 [project]
 name = "gandora-tool"
-version = "0.10.2"
+version = "0.10.3"
 description = "gan — the Gandora task runner (mix/cargo role), written in Gandora"
 readme = "README.md"
 license = "MIT"

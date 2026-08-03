@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 8
+revision: 9
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -174,10 +174,11 @@ first: an explicit `--locale` flag; the `docLocale` key of
 `gandora.local.jsonc` (a gitignored, per-developer file next to
 `gandora.jsonc` whose unknown keys are ignored; `gan init` writes the
 gitignore entry); the `GAN_DOC_LOCALE` environment variable (which
-the VS Code setting `gandora.doc.locale` feeds); then the default —
-every language in sections. A specific tag renders that language
-only, parameter docs included, falling back per-item to the default
-text. Hover and signature help honor the preference; `gan lsc doc`
+the VS Code setting `gandora.doc.locale` feeds); then the default
+language alone — translations stay out of the way until asked for.
+A specific tag renders that language only, parameter docs included,
+falling back per-item to the default text; `all` opts into every
+language in sections. Hover and signature help honor the preference; `gan lsc doc`
 stays locale-complete JSON so agents pick for themselves.
 
 The server compiles buffers it is sent and executes nothing.
@@ -209,6 +210,9 @@ and an R014 quick fix carrying the @allow edit.
 
 ## Change History
 
+- Revision 9, 2026-08-03: R015 — the unset default is the default
+  language alone; "all" (every language in sections) became the
+  explicit opt-in.
 - Revision 8, 2026-08-03: R015 — developer-level documentation
   locale (gandora.local.jsonc / GAN_DOC_LOCALE / editor setting),
   localized hover parameters, single-language rendering.
