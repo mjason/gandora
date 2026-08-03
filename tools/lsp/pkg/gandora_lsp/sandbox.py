@@ -129,6 +129,18 @@ def _run_diag(err):
         return [{"severity": "error", "line": 0, "col": 0, "message": err}]
 
 
+def analyze(source: str, root: str) -> list[dict]:
+    """Suggestions only — the teaching half of the verdict, applied to one
+source (used by `gan lsc review` across a whole project).
+
+## Parameters
+
+  - source: The Gandora source text.
+  - root: Project root for symbol resolution.
+"""
+    return _common_mistakes(source) + (_practice_hints(source) + _member_suggestions(source, root))
+
+
 def _mask_literals(source: str) -> str:
     spaces = lambda text: re.sub("\\S", " ", text)
     masked = re.sub("\"\"\"([\\s\\S]*?)\"\"\"", lambda m, *, spaces=spaces: "\"\"\"" + (spaces(m.group(1)) + "\"\"\""), source)

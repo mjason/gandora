@@ -185,6 +185,18 @@ defmodule Sandbox do
     end
   end
 
+  @doc """
+  Suggestions only — the teaching half of the verdict, applied to one
+  source (used by `gan lsc review` across a whole project).
+  """
+  @param source, "The Gandora source text."
+  @param root, "Project root for symbol resolution."
+  @spec analyze(string(), string()) :: list(map())
+  def analyze(source, root) do
+    common_mistakes(source) ++ practice_hints(source) ++
+      member_suggestions(source, root)
+  end
+
   # ---- suggestion engine ---------------------------------------------------
 
   # blank out string/heredoc/sigil/comment content (newlines kept) so

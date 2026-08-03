@@ -119,15 +119,20 @@ pub struct Expander {
     macros: MacroTable,
     next_ctx: u64,
     steps: u64,
+    /// compile-time feedback raised by macros via `compile_warn`
+    /// (GEP-0002 rev 2): the macro-author side of the lint story
+    pub warnings: Vec<crate::diag::Diagnostic>,
 }
 
 impl Expander {
     pub fn new(file: &str, macros: MacroTable) -> Self {
+        // (warnings starts empty; populated during expansion)
         Expander {
             file: file.to_string(),
             macros,
             next_ctx: 1,
             steps: 0,
+            warnings: Vec::new(),
         }
     }
 
@@ -682,6 +687,59 @@ impl Expander {
                     .map(Term::Bool)
                     .ok_or_else(|| self.err(span, format!("cannot compare with {op}")))
             }
+            // -- macro-space string kit (GEP-0002 rev 2) ------------------
+            "downcase" => match self.eval(&call.args[0], env, ctx)? {
+                t => match t.as_plain_str() {
+                    Some(s) => Ok(Term::Str(vec![StrPart::Text(s.to_lowercase())])),
+                    None => Err(self.err(span, "downcase expects a string")),
+                },
+            },
+            "replace" if call.args.len() == 3 => {
+                let s = self.eval(&call.args[0], env, ctx)?;
+                let from = self.eval(&call.args[1], env, ctx)?;
+                let to = self.eval(&call.args[2], env, ctx)?;
+                match (s.as_plain_str(), from.as_plain_str(), to.as_plain_str()) {
+                    (Some(s), Some(f), Some(t)) => {
+                        Ok(Term::Str(vec![StrPart::Text(s.replace(&f, &t))]))
+                    }
+                    _ => Err(self.err(span, "replace expects three strings")),
+                }
+            }
+            "to_atom" => match self.eval(&call.args[0], env, ctx)?.as_plain_str() {
+                Some(s) => Ok(Term::Atom(s)),
+                None => Err(self.err(span, "to_atom expects a string")),
+            },
+            "slug" => match self.eval(&call.args[0], env, ctx)?.as_plain_str() {
+                Some(s) => {
+                    let cleaned: String = s
+                        .to_lowercase()
+                        .chars()
+                        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+                        .collect();
+                    let mut out = String::new();
+                    for part in cleaned.split('_').filter(|p| !p.is_empty()) {
+                        if !out.is_empty() {
+                            out.push('_');
+                        }
+                        out.push_str(part);
+                    }
+                    Ok(Term::Str(vec![StrPart::Text(out)]))
+                }
+                None => Err(self.err(span, "slug expects a string")),
+            },
+            // -- compile-time feedback from macros (GEP-0002 rev 2) --------
+            "compile_warn" => {
+                let msg = self.eval(&call.args[0], env, ctx)?;
+                let text = msg
+                    .as_plain_str()
+                    .unwrap_or_else(|| format!("{msg:?}"));
+                self.warnings.push(crate::diag::Diagnostic::new(
+                    &self.file,
+                    span,
+                    text,
+                ));
+                Ok(Term::Nil)
+            }
             "and" => {
                 let a = self.eval(&call.args[0], env, ctx)?;
                 if is_truthy(&a) {
@@ -838,6 +896,22 @@ impl Expander {
                 } else {
                     false
                 }
+            }
+            // a keyword pair matches {key, value} — do-blocks destructure
+            (Term::Tuple(parts), Term::Pair(k, v)) if parts.len() == 2 => {
+                self.match_pattern(&parts[0], &Term::Atom(k.clone()), env)
+                    && self.match_pattern(&parts[1], v, env)
+            }
+            // a quoted call matches its GEP-0012 encoding:
+            // {name, meta, args} — metaprogramming without ceremony
+            (Term::Tuple(parts), Term::Call(c)) if parts.len() == 3 => {
+                let head: Term = match &c.callee {
+                    Callee::Name(n) => Term::Atom(n.clone()),
+                    _ => return false,
+                };
+                self.match_pattern(&parts[0], &head, env)
+                    && self.match_pattern(&parts[1], &Term::List(Vec::new()), env)
+                    && self.match_pattern(&parts[2], &Term::List(c.args.clone()), env)
             }
             (Term::List(pats), Term::List(vals)) => {
                 // handle a trailing cons pattern [a, b | rest]

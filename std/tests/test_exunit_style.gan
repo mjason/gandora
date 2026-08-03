@@ -1,0 +1,59 @@
+defmodule TestExunitStyle do
+  @moduledoc "ExUnit 对齐表面自测:test/describe/assert/refute/assert_raise/assert_in_delta/flunk。"
+
+  use Test
+
+  test "assert on == names both sides" do
+    assert 2 + 2 == 4
+  end
+
+  test "assert on comparisons" do
+    assert 1 < 2
+    assert 5 >= 5
+    assert "a" != "b"
+  end
+
+  test "assert in" do
+    assert 2 in [1, 2, 3]
+  end
+
+  test "assert truthiness fallback" do
+    assert Enum.member?([1], 1)
+  end
+
+  test "refute" do
+    refute 1 == 2
+    refute 9 in [1, 2]
+    refute false
+  end
+
+  test "assert raise checks the exception type" do
+    msg = Test.assert_raise($builtins.ZeroDivisionError, fn -> 1 / 0 end)
+    assert String.contains?(msg, "division")
+  end
+
+  test "assert in delta" do
+    Test.assert_in_delta(3.14159, 3.14, 0.01)
+  end
+
+  test "failure messages carry both operands" do
+    msg = Test.assert_raises(fn -> assert 1 == 2 end)
+    assert String.contains?(msg, "left:")
+    assert String.contains?(msg, "right:")
+  end
+
+  test "flunk fails on demand" do
+    msg = Test.assert_raises(fn -> Test.flunk("nope") end)
+    assert msg == "nope"
+  end
+
+  describe "arith" do
+    test "adds" do
+      assert 1 + 1 == 2
+    end
+
+    test "multiplies" do
+      assert 3 * 3 == 9
+    end
+  end
+end

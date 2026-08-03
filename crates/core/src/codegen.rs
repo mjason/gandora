@@ -1187,19 +1187,6 @@ impl Codegen {
                     "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
                 )),
             },
-            Term::Var(n, _) => match spec_type_suggestion(n) {
-                Some(fix) => Err(self.err(
-                    Span::default(),
-                    format!("'{n}' is not a type — write {fix} (GEP-0017-R002)"),
-                )),
-                None => Err(self.err(
-                    Span::default(),
-                    format!(
-                        "'{n}' is not a type; did you mean {n}()? built-ins \
-                         look like integer(), string(), list(t) (GEP-0017-R002)"
-                    ),
-                )),
-            },
             Term::Atom(a) => Err(self.err(
                 Span::default(),
                 format!(

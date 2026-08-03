@@ -10,7 +10,7 @@ areas:
   - Macros
 created: 2026-08-01
 updated: 2026-08-01
-revision: 2
+revision: 3
 requires: [1]
 replaces: []
 superseded-by: null
@@ -103,6 +103,22 @@ no `import` re-exports — MUST produce no generated Python file, and a
 build MUST remove a previously generated file for it. Running such a
 module MUST fail with a diagnostic naming the module.
 
+**GEP-0002-R010 (the macro kit, rev 2):** Macro bodies additionally
+have: string builtins `downcase/1`, `replace/3`, `slug/1` (lowercase,
+non-alphanumerics collapsed to `_`), and `to_atom/1` — enough to turn
+`test "reads Well!"` into `def test_reads_well`; **pattern matching
+over quoted code** — a quoted call destructures as its GEP-0012
+encoding `{name, meta, args}` (e.g. `{:"==", _m, [l, r]}`), and a
+keyword pair as `{key, value}` (do-blocks); calling another local
+macro from a macro body evaluates it as a compile-time function with
+evaluated arguments (recursion included, bounded by the step limit).
+
+**GEP-0002-R011 (compile-time feedback):** `compile_warn(message)` in
+a macro body raises a spanned compiler warning at the macro call site,
+through the same channel as GEP-0022 lints — `gan check`, `gan build`,
+editor squiggles, the sandbox. Library macros teach with the same
+voice as the kernel: the extension side of the AI-feedback story.
+
 ## Rationale
 
 Interpreting macro bodies inside the compiler (rather than compiling them
@@ -157,6 +173,9 @@ output stability.
 
 ## Change History
 
+- Revision 3, 2026-08-04: R010 macro kit (string builtins,
+  quoted-code destructuring, macro-as-function calls); R011
+  compile_warn — feedback from library macros.
 - Revision 2, 2026-08-01: Added R009 — macro-only modules produce no
   runtime Python file.
 - Revision 1, 2026-08-01: Initial version.

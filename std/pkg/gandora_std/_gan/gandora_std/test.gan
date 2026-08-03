@@ -100,4 +100,186 @@ defmodule Test do
     end
     nil
   end
+
+  # ---- ExUnit-style surface (GEP-0024 rev 2) -------------------------------
+
+  defmacro __using__() do
+    quote do
+      require Test
+      import Test
+    end
+  end
+
+  # `test "name" do ... end` — defines `test_<slug>` for pytest discovery, the ExUnit spelling.
+  defmacro test(name, body) do
+    fname = to_atom("test_" <> slug(name))
+    quote do
+      def unquote(fname)(), unquote(body)
+    end
+  end
+
+  # `describe "prefix" do ... end` — prefixes every inner `test` name, ExUnit-style grouping.
+  defmacro describe(prefix, body) do
+    {:"do", block} = body
+    stmts = case block do
+      {:__block__, _meta, inner} -> inner
+      single -> [single]
+    end
+    rewritten = prefix_tests(stmts, prefix)
+    quote do
+      unquote_splicing(rewritten)
+    end
+  end
+
+  defmacro prefix_tests(stmts, prefix) do
+    case stmts do
+      [] -> []
+      [{:test, _m, [n, b]} | rest] ->
+        renamed = prefix <> ": " <> n
+        one = quote do
+          test(unquote(renamed), unquote(b))
+        end
+        [one] ++ prefix_tests(rest, prefix)
+      [other | rest] ->
+        [other] ++ prefix_tests(rest, prefix)
+    end
+  end
+
+  # `assert expr` — on comparison expressions the failure names both sides (`assert a == b` reports left and right); anything else is a truthiness assertion.
+  defmacro assert(expr) do
+    case expr do
+      {:"==", _m, [l, r]} -> quote do
+        Test.assert_op("==", unquote(l), unquote(r))
+      end
+      {:"!=", _m, [l, r]} -> quote do
+        Test.assert_op("!=", unquote(l), unquote(r))
+      end
+      {:"<", _m, [l, r]} -> quote do
+        Test.assert_op("<", unquote(l), unquote(r))
+      end
+      {:">", _m, [l, r]} -> quote do
+        Test.assert_op(">", unquote(l), unquote(r))
+      end
+      {:"<=", _m, [l, r]} -> quote do
+        Test.assert_op("<=", unquote(l), unquote(r))
+      end
+      {:">=", _m, [l, r]} -> quote do
+        Test.assert_op(">=", unquote(l), unquote(r))
+      end
+      {:in, _m, [l, r]} -> quote do
+        Test.assert_op("in", unquote(l), unquote(r))
+      end
+      _other -> quote do
+        Test.assert_truthy(unquote(expr))
+      end
+    end
+  end
+
+  @doc "`refute expr` — the assertion that the expression is falsy."
+  defmacro refute(expr) do
+    case expr do
+      {:"==", _m, [l, r]} -> quote do
+        Test.assert_op("!=", unquote(l), unquote(r))
+      end
+      {:in, _m, [l, r]} -> quote do
+        Test.refute_in(unquote(l), unquote(r))
+      end
+      _other -> quote do
+        Test.refute_truthy(unquote(expr))
+      end
+    end
+  end
+
+  # ---- runtime backing for the macros (hidden from docs) -------------------
+
+  @doc false
+  @spec assert_op(string(), term(), term()) :: nil
+  def assert_op(op, l, r) do
+    held = case op do
+      "==" -> l == r
+      "!=" -> l != r
+      "<" -> l < r
+      ">" -> l > r
+      "<=" -> l <= r
+      ">=" -> l >= r
+      "in" -> Enum.member?(r, l)
+      _ -> raise "unknown assert op #{op}"
+    end
+    if not held do
+      raise "Assertion failed: left #{op} right\nleft:  #{inspect(l)}\nright: #{inspect(r)}"
+    end
+    nil
+  end
+
+  @doc false
+  @spec assert_truthy(term()) :: nil
+  def assert_truthy(value) do
+    if not value do
+      raise "Assertion failed: expected truthy, got #{inspect(value)}"
+    end
+    nil
+  end
+
+  @doc false
+  @spec refute_truthy(term()) :: nil
+  def refute_truthy(value) do
+    if value do
+      raise "Refute failed: expected falsy, got #{inspect(value)}"
+    end
+    nil
+  end
+
+  @doc false
+  @spec refute_in(term(), term()) :: nil
+  def refute_in(l, r) do
+    if Enum.member?(r, l) do
+      raise "Refute failed: #{inspect(l)} is in #{inspect(r)}"
+    end
+    nil
+  end
+
+  @doc "Fails unless `f` raises an instance of `type` (ExUnit assert_raise/2)."
+  @param type, "The exception class, e.g. $builtins.ValueError."
+  @param f, "A zero-arity function expected to raise it."
+  @spec assert_raise(term(), fun()) :: string()
+  def assert_raise(type, f) do
+    outcome = try do
+      f.()
+      :no_raise
+    rescue
+      e ->
+        if $builtins.isinstance(e, type) do
+          {:raised, to_string(e)}
+        else
+          {:wrong, $builtins.type(e).__name__}
+        end
+    end
+    case outcome do
+      :no_raise -> raise "expected #{inspect(type)} to be raised, got none"
+      {:wrong, got} -> raise "expected #{inspect(type)}, got #{got}"
+      {:raised, msg} -> msg
+    end
+  end
+
+  @doc "Fails unless `abs(a - b) <= delta` (ExUnit assert_in_delta/3)."
+  @param a, "One value."
+  @param b, "The other value."
+  @param delta, "The allowed absolute difference."
+  @spec assert_in_delta(number(), number(), number()) :: nil
+  @example """
+      gan> Test.assert_in_delta(3.14159, 3.14, 0.01)
+  """
+  def assert_in_delta(a, b, delta) do
+    if $builtins.abs(a - b) > delta do
+      raise "expected #{inspect(a)} and #{inspect(b)} to be within #{inspect(delta)}"
+    end
+    nil
+  end
+
+  @doc "Fails immediately with the given message (ExUnit flunk/1)."
+  @param message, "Why the test fails."
+  @spec flunk(string()) :: nil
+  def flunk(message) do
+    raise message
+  end
 end

@@ -167,14 +167,15 @@ fn expand_source(
     source: &str,
     path: &str,
     root: Option<&str>,
-) -> Result<Term, PyErr> {
+) -> Result<(Term, Vec<Diagnostic>), PyErr> {
     let term = parse_file(path, source).map_err(raise)?;
     let (_, _, mut macros) = context(root);
     for (k, v) in collect_macros(path, &term).map_err(raise)? {
         macros.insert(k, v);
     }
     let mut ex = Expander::new(path, macros);
-    ex.expand_module(&term).map_err(raise)
+    let expanded = ex.expand_module(&term).map_err(raise)?;
+    Ok((expanded, std::mem::take(&mut ex.warnings)))
 }
 
 #[pyfunction]
@@ -192,14 +193,14 @@ fn parse(py: Python, source: &str, path: &str) -> PyResult<PyObject> {
 #[pyfunction]
 #[pyo3(signature = (source, path = "nofile", root = None))]
 fn expand(py: Python, source: &str, path: &str, root: Option<&str>) -> PyResult<PyObject> {
-    let expanded = expand_source(source, path, root)?;
+    let (expanded, _) = expand_source(source, path, root)?;
     Ok(term_to_py(py, &expanded))
 }
 
 #[pyfunction]
 #[pyo3(signature = (source, path = "nofile", root = None))]
 fn compile_string(source: &str, path: &str, root: Option<&str>) -> PyResult<String> {
-    let expanded = expand_source(source, path, root)?;
+    let (expanded, _) = expand_source(source, path, root)?;
     let (project_modules, installed, _) = context(root);
     let mut cg = Codegen::new(path, vec![]);
     cg.project_modules = project_modules;
@@ -451,11 +452,14 @@ fn diagnostics(py: Python, source: &str, path: &str, root: Option<&str>) -> PyRe
                 .unwrap_or((value.to_string(), path.to_string(), 0, 0));
             push(&out, line, col, "error", &message);
         }
-        Ok(expanded) => {
+        Ok((expanded, macro_warnings)) => {
             let (project_modules, installed, _) = context(root);
             let mut cg = Codegen::new(path, vec![]);
             cg.project_modules = project_modules;
             cg.installed_modules = installed;
+            for w in &macro_warnings {
+                push(&out, w.span.line, w.span.col, "warning", &w.message);
+            }
             match cg.compile(&expanded) {
                 Err(d) => push(&out, d.span.line, d.span.col, "error", &d.message),
                 Ok(_) => {

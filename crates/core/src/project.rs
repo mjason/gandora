@@ -424,7 +424,9 @@ pub fn compile_files(
             python,
             compile_time_only: cg.compile_time_only,
             warnings: {
-                let mut warnings = std::mem::take(&mut cg.warnings);
+                // macro feedback first (GEP-0002 rev 2), then codegen lints
+                let mut warnings = std::mem::take(&mut expander.warnings);
+                warnings.append(&mut cg.warnings);
                 let py_path = match &py_prefix {
                     Some(prefix) => format!(
                         "{prefix}/{}.py",

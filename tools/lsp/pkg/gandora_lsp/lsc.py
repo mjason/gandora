@@ -21,7 +21,7 @@ def _gan_truthy(value):
 class GanMatchError(Exception):
     pass
 
-usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n  doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples\n  definition <Mod>[.<fun>]    defining source path/line/col\n  symbols <Mod>               every definition with rendered heads\n  references <Mod>.<fun>      every project call site (+ definitions)\n  wsymbols [<query>]          project-wide symbol search\n  check                       whole-project diagnostics, lints included\n  try <file|-> [--no-run]     sandbox: compile, lint, suggest, execute\n  pydoc <mod.chain>           Python docstring for a $-style reference\n  pycomplete <mod.prefix>     Python member completions\n  pygoto <mod.chain>          Python source location\n  pysig <mod.fun>             Python call signatures\n"
+usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n  doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples\n  definition <Mod>[.<fun>]    defining source path/line/col\n  symbols <Mod>               every definition with rendered heads\n  references <Mod>.<fun>      every project call site (+ definitions)\n  wsymbols [<query>]          project-wide symbol search\n  check                       whole-project diagnostics, lints included\n  review                      check + practice/migration suggestions per file\n  try <file|-> [--no-run]     sandbox: compile, lint, suggest, execute\n  pydoc <mod.chain>           Python docstring for a $-style reference\n  pycomplete <mod.prefix>     Python member completions\n  pygoto <mod.chain>          Python source location\n  pysig <mod.fun>             Python call signatures\n"
 
 
 def main() -> None:
@@ -80,29 +80,41 @@ def _dispatch(args, root):
             return _emit(core.wsymbols("", root))
         case ["check", *_] as _gan_l15 if isinstance(_gan_l15, list):
             return _emit(core.check(root))
-        case ["try"] as _gan_l16 if isinstance(_gan_l16, list):
+        case ["review", *_] as _gan_l16 if isinstance(_gan_l16, list):
+            diags = core.check(root)
+            files = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda s: gandora_std.map.get(s, "path")))
+            def _gan_fn0(path, *, root=root):
+                try:
+                    _gan_tmp17 = _read(path)
+                except Exception as _e:
+                    _gan_tmp17 = ""
+                text = _gan_tmp17
+                return gandora_std.enum.map(gandora_lsp.sandbox.analyze(text, root), lambda s, *, path=path: gandora_std.map.put(s, "path", path))
+            suggestions = gandora_std.enum.flat_map(files, _gan_fn0)
+            return _emit({"diagnostics": diags, "suggestions": suggestions})
+        case ["try"] as _gan_l18 if isinstance(_gan_l18, list):
             return print(gandora_lsp.sandbox.help())
-        case ["try", "--help", *_] as _gan_l17 if isinstance(_gan_l17, list):
+        case ["try", "--help", *_] as _gan_l19 if isinstance(_gan_l19, list):
             return print(gandora_lsp.sandbox.help())
-        case ["try", target, *rest] as _gan_l18 if isinstance(_gan_l18, list):
+        case ["try", target, *rest] as _gan_l20 if isinstance(_gan_l20, list):
             if target == "-":
-                _gan_tmp19 = sys.stdin.read()
+                _gan_tmp21 = sys.stdin.read()
             else:
-                _gan_tmp19 = _read(target)
-            source = _gan_tmp19
+                _gan_tmp21 = _read(target)
+            source = _gan_tmp21
             verdict = gandora_lsp.sandbox.try_source(source, root, not (_gan_truthy(gandora_std.enum.member_p(rest, "--no-run"))))
             _emit(verdict)
             if not (_gan_truthy(gandora_std.map.get(verdict, "ok"))):
                 return sys.exit(1)
             else:
                 return None
-        case ["pydoc", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
+        case ["pydoc", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
             return _emit(gandora_lsp.py_intel.hover_markdown(root, _import_line(chain), chain))
-        case ["pycomplete", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
+        case ["pycomplete", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
             return _emit(gandora_lsp.py_intel.complete(root, _import_line(chain), chain))
-        case ["pygoto", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
+        case ["pygoto", chain, *_] as _gan_l24 if isinstance(_gan_l24, list):
             return _emit(gandora_lsp.py_intel.goto(root, _import_line(chain), chain))
-        case ["pysig", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
+        case ["pysig", chain, *_] as _gan_l25 if isinstance(_gan_l25, list):
             return _emit(gandora_lsp.py_intel.signatures(root, _import_line(chain), chain))
         case _:
             print(usage)
@@ -114,8 +126,8 @@ def _import_line(chain):
 
 
 def _take_root(args):
-    _gan_case24 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case24:
+    _gan_case26 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case26:
         case None:
             return (os.getcwd(), args)
         case i:

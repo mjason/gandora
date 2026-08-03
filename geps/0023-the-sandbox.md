@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-03
 updated: 2026-08-03
-revision: 3
+revision: 4
 requires: [12, 15, 22]
 replaces: []
 superseded-by: null
@@ -91,6 +91,11 @@ content is masked (delimiters preserved) before any textual check —
 prose can never trip a code pattern, and an idiomatic module MUST
 yield `"suggestions": []`. Suggestions are deduplicated by message.
 
+**GEP-0023-R007 (project scope):** `gan lsc review` runs the same
+teaching pass over every project source: whole-project diagnostics
+(as `check`) plus per-file practice/migration/member suggestions —
+the sandbox's judgment, compiler-wide.
+
 **GEP-0023-R006 (ergonomics):** `gan try` is the runner-level
 spelling of the same query (`gan lsc try` is identical); with no
 target (or
@@ -147,6 +152,8 @@ guarantees of R005 (idiomatic module, prose, comments, doc text).
 
 ## Change History
 
+- Revision 4, 2026-08-04: R007 — `gan lsc review`, the verdict at
+  project scope.
 - Revision 3, 2026-08-03: `gan try` as the first-class runner
   spelling.
 - Revision 2, 2026-08-03: R004 expanded for AI-laziness patterns;

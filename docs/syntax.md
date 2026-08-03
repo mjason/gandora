@@ -348,20 +348,31 @@ project's full module resolution and executed by pytest (add it once:
 defmodule TestStats do
   @moduledoc "Edge cases the doctests don't cover."
 
-  import Test
+  use Test
 
-  def test_mean(), do: Test.assert_eq(Stats.mean([1, 2, 3, 4]), 2.5)
-  def test_missing_key_is_nil(), do: Test.assert_nil(Map.get(%{}, "x"))
-  def test_fetch_raises() do
-    _ = Test.assert_raises(fn -> Map.fetch!(%{}, "nope") end)
+  describe "mean" do
+    test "averages evenly" do
+      assert Stats.mean([1, 2, 3, 4]) == 2.5   # failure names left and right
+    end
+  end
+
+  test "membership and negation" do
+    assert 16 in Stats.even_squares(1, 8)
+    refute 9 in Stats.even_squares(1, 8)
+  end
+
+  test "typed raises" do
+    _ = Test.assert_raise($builtins.KeyError, fn -> Map.fetch!(%{}, "no") end)
     nil
   end
 end
 ```
 
-`Test` (std) provides `assert_eq / assert_true / assert_false /
-assert_nil / assert_raises / assert_contains`. `tests/` never ships —
-it lives outside the source roots.
+The ExUnit surface: `test "name" do` (defines `test_<slug>`),
+`describe` (prefixes inner names), `assert`/`refute` (comparisons
+report both operands), plus `Test.assert_eq / assert_nil /
+assert_raise / assert_in_delta / flunk` as plain functions. `tests/`
+never ships — it lives outside the source roots.
 
 ## Python interop
 
@@ -539,6 +550,7 @@ Every language fact is one JSON value on stdout — built for agents:
 
 ```console
 gan lsc check --root .                  # whole-project diagnostics, lints included
+gan lsc review --root .                 # check + per-file practice/migration suggestions
 gan lsc diagnostics src/x.gan --root .  # one file
 gan lsc doc Enum.take --root .          # specs, prose (all locales), params, tco shape
 gan lsc doc for --root .                # language constructs answer too (for/recur/with...)

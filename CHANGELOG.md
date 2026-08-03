@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.13.0 — 2026-08-04
+
+**ExUnit parity, macros that talk back, and the verdict at project scope.**
+
+- **GEP-0024 rev 2 — the ExUnit surface**: `use Test` brings
+  `test "name" do`, `describe "prefix" do` (name prefixing),
+  `assert a == b` (failures report left and right), `refute`, `in`
+  membership, plus typed `assert_raise/2`, `assert_in_delta/3`,
+  `flunk/1`. Macros compile to plain defs — pytest sees ordinary
+  tests. Works from the installed wheel (macros ship as .gan sources).
+- **GEP-0002 rev 3 — the macro kit**: string builtins
+  (`slug/downcase/replace/to_atom`), pattern matching over quoted code
+  (`{:"==", _m, [l, r]}`, do-block pairs), macro-as-function calls
+  with recursion — and **`compile_warn/1`**: library macros raise
+  spanned compiler warnings through the same channel as kernel lints.
+  Extensions now teach with the kernel's voice.
+- **GEP-0023 rev 4 — `gan lsc review`**: the sandbox's teaching pass
+  over every project source (check + per-file practice/migration/
+  member suggestions).
+- **Gauntlet**: 14 hostile-input scenarios (pure Python, JS, Ruby,
+  YAML, SQL, Markdown, truncated blocks, BEAM-isms) — every one
+  degrades to a JSON verdict, never a crash; BDD now 83 scenarios.
+- std tests grew to 145 (ExUnit-style suite included).
+
 ## v0.12.0 — 2026-08-03
 
 **The official test tool — and the first recursive-improvement round.**

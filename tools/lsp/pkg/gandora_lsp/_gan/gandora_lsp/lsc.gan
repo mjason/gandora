@@ -24,6 +24,7 @@ defmodule Lsc do
     references <Mod>.<fun>      every project call site (+ definitions)
     wsymbols [<query>]          project-wide symbol search
     check                       whole-project diagnostics, lints included
+    review                      check + practice/migration suggestions per file
     try <file|-> [--no-run]     sandbox: compile, lint, suggest, execute
     pydoc <mod.chain>           Python docstring for a $-style reference
     pycomplete <mod.prefix>     Python member completions
@@ -90,6 +91,21 @@ defmodule Lsc do
         emit(core.wsymbols("", root))
       ["check" | _] ->
         emit(core.check(root))
+      ["review" | _] ->
+        diags = core.check(root)
+        files = core.wsymbols("", root)
+        |> Enum.map(fn s -> Map.get(s, "path") end)
+        |> Enum.uniq()
+        suggestions = Enum.flat_map(files, fn path ->
+          text = try do
+            read(path)
+          rescue
+            _e -> ""
+          end
+          Sandbox.analyze(text, root)
+          |> Enum.map(fn s -> Map.put(s, "path", path) end)
+        end)
+        emit(%{"diagnostics" => diags, "suggestions" => suggestions})
       ["try"] ->
         IO.puts(Sandbox.help())
       ["try", "--help" | _] ->

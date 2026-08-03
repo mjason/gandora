@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-03
 updated: 2026-08-03
-revision: 1
+revision: 2
 requires: [7, 10, 13]
 replaces: []
 superseded-by: null
@@ -60,9 +60,16 @@ missing pytest is reported with the `uv add --dev pytest` remedy.
 `test_*` public functions are the tests (pytest discovery applies).
 `Test` (gandora-std) provides the assertion family: `assert_eq`,
 `assert_true`, `assert_false`, `assert_nil`, `assert_raises`,
-`assert_contains` — each raises with a message naming expectation and
-reality. Test files follow every language rule (lints, fmt, specs on
-public helpers where meaningful).
+`assert_contains`, `assert_raise/2` (typed), `assert_in_delta/3`,
+`flunk/1` — each raises with a message naming expectation and reality.
+
+**GEP-0024-R004 (the ExUnit surface, rev 2):** `use Test` brings the
+macro spelling: `test "name" do ... end` defines `test_<slug>`;
+`describe "prefix" do ... end` prefixes every inner test's name;
+`assert expr` destructures comparisons so failures name both sides
+(`assert a == b` reports left and right values; `in` asserts
+membership); `refute expr` is its negation. The macros compile to the
+R002 functions — pytest sees ordinary defs.
 
 **GEP-0024-R003:** `tests/` never ships: it is outside the source
 roots, so `gan build` and packaging ignore it; `.gandora/tests` is
@@ -99,11 +106,10 @@ module (`gan lsc doc Test.assert_eq`).
 pytest's discovery, reporting, and ecosystem for one dependency in
 the dev group; a bespoke runner would re-implement all three.
 
-### ExUnit-style `test "name" do` macros
+### A bespoke assertion DSL beyond ExUnit's
 
-A macro DSL adds surface before it adds value; named functions are
-already discoverable, greppable, and lintable. Revisit if demand
-appears.
+ExUnit's surface is the vocabulary Elixir hands know; parity, not
+invention.
 
 ## Conformance
 
@@ -114,4 +120,6 @@ success and failure paths.
 
 ## Change History
 
+- Revision 2, 2026-08-04: R004 — the ExUnit surface (test/describe/
+  assert/refute macros) on the GEP-0002 rev 2 macro kit.
 - Revision 1, 2026-08-03: Initial version.
