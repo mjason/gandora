@@ -1,7 +1,7 @@
 ---
 gep: 23
 title: The Sandbox
-description: 一个验证生成代码的查询——编译、lint检查、模糊建议、带超时执行——以便代理通过尝试来学习该语言。
+description: 一个查询，用于验证生成的代码——编译、检查、模糊建议、带超时执行——以便代理通过尝试来学习语言。
 author: MJ
 status: Accepted
 type: Standards Track
@@ -9,78 +9,83 @@ areas:
   - Tooling
 created: 2026-08-03
 updated: 2026-08-03
-revision: 2
+revision: 3
 requires: [12, 15, 22]
 replaces: []
 superseded-by: null
 resolution: null
 language: zh-CN
 source: ../../0023-the-sandbox.md
-source-revision: 2
+source-revision: 3
 translation-status: Current
 ---
 
 > 本文件是非规范性翻译，仅供评审参考；规范性文本为英文原文 [0023-the-sandbox.md](../../0023-the-sandbox.md)。
 
-# GEP-0023：沙箱
+# GEP-0023: 沙盒
 
 ## 摘要
 
-`gan lsc try <file|-> [--no-run]` 以一个 JSON 值的形式回答了 AI 智能体在生成 Gandora 代码后提出的问题：*这是正确的吗？如果不是，我可能实际想表达什么？* 该管道会执行编译、lint、将模块成员与实际符号进行拼写对照检查，标记常见的跨语言习惯，然后在临时目录下以硬超时方式运行——捕获标准输出，对于裸语句片段，还捕获最后一个表达式的值。错误的名称会从编辑距离搜索中获得 Rails 风格的 *你是说？* 建议。整个过程不会触及项目本身。
+`gan lsc try <file|-> [--no-run]` 以一个 JSON 值回答 AI 智能体在生成 Gandora 代码后提出的问题：*这段代码是否正确？如果不正确，我可能原本想表达什么？* 该流水线依次执行编译、lint 检查、对模块成员与真实符号进行拼写检查、标记常见的跨语言习惯，然后在临时目录中在硬超时限制下运行——并捕获标准输出，同时对于裸语句片段，还会捕获最后一个表达式的值。错误的名称会通过编辑距离搜索得到 Rails 风格的 *did-you-mean* 建议。整个过程不会触及项目本身。
 
 ## 动机
 
-一门新语言对 AI 智能体最大的采纳风险在于反馈循环：一个看似合理但错误的拼写（如 `Enum.mpa`、`return`、Python 的 `def f():`）需要经过完整的编辑-构建-运行循环才能发现，而运行时 `AttributeError` 只指出了症状，而非修复方法。一次快速查询能够给出判决 *并* 提供教导，将每一次错误都变成一堂课。
+一门新语言对 AI 代理最大的采纳风险在于反馈循环：一个看似合理但错误的拼写（`Enum.mpa`、`return`、Python 的 `def f()`）需要完整的编辑-构建-运行往返才能发现，代价高昂；而运行时的 `AttributeError` 只指出症状，而非修复方法。一个快速查询，既能判定*又能教导*，可将每个错误都变成一次学习。
 
 ## 范围
 
-`gan lsc` 中的只读验证查询。持久化沙箱、超过挂钟超时的资源配额以及网络隔离不在范围内：沙箱运行开发者自己的代码，使用项目自己的解释器，就像 `gan run` 那样。
+一个在 `gan lsc` 中的只读验证查询。持久沙箱、超出挂钟超时的资源配额以及网络隔离不在范围内：沙箱使用项目自身的解释器运行开发者自己的代码，就像 `gan run` 一样。
 
 ## 规范
 
-**GEP-0023-R001：** `gan lsc try <file|->`（使用 `-` 表示标准输入）接受一个完整模块或裸语句，并输出一个 JSON 对象：`ok`（布尔值）、`stage`（`compile` | `lint` | `run` | `ok`）、`diagnostics`（编译器错误和 GEP-0022 的 lint 检查结果，带有跨度信息）、`suggestions`（参见 R002/R003）、`python`（生成的代码——零运行时承诺被变得可检查）、`stdout` 和 `value`（代码片段最后一个表达式的 `repr` 表示）。`--no-run` 标志在诊断之后停止执行。执行发生在项目解释器下的一个临时目录中，并带有硬超时限制；模块的 `main/0` 恰好运行一次。
+**GEP-0023-R001:** `gan lsc try <file|->`（使用 `-` 表示标准输入）接受一个完整模块或裸语句，并输出一个 JSON 对象：`ok`（布尔值）、`stage`（`compile` | `lint` | `run` | `ok`）、`diagnostics`（编译器错误和 GEP-0022 的 lint 检查结果，带跨度信息）、`suggestions`（见 R002/R003）、`python`（生成的代码——零运行时承诺变得可检查）、`stdout` 和 `value`（代码片段最后一个表达式的 `repr` 值）。`--no-run` 在执行诊断后停止。执行过程在项目的解释器环境下，使用一个临时目录并设置硬超时；模块的 `main/0` 恰好运行一次。
 
-**GEP-0023-R002（“你是不是想找”类建议）：** 拼写错误会从实际候选词中获得编辑距离建议：`Mod.fun(...)` 调用会对照模块的实际符号进行检查（`Enum.mpa` → `Enum.map`），未定义变量 lint 会对照片段自身的标识符进行检查（`valeu` → `value`），编译错误位置会对照关键字列表进行检查（`defmodul` → `defmodule`）。建议携带 `"kind": "did_you_mean"`。
+**GEP-0023-R002（是否指提示）：** 拼写错误会从*真实*候选列表中获得编辑距离建议：`Mod.fun(...)` 调用会对照模块的实际符号进行检查（如 `Enum.mpa` → `Enum.map`），未定义变量的 lint 会对照代码片段自身的标识符进行检查（如 `valeu` → `value`），编译错误位置会对照关键字列表进行检查（如 `defmodul` → `defmodule`）。建议携带 `"kind": "did_you_mean"`。
 
-**GEP-0023-R003（迁移提示）：** 常见的跨语言习惯会被文本方式识别，并给出 Gandora 的拼写提示——`return`、`while`、`elif`、Python 的 `def ...():`、`lambda`、`None`/`True`/`False`、`import`/`from ... import`、`self.`、`&&`/`||`、增量赋值、f-string、`switch`、`== nil` 以及已废弃的 `$"a.b"`。建议携带 `"kind": "migration"`；它们是建议性的，且从不阻止最终判定。
+**GEP-0023-R003（迁移提示）：** 常见的跨语言习惯会被文本识别，并以 Gandora 的拼写方式给出回答——例如 `return`、`while`、`elif`、Python 的 `def ...():`、`lambda`、`None`/`True`/`False`、`import`/`from ... import`、`self.`、`&&`/`||`、增强赋值、f-字符串、`switch`、`== nil` 以及已废弃的 `$"a.b"`。建议携带 `"kind": "migration"`；它们仅供参考，不会阻止裁决。
 
-**GEP-0023-R004（实践提示）：** AI 很少拼写错误——它只会偷懒。文档化的规范会以 `"kind": "practice"` 的建议形式呈现，在编译器保持沉默的地方给出提示：一个汇总的注释覆盖报告（`@spec`/`@doc`/`@moduledoc`，以及缺少 `@example` 的提示）、`@spec` 参数位置中具体的 `list()`/`map()`（“参数中抽象，返回值中具体”）、想要改为 `for` 的 map+filter 管道、想要改为 `&f/1` 的 `fn x -> f(x) end`、想要改为 `Enum.empty?` 的 `count == 0`、想要指定具体异常类型的裸 `rescue`，以及想要使用 `pyimport` 的重复 `$module`（GEP-0003 修订版 6）。
+**GEP-0023-R004（实践提示）：** 人工智能很少拼写错误——它只是偷懒。在编译器保持沉默的地方，文档化的标准会以 `"kind": "practice"` 建议的形式呈现：一份综合的注解覆盖率报告（`@spec`/`@doc`/`@moduledoc`，外加缺少 `@example` 的说明）、在 `@spec` 参数位置使用具体的 `list()`/`map()`（“抽象输入，具体输出”）、希望使用 `for` 的 map+filter 管道、希望使用 `&f/1` 的 `fn x -> f(x) end`、希望使用 `Enum.empty?` 的 `count == 0`、希望指定具体异常类型的裸 `rescue`，以及希望使用 `pyimport` 的重复 `$module`（GEP-0003 修订版 6）。
 
-**GEP-0023-R005（信任）：** 字符串、heredoc、标记和注释内容会被屏蔽（保留分隔符），然后才进行任何文本检查——散文永远无法触发代码模式，且一个符合惯用风格的模块 MUST 产生 `"suggestions": []`。建议会按消息去重。
+**GEP-0023-R005（信任机制）：** 字符串、heredoc、sigil 和注释内容在进行任何文本检查之前会被屏蔽（保留定界符）——正常文本绝不会触发代码模式，一个符合习惯的模块 MUST 产生 `"suggestions": []`。建议按消息内容去重。
 
-**GEP-0023-R006（人体工程学）：** `gan lsc try` 不带目标（或带 `--help`）时会打印技能指南——用法、JSON 契约、建议种类以及代理循环。退出码在 `ok` 时为 0，否则为 1，因此判定结果可以在脚本中串联。
+**GEP-0023-R006（人机工程学）：** `gan try` 是同一查询在运行器层面的拼写方式（与 `gan lsc try` 相同）；无目标（或使用 `--help`）时输出技能指南——用法、JSON 契约、建议种类以及代理循环。退出码在 `ok` 时为 0，否则为 1，以便在脚本中形成裁决链。
 
-## 理由
+## Rationale
 
-将沙箱构建到 `lsc` 中保持了一个统一的 AI 界面：使用 `lsc` 进行检查、阅读文档和查找引用的智能体，也通过它来进行学习和验证。文本错误模式被刻意保持简单——它们的存在是为了教授惯用法，而非解析 Python——而对真实符号表进行编辑距离搜索，才使得建议可信而非幻觉。
+将沙箱构建到 `lsc` 中可保持一个统一的 AI 面：使用 `lsc` 进行检查、阅读文档和查找引用的智能体，也通过它进行学习和验证。文本错误模式有意保持简单——它们的存在是为了教授惯用法，而非解析 Python——而对真实符号表进行编辑距离搜索，正是让建议可信而非幻觉的关键所在。
 
 ## 向后兼容性
 
 增量式。
 
-## 安全性与确定性
+## Security and Determinism
 
-沙箱使用项目解释器执行用户提供的代码——与 `gan run`/`gan test` 相同的信任边界。超时限制的是挂钟时间，而非能力；判定输出是确定性的，但执行程序自身的行为除外。
+The sandbox executes user-supplied code with the project interpreter —
+the same trust boundary as `gan run`/`gan test`. The timeout bounds
+wall clock, not capability; verdict output is deterministic apart from
+the executed program's own behavior.
 
 ## 工具与 AI 使用
 
-代理（Agents）SHOULD 在将生成的代码写入项目之前通过 `gan lsc try` 路由代码，将 `did_you_mean` 建议视为要应用的修正，并在不需要执行时使用 `--no-run`。循环：生成 → `try` → 应用建议 → `try` → 写入。
+Agents SHOULD 先将生成的代码通过 `gan lsc try` 路由，再写入项目，将 `did_you_mean` 建议视为要应用的修正，并在不需要执行时使用 `--no-run`。  
+循环：生成 → `try` → 应用建议 → `try` → 写入。
 
-## 被拒绝的备选方案
+## 已拒绝的替代方案
 
-### 长期运行的沙盒服务器
+### 长期存在的沙箱服务器
 
-状态会积累并与项目产生偏差；每次查询使用全新的临时目录可保持裁决的可重现性，且实现代码仅约 300 行。
+状态会累积并偏离项目；每次查询使用全新的临时目录，可保持裁决可重现，且实现仅约300行。
 
-### 编译器端的“您是不是要找”
+### 编译器端的“你是否要找”
 
-编译器保持小巧且确定；模糊搜索应属于工具，其中候选对象（符号、标识符）已被索引。
+编译器保持小巧和确定性；模糊搜索属于工具链，在那里候选（符号、标识符）已被索引。
 
-## 合规性
+## 一致性
 
-一个 BDD 场景套件（Given source / When tried / Then verdict）MUST 覆盖：干净运行（stdout、值、单个 `main/0`）、运行崩溃和超时、`--no-run`；每个“您是否指的是”类别；每个迁移模式；每个实践提示；lint 通过；以及 R005 的静默保证（惯用模块、散文、注释、文档文本）。
+BDD 场景套件（给定源 / 当尝试 / 然后判定）MUST 涵盖：干净运行（stdout、值、单个 `main/0`）、运行崩溃与超时、`--no-run`；每一个“您是不是要找”类；每一个迁移模式；每一个实践提示；lint 传递；以及 R005 的静默保证（惯用模块、散文、注释、文档文本）。
 
 ## 变更历史
 
-- 修订版 2，2026-08-03：R004 扩展了针对 AI 懒惰模式的模式；R005 文字掩码与静默保证；R006 技能风格帮助与退出码；BDD 一致性。
+- 修订版 3，2026-08-03：`gan try` 作为第一类运行器的拼写。
+- 修订版 2，2026-08-03：R004 扩展了 AI 懒惰模式；R005 字面掩码 + 静默保证；R006 技能风格帮助和退出码；BDD 一致性。
 - 修订版 1，2026-08-03：初始版本。
