@@ -9,7 +9,7 @@ areas:
   - Language
 created: 2026-08-03
 updated: 2026-08-03
-revision: 1
+revision: 2
 requires: [1, 14]
 replaces: []
 superseded-by: null
@@ -54,7 +54,7 @@ Direct self-recursion only. Mutual recursion stays call-stack-bound
 **GEP-0019-R001:** A call is in tail position when it is the final
 expression of a clause body, of a branch of `if`/`unless`/`case`/
 `cond` in tail position, or of a block in tail position. Expressions
-inside `try`, `loop`, anonymous functions, and argument positions are
+inside `try`, anonymous functions, and argument positions are
 never tail positions.
 
 **GEP-0019-R002:** When any clause of a definition group contains a
@@ -74,15 +74,14 @@ rebinding.
 default-parameter delegates alike, and composes with `@spec`
 annotations (GEP-0017) unchanged.
 
-**GEP-0019-R005:** `recur(args)` in a function body outside any
-`loop` is the **explicit** spelling of the same jump: it rebinds the
+**GEP-0019-R005:** `recur(args)` in a function body is the
+**explicit** spelling of the same jump: it rebinds the
 enclosing function's parameters and restarts it. It MUST be in tail
 position and its arity MUST match a clause of the group — both are
 compile errors otherwise, which is the guarantee the implicit form
 cannot give (a refactor that moves a call out of tail position simply
 loses the optimization silently; a moved `recur` breaks the build).
-Inside `loop`, `recur` keeps its GEP-0014 meaning (nearest binding
-wins). Division of labor: natural Elixir tail recursion is optimized
+Division of labor: natural Elixir tail recursion is optimized
 implicitly for portability; `recur` is the spelling that *asserts*
 constant stack.
 
@@ -107,8 +106,8 @@ None beyond GEP-0001-R024; output remains deterministic.
 
 Agents SHOULD write natural tail recursion for unbounded iteration,
 use function-level `recur` when constant stack is a requirement worth
-asserting, and reserve `loop` for state machines where naming the
-state pattern aids the reader.
+asserting, and reach for `for` (GEP-0020) or Enum when the iteration
+is a mapping rather than a state machine.
 
 ## Rejected Alternatives
 
@@ -134,4 +133,7 @@ results before and after optimization for a reference function.
 
 ## Change History
 
+- Revision 2, 2026-08-03: `loop` retired (GEP-0014-R007) — removed it
+  from R001's exclusion list, R005's scoping language, and the
+  tooling advice; iteration guidance now points at `for`/Enum.
 - Revision 1, 2026-08-03: Initial version.

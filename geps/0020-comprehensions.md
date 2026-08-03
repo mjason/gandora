@@ -33,7 +33,7 @@ compiles to the Python comprehension
 patterns, bare expressions between clauses are filters, and
 `into: %{}` produces a dict comprehension. With GEP-0019 recursion
 and Enum, this completes the iteration story that lets `loop` retire
-(GEP-0014 revision 2).
+(GEP-0014 revision 3).
 
 ## Motivation
 

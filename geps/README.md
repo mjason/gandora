@@ -31,5 +31,5 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0016](0016-the-formatter.md) | The Formatter | Standards Track | Accepted | 1 | [zh](local/zh/0016-the-formatter.md) |
 | [0017](0017-typespecs.md) | Typespecs and the Typed Boundary | Standards Track | Accepted | 3 | [zh](local/zh/0017-typespecs.md) |
 | [0018](0018-parameter-documentation.md) | Parameter Documentation | Standards Track | Accepted | 1 | [zh](local/zh/0018-parameter-documentation.md) |
-| [0019](0019-tail-call-optimization.md) | Self-Recursion Tail-Call Optimization | Standards Track | Accepted | 1 | [zh](local/zh/0019-tail-call-optimization.md) |
+| [0019](0019-tail-call-optimization.md) | Self-Recursion Tail-Call Optimization | Standards Track | Accepted | 2 | [zh](local/zh/0019-tail-call-optimization.md) |
 | [0020](0020-comprehensions.md) | Comprehensions | Standards Track | Accepted | 1 | [zh](local/zh/0020-comprehensions.md) |
