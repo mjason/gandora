@@ -284,6 +284,8 @@ struct FnDef {
 pub struct Codegen {
     file: String,
     typevars: BTreeSet<String>,
+    /// active TCO context: (name, arities, simple param names) (GEP-0019)
+    tail_ctx: Option<(String, BTreeSet<usize>, Option<Vec<String>>)>,
     module_segs: Vec<String>,
     py_imports: BTreeSet<String>,
     gan_imports: BTreeSet<String>,
@@ -333,6 +335,7 @@ impl Codegen {
             struct_fields: None,
             warnings: Vec::new(),
             typevars: BTreeSet::new(),
+            tail_ctx: None,
             compile_time_only: false,
             loop_stack: Vec::new(),
             tmp_counter: 0,
@@ -1187,6 +1190,12 @@ impl Codegen {
                 Some((hints, ret_hint))
             }
         };
+        let arity_set: BTreeSet<usize> = arities.iter().copied().collect();
+        let tail = f
+            .clauses
+            .iter()
+            .any(|(_, _, b)| self.has_tail_self(b, &f.name, &arity_set));
+        let saved_tail = self.tail_ctx.take();
         let simple = f.clauses.len() == 1
             && f.clauses[0].1.is_none()
             && f.clauses[0]
@@ -1223,7 +1232,16 @@ impl Codegen {
                     compiled.replace("\"\"\"", "\\\"\\\"\\\"")
                 ));
             }
-            self.emit_stmt_block(body, Dest::Return, &mut body_lines)?;
+            if tail {
+                self.tail_ctx =
+                    Some((f.name.clone(), arity_set.clone(), Some(names.clone())));
+                let mut core = Vec::new();
+                self.emit_stmt_block(body, Dest::Return, &mut core)?;
+                body_lines.push("while True:".to_string());
+                push_indented(&mut body_lines, &core);
+            } else {
+                self.emit_stmt_block(body, Dest::Return, &mut body_lines)?;
+            }
             push_indented(&mut lines, &body_lines);
         } else {
             match &spec_info {
@@ -1239,7 +1257,14 @@ impl Codegen {
                     compiled.replace("\"\"\"", "\\\"\\\"\\\"")
                 ));
             }
-            body_lines.push("match _gan_args:".to_string());
+            if tail {
+                self.tail_ctx = Some((f.name.clone(), arity_set.clone(), None));
+            }
+            let mut core: Vec<String> = Vec::new();
+            core.push("match _gan_args:".to_string());
+            let body_lines_saved = std::mem::take(&mut body_lines);
+            body_lines = core;
+            let docstring_prefix = body_lines_saved;
             for (params, guard, body) in &f.clauses {
                 let mut pat_guards = Vec::new();
                 let pats: Vec<String> = params
@@ -1281,8 +1306,16 @@ impl Codegen {
             body_lines.push(format!(
                 "raise GanMatchError(\"no clause of {n}/{arity_label} matched \" + repr(_gan_args))"
             ));
-            push_indented(&mut lines, &body_lines);
+            let mut assembled = docstring_prefix;
+            if tail {
+                assembled.push("while True:".to_string());
+                push_indented(&mut assembled, &body_lines);
+            } else {
+                assembled.extend(body_lines);
+            }
+            push_indented(&mut lines, &assembled);
         }
+        self.tail_ctx = saved_tail;
         Ok(format!("\n{}\n", lines.join("\n")))
     }
 
@@ -1415,12 +1448,61 @@ impl Codegen {
                         "try" => return self.emit_try(call, dest, out),
                         "loop" => return self.emit_loop(call, dest, out),
                         "recur" | "break" => {
+                            if name == "recur" && self.loop_stack.is_empty() {
+                                if let Some((_, arities, params)) = self.tail_ctx.clone() {
+                                    if !matches!(dest, Dest::Return) {
+                                        return Err(self.err(
+                                            call.span,
+                                            "recur must be in tail position (GEP-0019-R005)",
+                                        ));
+                                    }
+                                    if !arities.contains(&call.args.len()) {
+                                        return Err(self.err(
+                                            call.span,
+                                            format!(
+                                                "recur/{} matches no clause of this \
+                                                 function (GEP-0019-R005)",
+                                                call.args.len()
+                                            ),
+                                        ));
+                                    }
+                                    let mut pre = Vec::new();
+                                    let args: Vec<String> = call
+                                        .args
+                                        .iter()
+                                        .map(|a| self.emit_expr(a, &mut pre))
+                                        .collect::<Result<_>>()?;
+                                    out.extend(pre);
+                                    match &params {
+                                        Some(ps)
+                                            if ps.len() == args.len() && !ps.is_empty() =>
+                                        {
+                                            out.push(format!(
+                                                "{} = {}",
+                                                ps.join(", "),
+                                                args.join(", ")
+                                            ));
+                                        }
+                                        Some(_) => {}
+                                        None => {
+                                            let trailing =
+                                                if args.len() == 1 { "," } else { "" };
+                                            out.push(format!(
+                                                "_gan_args = ({}{trailing})",
+                                                args.join(", ")
+                                            ));
+                                        }
+                                    }
+                                    out.push("continue".into());
+                                    return Ok(());
+                                }
+                            }
                             let Some((state, result)) = self.loop_stack.last().cloned() else {
                                 return Err(self.err(
                                     call.span,
                                     format!(
-                                        "{name} is only valid inside a loop body \
-                                         (GEP-0014-R005)"
+                                        "{name} is only valid inside a loop body or, for \
+                                         recur, a function tail (GEP-0014-R005, GEP-0019)"
                                     ),
                                 ));
                             };
@@ -1453,6 +1535,41 @@ impl Codegen {
                             return Ok(());
                         }
                         _ => {}
+                    }
+                }
+                // tail self-call: rebind parameters and continue (GEP-0019-R002)
+                if matches!(dest, Dest::Return) {
+                    if let Some((tname, arities, params)) = self.tail_ctx.clone() {
+                        if let Callee::Name(n) = &call.callee {
+                            if *n == tname && arities.contains(&call.args.len()) {
+                                let mut pre = Vec::new();
+                                let args: Vec<String> = call
+                                    .args
+                                    .iter()
+                                    .map(|a| self.emit_expr(a, &mut pre))
+                                    .collect::<Result<_>>()?;
+                                out.extend(pre);
+                                match &params {
+                                    Some(ps) if ps.len() == args.len() && !ps.is_empty() => {
+                                        out.push(format!(
+                                            "{} = {}",
+                                            ps.join(", "),
+                                            args.join(", ")
+                                        ));
+                                    }
+                                    Some(_) => {}
+                                    None => {
+                                        let trailing = if args.len() == 1 { "," } else { "" };
+                                        out.push(format!(
+                                            "_gan_args = ({}{trailing})",
+                                            args.join(", ")
+                                        ));
+                                    }
+                                }
+                                out.push("continue".into());
+                                return Ok(());
+                            }
+                        }
                     }
                 }
                 let mut pre = Vec::new();
@@ -1549,6 +1666,36 @@ impl Codegen {
             push_indented(out, &else_lines);
         }
         Ok(())
+    }
+
+    /// GEP-0019-R001: does this body end in a tail call to `name`?
+    fn has_tail_self(&self, term: &Term, name: &str, arities: &BTreeSet<usize>) -> bool {
+        let stmts = term.as_block();
+        let Some(last) = stmts.last() else { return false };
+        let Term::Call(c) = last else { return false };
+        match &c.callee {
+            Callee::Name(n) if n == name && arities.contains(&c.args.len()) => true,
+            Callee::Name(n) if n == "recur" => true,
+            Callee::Name(n) => match n.as_str() {
+                "if" | "unless" | "with" => ["do", "else"].iter().any(|k| {
+                    Term::keyword_arg(&c.args, k)
+                        .is_some_and(|b| self.has_tail_self(b, name, arities))
+                }),
+                "case" | "cond" => Term::keyword_arg(&c.args, "do")
+                    .and_then(|b| self.clause_list(b, c.span).ok())
+                    .is_some_and(|cls| {
+                        cls.iter().any(|cl| match cl {
+                            Term::Call(cc) => cc
+                                .args
+                                .last()
+                                .is_some_and(|b| self.has_tail_self(b, name, arities)),
+                            _ => false,
+                        })
+                    }),
+                _ => false,
+            },
+            _ => false,
+        }
     }
 
     fn clause_list<'t>(&self, block: &'t Term, span: Span) -> Result<Vec<&'t Term>> {
@@ -1733,6 +1880,13 @@ impl Codegen {
 
     /// try/rescue/after (GEP-0014-R001..R003).
     fn emit_try(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
+        let saved_tail = self.tail_ctx.take();
+        let r = self.emit_try_inner(call, dest, out);
+        self.tail_ctx = saved_tail;
+        return r;
+    }
+
+    fn emit_try_inner(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
         let body = Term::keyword_arg(&call.args, "do")
             .ok_or_else(|| self.err(call.span, "try requires a do block"))?
             .clone();
@@ -1813,6 +1967,13 @@ impl Codegen {
 
     /// loop/recur/break (GEP-0014-R004..R006).
     fn emit_loop(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
+        let saved_tail = self.tail_ctx.take();
+        let r = self.emit_loop_inner(call, dest, out);
+        self.tail_ctx = saved_tail;
+        return r;
+    }
+
+    fn emit_loop_inner(&mut self, call: &Call, dest: Dest, out: &mut Vec<String>) -> Result<()> {
         let head = call
             .args
             .first()
@@ -3323,6 +3484,56 @@ mod tests {
     }
 
     #[test]
+    fn tail_self_calls_compile_to_loops() {
+        // GEP-0019-R002: dispatcher form
+        let py = compile(
+            "defmodule M do\n  def sum_to(0, acc), do: acc\n  def sum_to(n, acc), do: sum_to(n - 1, acc + n)\nend",
+        );
+        assert!(py.contains("while True:"), "{py}");
+        assert!(py.contains("_gan_args = (n - 1, acc + n)"), "{py}");
+        assert!(py.contains("continue"), "{py}");
+        // simple form under an if branch
+        let py2 = compile(
+            "defmodule M do\n  def go(n) do\n    if n <= 0 do\n      :done\n    else\n      go(n - 1)\n    end\n  end\nend",
+        );
+        assert!(py2.contains("n = n - 1"), "{py2}");
+        assert!(py2.contains("continue"), "{py2}");
+    }
+
+    #[test]
+    fn function_level_recur_is_checked_and_compiled() {
+        // GEP-0019-R005
+        let py = compile(
+            "defmodule M do\n  def go(n, acc) do\n    if n == 0 do\n      acc\n    else\n      recur(n - 1, acc + n)\n    end\n  end\nend",
+        );
+        assert!(py.contains("while True:"), "{py}");
+        assert!(py.contains("n, acc = n - 1, acc + n"), "{py}");
+        let err = compile_err(
+            "defmodule M do\n  def go(n) do\n    if n == 0 do\n      :done\n    else\n      recur(n - 1, n)\n    end\n  end\nend",
+        );
+        assert!(err.contains("GEP-0019-R005"), "{err}");
+    }
+
+    #[test]
+    fn non_tail_recursion_is_untouched() {
+        // GEP-0019-R003
+        let py = compile(
+            "defmodule M do\n  def fact(0), do: 1\n  def fact(n), do: n * fact(n - 1)\nend",
+        );
+        assert!(!py.contains("while True:"), "{py}");
+        assert!(py.contains("return n * fact(n - 1)"), "{py}");
+    }
+
+    #[test]
+    fn tail_calls_inside_try_are_not_optimized() {
+        // GEP-0019-R001: try is never a tail position
+        let py = compile(
+            "defmodule M do\n  def f(n) do\n    try do\n      f(n - 1)\n    rescue\n      _e -> :stop\n    end\n  end\nend",
+        );
+        assert!(!py.contains("continue"), "{py}");
+    }
+
+    #[test]
     fn type_variables_compile_to_typevars() {
         // GEP-0017-R005
         let py = compile(
@@ -4108,8 +4319,10 @@ mod gep0011_tests {
         assert!(py.contains("case (name, greeting, mark,):"), "{py}");
         assert!(py.contains("case (name, greeting,):"), "{py}");
         assert!(py.contains("case (name,):"), "{py}");
-        assert!(py.contains("return greet(name, greeting, \"!\")"), "{py}");
-        assert!(py.contains("return greet(name, \"hello\", \"!\")"), "{py}");
+        // delegate clauses are themselves tail self-calls, so GEP-0019
+        // turns them into rebind-and-continue
+        assert!(py.contains("_gan_args = (name, greeting, \"!\")"), "{py}");
+        assert!(py.contains("_gan_args = (name, \"hello\", \"!\")"), "{py}");
     }
 
     #[test]
@@ -4211,9 +4424,16 @@ mod gep0014_tests {
     }
 
     #[test]
-    fn recur_outside_loop_is_an_error() {
-        let err = compile_err("defmodule M do\n  def f(), do: recur(1)\nend");
+    fn recur_outside_loop_or_function_tail_is_an_error() {
+        // since GEP-0019-R005, a function-tail recur is legal (arity-checked);
+        // inside try the jump would change rescue semantics, so it stays out
+        let err = compile_err(
+            "defmodule M do\n  def f(x) do\n    try do\n      recur(x)\n    rescue\n      _e -> :x\n    end\n  end\nend",
+        );
         assert!(err.contains("GEP-0014-R005"), "{err}");
+        // wrong arity on a function-tail recur
+        let err2 = compile_err("defmodule M do\n  def f(), do: recur(1)\nend");
+        assert!(err2.contains("GEP-0019-R005"), "{err2}");
     }
 
     #[test]

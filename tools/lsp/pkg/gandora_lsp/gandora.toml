@@ -1,5 +1,5 @@
 schema = 1
-compiler = "0.7.1"
+compiler = "0.8.0"
 
 [[modules]]
 name = "Lsc"

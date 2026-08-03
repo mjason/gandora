@@ -1,6 +1,6 @@
 [project]
 name = "gandora-core"
-version = "0.7.1"
+version = "0.8.0"
 description = "The Gandora compiler as a Python extension module (GEP-0012)"
 readme = "README.md"
 license = "MIT"

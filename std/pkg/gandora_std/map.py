@@ -28,12 +28,14 @@ def get(*_gan_args) -> _T_v | _T_d:
     >>> get({"a": 1}, "b", 0)
     0
 """
-    match _gan_args:
-        case (m, key, default,):
-            return m.get(key, default)
-        case (m, key,):
-            return get(m, key, None)
-    raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
+    while True:
+        match _gan_args:
+            case (m, key, default,):
+                return m.get(key, default)
+            case (m, key,):
+                _gan_args = (m, key, None)
+                continue
+        raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
 
 
 def put(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:

@@ -369,16 +369,18 @@ def _struct_kind(t):
 
 
 def _pop_to_opener(s):
-    _gan_case26 = s
-    match _gan_case26:
-        case [] as _gan_l27 if isinstance(_gan_l27, list):
-            return []
-        case [{"kind": "clause"}, *rest] as _gan_l28 if isinstance(_gan_l28, list):
-            return _pop_to_opener(rest)
-        case [_, *rest] as _gan_l29 if isinstance(_gan_l29, list):
-            return rest
-        case _:
-            raise GanMatchError("no case clause matched: " + repr(_gan_case26))
+    while True:
+        _gan_case26 = s
+        match _gan_case26:
+            case [] as _gan_l27 if isinstance(_gan_l27, list):
+                return []
+            case [{"kind": "clause"}, *rest] as _gan_l28 if isinstance(_gan_l28, list):
+                s = rest
+                continue
+            case [_, *rest] as _gan_l29 if isinstance(_gan_l29, list):
+                return rest
+            case _:
+                raise GanMatchError("no case clause matched: " + repr(_gan_case26))
 
 
 def _render_tokens(lt, lines):

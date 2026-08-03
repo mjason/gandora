@@ -117,6 +117,54 @@ defmodule PyIntel do
     end
   end
 
+  # the inferred type of `var` inside compiled function `fn_names` (first
+  # match wins) of the generated Python source (GEP-0015-R011)
+  def infer_type(source_py, fn_names, var) do
+    try do
+      lines = source_py.split("\n")
+      start = Enum.find_index(lines, fn l ->
+        Enum.any?(fn_names, fn n -> l.startswith("def " <> n <> "(") end)
+      end)
+      if is_nil(start) do
+        nil
+      else
+        var_re = jedi and ~r/\b/ and nil
+        find_and_infer(source_py, lines, start, var)
+      end
+    rescue
+      _e -> nil
+    end
+  end
+
+  defp find_and_infer(source_py, lines, start, var) do
+    pattern = $re.compile("\\b" <> $re.escape(var) <> "\\b")
+    total = Enum.count(lines)
+    hit = loop i = start do
+      cond do
+        i >= total -> break(nil)
+        i > start and Enum.at(lines, i).startswith("def ") -> break(nil)
+        true ->
+          m = pattern.search(Enum.at(lines, i))
+          if is_nil(m) do
+            recur(i + 1)
+          else
+            {s, _e} = m.span()
+            break({i + 1, s})
+          end
+      end
+    end
+    if is_nil(hit) do
+      nil
+    else
+      {line1, col} = hit
+      names = $builtins.list(jedi.Script(source_py).infer(line1, col))
+      case names do
+        [] -> nil
+        [n | _] -> n.name
+      end
+    end
+  end
+
   defp to_first_line(text) do
     line = text.strip().split("\n") |> Enum.at(0)
     if is_nil(line) do

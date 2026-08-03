@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.7.1",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.8.0",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -167,9 +167,52 @@ defmodule Main do
         true ->
           target = target_of(doc.source, token)
           info = lookup_doc(target)
-          render_hover(target, info)
+          h = render_hover(target, info)
+          if is_nil(h) and String.match?(token, ~r/^[a-z_]/) do
+            var_hover(doc, token, params.position.line)
+          else
+            h
+          end
       end
     end
+  end
+
+  # local-variable hover: infer from the compiled Python (GEP-0015-R011)
+  defp var_hover(doc, token, cursor_line) do
+    mod = module_of(doc.source)
+    compiled = try do
+      core.compile_string(doc.source, String.replace(doc.uri, "file://", ""), root_path())
+    rescue
+      _e -> nil
+    end
+    if is_nil(compiled) or is_nil(mod) do
+      nil
+    else
+      syms = try do
+        core.symbols(mod, root_path())
+      rescue
+        _e -> []
+      end
+      holder = syms
+      |> Enum.filter(fn s -> Map.get(s, "line") <= cursor_line + 1 end)
+      |> Enum.at(-1)
+      if is_nil(holder) do
+        nil
+      else
+        base = py_name(Map.get(holder, "name"))
+        py_var = py_name(token)
+        t = PyIntel.infer_type(compiled, [base, "_" <> base], py_var)
+        if is_nil(t) do
+          nil
+        else
+          markdown_hover("`#{token}`: `#{t}` *(inferred)*")
+        end
+      end
+    end
+  end
+
+  defp py_name(name) do
+    name.replace("?", "_p").replace("!", "_bang")
   end
 
   defp root_path() do

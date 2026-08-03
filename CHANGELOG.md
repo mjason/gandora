@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.0 — 2026-08-03
+
+**Tail-call optimization (GEP-0019).** Tail-position self-calls
+compile to parameter rebinding in a loop — Elixir's natural recursive
+style (`def sum_to(n, acc), do: sum_to(n - 1, acc + n)`) runs in
+constant stack; a million frames pass in the test suite. Non-tail
+recursion is untouched. `recur(args)` in a function body is the
+explicit, compiler-checked spelling: tail position and arity are
+verified at compile time. Default-parameter delegates now rebind
+instead of calling.
+
+**Local-variable type inference in the LSP (GEP-0015).** Hovering a
+variable with no doc entity infers its type from the compiled Python
+of the very buffer (jedi over `compile_string` output):
+`log`: `list`, `result`: `str` — marked *(inferred)*.
+
 ## v0.7.1 — 2026-08-03
 
 - **`$(a.b)` replaces `$"a.b"`** (GEP-0003 rev 4): the explicit module
