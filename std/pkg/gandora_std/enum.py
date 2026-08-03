@@ -59,6 +59,9 @@ def reject(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
 
   - xs: The source list.
   - f: Drops the elements it returns truthy for.
+
+    >>> reject([1, 2, 3, 4], lambda x: _gan_rem(x, 2) == 0)
+    [1, 3]
 """
     return ([x for x in (xs) if not (f)(x)])
 
@@ -84,6 +87,9 @@ def sum(xs: list) -> int | float:
 ## Parameters
 
   - xs: The numbers to add.
+
+    >>> sum([1, 2, 3])
+    6
 """
     return builtins.sum(xs)
 
@@ -94,6 +100,9 @@ def count(xs: list) -> int:
 ## Parameters
 
   - xs: The list to measure.
+
+    >>> count([10, 20, 30])
+    3
 """
     return builtins.len(xs)
 
@@ -104,6 +113,9 @@ def sort(xs: list) -> list:
 ## Parameters
 
   - xs: The list to order ascending.
+
+    >>> sort([3, 1, 2])
+    [1, 2, 3]
 """
     return builtins.sorted(xs)
 
@@ -128,6 +140,9 @@ def reverse(xs: list[_T_a]) -> list[_T_a]:
 ## Parameters
 
   - xs: The list to reverse.
+
+    >>> reverse([1, 2, 3])
+    [3, 2, 1]
 """
     return (list(reversed((xs))))
 
@@ -153,6 +168,9 @@ def at(xs: list[_T_a], index: int) -> _T_a | None:
 
   - xs: The list to index.
   - index: Zero-based; negative counts from the end.
+
+    >>> at([10, 20, 30], 1)
+    20
 """
     if (index < builtins.len(xs)) and (index >= -(builtins.len(xs))):
         return ((xs)[(index)])
@@ -167,6 +185,9 @@ def take(xs: list[_T_a], n: int) -> list[_T_a]:
 
   - xs: The source list.
   - n: How many leading elements to keep.
+
+    >>> take([1, 2, 3], 2)
+    [1, 2]
 """
     return ((xs)[:(n)])
 
@@ -178,6 +199,9 @@ def drop(xs: list[_T_a], n: int) -> list[_T_a]:
 
   - xs: The source list.
   - n: How many leading elements to skip.
+
+    >>> drop([1, 2, 3], 2)
+    [3]
 """
     return ((xs)[(n):])
 
@@ -189,6 +213,9 @@ def zip(xs: list[_T_a], ys: list[_T_b]) -> list[tuple[_T_a, _T_b]]:
 
   - xs: The first list.
   - ys: The second list.
+
+    >>> zip([1, 2], ["a", "b"])
+    [(1, 'a'), (2, 'b')]
 """
     return builtins.list(builtins.zip(xs, ys))
 
@@ -213,6 +240,9 @@ def member_p(xs: list[_T_a], x: _T_a) -> bool:
 
   - xs: The list to search.
   - x: The value to look for.
+
+    >>> member_p([1, 2, 3], 2)
+    True
 """
     return ((x) in (xs))
 
@@ -224,6 +254,9 @@ def all_p(xs: list[_T_a], f: collections.abc.Callable) -> bool:
 
   - xs: The list to test.
   - f: The predicate every element must satisfy.
+
+    >>> all_p([1, 2, 3], lambda x: x > 0)
+    True
 """
     return (all((f)(x) for x in (xs)))
 
@@ -235,6 +268,9 @@ def any_p(xs: list[_T_a], f: collections.abc.Callable) -> bool:
 
   - xs: The list to test.
   - f: The predicate at least one element must satisfy.
+
+    >>> any_p([1, 2, 3], lambda x: x > 2)
+    True
 """
     return (any((f)(x) for x in (xs)))
 
@@ -245,6 +281,9 @@ def empty_p(xs: list) -> bool:
 ## Parameters
 
   - xs: The list to test.
+
+    >>> empty_p([])
+    True
 """
     return builtins.len(xs) == 0
 
@@ -255,6 +294,9 @@ def uniq(xs: list[_T_a]) -> list[_T_a]:
 ## Parameters
 
   - xs: The list to deduplicate, keeping first occurrences.
+
+    >>> uniq([1, 2, 1, 3, 2])
+    [1, 2, 3]
 """
     return (list(dict.fromkeys((xs))))
 
@@ -280,6 +322,11 @@ def each(xs: list[_T_a], f: collections.abc.Callable) -> str:
 
   - xs: The list to walk.
   - f: Called on each element for its side effect.
+
+    >>> each(["a", "b"], lambda x: print(x))
+    a
+    b
+    'ok'
 """
     ([(f)(x) for x in (xs)])
     return "ok"
@@ -291,6 +338,9 @@ def min(xs: list) -> object:
 ## Parameters
 
   - xs: The non-empty list.
+
+    >>> min([3, 1, 2])
+    1
 """
     return builtins.min(xs)
 
@@ -301,6 +351,9 @@ def max(xs: list) -> object:
 ## Parameters
 
   - xs: The non-empty list.
+
+    >>> max([3, 1, 2])
+    3
 """
     return builtins.max(xs)
 
@@ -326,6 +379,9 @@ def find_index(xs: list, f: collections.abc.Callable) -> int | None:
 
   - xs: The list to search.
   - f: The predicate; the index of the first match is returned.
+
+    >>> find_index(["a", "b", "c"], lambda x: x == "b")
+    1
 """
     return (next((i for i, x in enumerate((xs)) if (f)(x)), None))
 
@@ -364,6 +420,9 @@ def max_by(xs: list[_T_a], f: collections.abc.Callable) -> _T_a:
 
   - xs: The non-empty list.
   - f: Maps an element to its comparison key.
+
+    >>> max_by(["a", "bbb", "cc"], lambda s: gandora_std.string.length(s))
+    'bbb'
 """
     return builtins.max(xs, key=f)
 
@@ -375,6 +434,9 @@ def min_by(xs: list[_T_a], f: collections.abc.Callable) -> _T_a:
 
   - xs: The non-empty list.
   - f: Maps an element to its comparison key.
+
+    >>> min_by(["a", "bbb", "cc"], lambda s: gandora_std.string.length(s))
+    'a'
 """
     return builtins.min(xs, key=f)
 
@@ -385,6 +447,9 @@ def product(xs: list) -> int | float:
 ## Parameters
 
   - xs: The numbers to multiply.
+
+    >>> product([2, 3, 4])
+    24
 """
     return math.prod(xs)
 
@@ -396,6 +461,9 @@ def take_while(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
 
   - xs: The source list.
   - f: Elements are taken while it returns truthy.
+
+    >>> take_while([1, 2, 0, 3], lambda x: x > 0)
+    [1, 2]
 """
     return builtins.list(itertools.takewhile(f, xs))
 
@@ -407,6 +475,9 @@ def drop_while(xs: list[_T_a], f: collections.abc.Callable) -> list[_T_a]:
 
   - xs: The source list.
   - f: Elements are dropped while it returns truthy.
+
+    >>> drop_while([1, 2, 0, 3], lambda x: x > 0)
+    [0, 3]
 """
     return builtins.list(itertools.dropwhile(f, xs))
 
@@ -431,6 +502,9 @@ def concat(xss: list[list[_T_a]]) -> list[_T_a]:
 ## Parameters
 
   - xss: A list of lists to flatten one level.
+
+    >>> concat([[1, 2], [3], []])
+    [1, 2, 3]
 """
     return ([y for x in (xss) for y in x])
 
@@ -457,6 +531,9 @@ def slice(xs: list[_T_a], start: int, count: int) -> list[_T_a]:
   - xs: The source list.
   - start: Zero-based start position.
   - count: Maximum number of elements.
+
+    >>> slice([1, 2, 3, 4], 1, 2)
+    [2, 3]
 """
     return ((xs)[(start):] [:(count)])
 

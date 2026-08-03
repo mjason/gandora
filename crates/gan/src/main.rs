@@ -87,7 +87,8 @@ const INIT_CONFIG: &str = r#"{
 }
 "#;
 
-const INIT_GITIGNORE: &str = "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n";
+const INIT_GITIGNORE: &str =
+    "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\ngandora.local.jsonc\n";
 
 fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
     if args.iter().any(|a| a == "--package") {
@@ -548,6 +549,15 @@ fn cmd_doc(args: &[String]) -> Result<(), Diagnostic> {
     let Some(target) = target else {
         return Err(usage_err("doc requires a Module or Module.function target"));
     };
+    // developer preference when no --locale: project-local file first,
+    // then the environment (GEP-0015-R015)
+    if locale.is_none() {
+        locale = config_for_cwd()
+            .ok()
+            .and_then(|c| project::local_pref(&c.root, "docLocale"))
+            .or_else(|| std::env::var("GAN_DOC_LOCALE").ok())
+            .filter(|l| !l.is_empty() && l != "all");
+    }
     // `App.Mod.fun` -> module App.Mod + function fun; `App.Mod` -> module doc
     let segs: Vec<&str> = target.split('.').collect();
     let (module_name, fun) = match segs.last() {

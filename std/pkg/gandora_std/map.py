@@ -60,6 +60,9 @@ def delete(m: dict[_T_k, _T_v], key: _T_k) -> dict[_T_k, _T_v]:
 
   - m: The map.
   - key: The key to remove.
+
+    >>> delete({"a": 1, "b": 2}, "a")
+    {'b': 2}
 """
     return ({k: v for k, v in (m).items() if k != (key)})
 
@@ -70,6 +73,9 @@ def keys(m: dict[_T_k, _T_v]) -> list[_T_k]:
 ## Parameters
 
   - m: The map.
+
+    >>> keys({"a": 1, "b": 2})
+    ['a', 'b']
 """
     return builtins.list(m.keys())
 
@@ -80,6 +86,9 @@ def values(m: dict[_T_k, _T_v]) -> list[_T_v]:
 ## Parameters
 
   - m: The map.
+
+    >>> values({"a": 1, "b": 2})
+    [1, 2]
 """
     return builtins.list(m.values())
 
@@ -91,6 +100,9 @@ def merge(m1: dict[_T_k, _T_v], m2: dict[_T_k, _T_v]) -> dict[_T_k, _T_v]:
 
   - m1: The base map.
   - m2: Its entries win on conflicts.
+
+    >>> merge({"a": 1}, {"b": 2})
+    {'a': 1, 'b': 2}
 """
     return ({**(m1), **(m2)})
 
@@ -102,6 +114,9 @@ def has_key_p(m: dict[_T_k, _T_v], key: _T_k) -> bool:
 
   - m: The map.
   - key: The key to test.
+
+    >>> has_key_p({"a": 1}, "a")
+    True
 """
     return ((key) in (m))
 
@@ -112,13 +127,25 @@ def to_list(m: dict[_T_k, _T_v]) -> list[tuple[_T_k, _T_v]]:
 ## Parameters
 
   - m: The map.
+
+    >>> to_list({"a": 1, "b": 2})
+    [('a', 1), ('b', 2)]
 """
     return builtins.list(m.items())
 
 
-def new() -> dict:
-    """An empty map."""
-    return {}
+def new(*_gan_args) -> dict:
+    """An empty map.
+
+    >>> new([("a", 1), ("b", 2)])
+    {'a': 1, 'b': 2}
+"""
+    match _gan_args:
+        case ():
+            return {}
+        case (pairs,):
+            return builtins.dict(pairs)
+    raise GanMatchError("no clause of new/0,1 matched " + repr(_gan_args))
 
 
 def update(m: dict[_T_k, _T_v], key: _T_k, default: _T_v, f: collections.abc.Callable) -> dict[_T_k, _T_v]:
@@ -147,6 +174,9 @@ def fetch_bang(m: dict[_T_k, _T_v], key: _T_k) -> _T_v:
 
   - m: The map.
   - key: The key that must exist.
+
+    >>> fetch_bang({"a": 1}, "a")
+    1
 """
     return ((m)[(key)])
 
@@ -159,6 +189,9 @@ def put_new(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
   - m: The map.
   - key: The key to set only if absent.
   - value: The value to store.
+
+    >>> put_new({"a": 1}, "a", 9)
+    {'a': 1}
 """
     if _gan_truthy(has_key_p(m, key)):
         return m
@@ -173,6 +206,9 @@ def take(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
 
   - m: The map.
   - keys: The keys to keep.
+
+    >>> take({"a": 1, "b": 2}, ["a"])
+    {'a': 1}
 """
     return ({k: v for k, v in (m).items() if k in (keys)})
 
@@ -184,6 +220,9 @@ def drop(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
 
   - m: The map.
   - keys: The keys to remove.
+
+    >>> drop({"a": 1, "b": 2}, ["a"])
+    {'b': 2}
 """
     return ({k: v for k, v in (m).items() if k not in (keys)})
 

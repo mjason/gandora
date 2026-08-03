@@ -24,6 +24,10 @@ defmodule Keyword do
   @param value, "The value to store."
   @param_trans value, zh_CN: "要存储的值。"
   @spec put(keyword(), atom(), any()) :: keyword()
+  @example """
+      gan> Keyword.put([a: 1], :b, 2)
+      [('b', 2), ('a', 1)]
+  """
   def put(kw, key, value) do
     [{key, value}] ++ Enum.reject(kw, fn {k, _} -> k == key end)
   end
@@ -33,6 +37,10 @@ defmodule Keyword do
   @param kw, "The keyword list."
   @param_trans kw, zh_CN: "关键字列表。"
   @spec keys(keyword()) :: list(atom())
+  @example """
+      gan> Keyword.keys([a: 1, b: 2])
+      ['a', 'b']
+  """
   def keys(kw), do: Enum.map(kw, fn {k, _} -> k end)
 
   @doc "The values, in order."
@@ -40,6 +48,10 @@ defmodule Keyword do
   @param kw, "The keyword list."
   @param_trans kw, zh_CN: "关键字列表。"
   @spec values(keyword()) :: list()
+  @example """
+      gan> Keyword.values([a: 1, b: 2])
+      [1, 2]
+  """
   def values(kw), do: Enum.map(kw, fn {_, v} -> v end)
 
   @doc "Whether `key` is present."
@@ -49,6 +61,10 @@ defmodule Keyword do
   @param key, "The key to test."
   @param_trans key, zh_CN: "要检测的键。"
   @spec has_key?(keyword(), atom()) :: boolean()
+  @example """
+      gan> Keyword.has_key?([a: 1], :a)
+      True
+  """
   def has_key?(kw, key), do: Enum.any?(kw, fn {k, _} -> k == key end)
   @doc "Removes every entry for `key`."
   @doc_trans zh_CN: "移除键为 `key` 的全部条目。"
@@ -57,6 +73,10 @@ defmodule Keyword do
   @param key, "Every entry with this key is removed."
   @param_trans key, zh_CN: "删除所有该键的条目。"
   @spec delete(keyword(), atom()) :: keyword()
+  @example """
+      gan> Keyword.delete([a: 1, b: 2], :a)
+      [('b', 2)]
+  """
   def delete(kw, key), do: Enum.reject(kw, fn {k, _} -> k == key end)
 
   @doc "Merges `kw2` into `kw1`; `kw2` wins, its entries appended."

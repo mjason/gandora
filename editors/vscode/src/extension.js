@@ -145,10 +145,16 @@ async function startClient(output) {
     return null;
   }
   output.appendLine("[gandora] preflight ok, starting `" + cmd + " lsp`");
+  // an explicit setting feeds the env; gandora.local.jsonc still wins
+  // (GEP-0015-R015: closer scope, closer heart)
+  const locale = vscode.workspace.getConfiguration("gandora").get("doc.locale");
+  const env = locale
+    ? { ...process.env, GAN_DOC_LOCALE: locale }
+    : { ...process.env };
   const c = new LanguageClient(
     "gandora",
     "Gandora Language Server",
-    { command: cmd, args: ["lsp"], options: { cwd } },
+    { command: cmd, args: ["lsp"], options: { cwd, env } },
     {
       documentSelector: [{ scheme: "file", language: "gandora" }],
       outputChannel: output,
@@ -166,6 +172,15 @@ async function activate(context) {
   const provider = new PreviewProvider();
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(PREVIEW_SCHEME, provider)
+  );
+
+  // locale changes need a server restart to take effect
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration("gandora.doc.locale")) {
+        await vscode.commands.executeCommand("gandora.restartServer");
+      }
+    })
   );
 
   // keep previews in sync with saves

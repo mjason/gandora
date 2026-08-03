@@ -39,6 +39,10 @@ defmodule Map do
   @param key, "The key to remove."
   @param_trans key, zh_CN: "要删除的键。"
   @spec delete(map(k, v), k) :: map(k, v)
+  @example """
+      gan> Map.delete(%{"a" => 1, "b" => 2}, "a")
+      {'b': 2}
+  """
   def delete(m, key), do: ~python({k: v for k, v in <%= m %>.items() if k != <%= key %>})
 
   @doc "The keys as a list."
@@ -46,6 +50,10 @@ defmodule Map do
   @param m, "The map."
   @param_trans m, zh_CN: "映射。"
   @spec keys(map(k, v)) :: list(k)
+  @example """
+      gan> Map.keys(%{"a" => 1, "b" => 2})
+      ['a', 'b']
+  """
   def keys(m), do: $builtins.list(m.keys())
 
   @doc "The values as a list."
@@ -53,6 +61,10 @@ defmodule Map do
   @param m, "The map."
   @param_trans m, zh_CN: "映射。"
   @spec values(map(k, v)) :: list(v)
+  @example """
+      gan> Map.values(%{"a" => 1, "b" => 2})
+      [1, 2]
+  """
   def values(m), do: $builtins.list(m.values())
 
   @doc "Merges `m2` into `m1`; `m2` wins on conflicts."
@@ -62,6 +74,10 @@ defmodule Map do
   @param m2, "Its entries win on conflicts."
   @param_trans m2, zh_CN: "冲突时以其条目为准。"
   @spec merge(map(k, v), map(k, v)) :: map(k, v)
+  @example """
+      gan> Map.merge(%{"a" => 1}, %{"b" => 2})
+      {'a': 1, 'b': 2}
+  """
   def merge(m1, m2), do: ~python({**<%= m1 %>, **<%= m2 %>})
 
   @doc "Whether `key` is present."
@@ -71,6 +87,10 @@ defmodule Map do
   @param key, "The key to test."
   @param_trans key, zh_CN: "要检测的键。"
   @spec has_key?(map(k, v), k) :: boolean()
+  @example """
+      gan> Map.has_key?(%{"a" => 1}, "a")
+      True
+  """
   def has_key?(m, key), do: ~python(<%= key %> in <%= m %>)
 
   @doc "The entries as a list of `{key, value}` tuples."
@@ -78,12 +98,21 @@ defmodule Map do
   @param m, "The map."
   @param_trans m, zh_CN: "映射。"
   @spec to_list(map(k, v)) :: list(tuple(k, v))
+  @example """
+      gan> Map.to_list(%{"a" => 1, "b" => 2})
+      [('a', 1), ('b', 2)]
+  """
   def to_list(m), do: $builtins.list(m.items())
 
   @doc "An empty map."
   @doc_trans zh_CN: "空映射。"
   @spec new() :: map()
+  @example """
+      gan> Map.new([{"a", 1}, {"b", 2}])
+      {'a': 1, 'b': 2}
+  """
   def new(), do: %{}
+  def new(pairs), do: $builtins.dict(pairs)
 
   @doc "Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4)."
   @doc_trans zh_CN: "以 `f` 更新 `key`；键不存在时使用 `default`（Elixir 的 Map.update/4）。"
@@ -114,6 +143,10 @@ defmodule Map do
   @param key, "The key that must exist."
   @param_trans key, zh_CN: "必须存在的键。"
   @spec fetch!(map(k, v), k) :: v
+  @example """
+      gan> Map.fetch!(%{"a" => 1}, "a")
+      1
+  """
   def fetch!(m, key), do: ~python(<%= m %>[<%= key %>])
 
   @doc "Sets `key` only when absent."
@@ -125,6 +158,10 @@ defmodule Map do
   @param value, "The value to store."
   @param_trans value, zh_CN: "要存储的值。"
   @spec put_new(map(k, v), k, v) :: map(k, v)
+  @example """
+      gan> Map.put_new(%{"a" => 1}, "a", 9)
+      {'a': 1}
+  """
   def put_new(m, key, value) do
     if has_key?(m, key) do
       m
@@ -140,6 +177,10 @@ defmodule Map do
   @param keys, "The keys to keep."
   @param_trans keys, zh_CN: "要保留的键。"
   @spec take(map(k, v), list(k)) :: map(k, v)
+  @example """
+      gan> Map.take(%{"a" => 1, "b" => 2}, ["a"])
+      {'a': 1}
+  """
   def take(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k in <%= keys %>})
 
   @doc "The map without `keys`."
@@ -149,6 +190,10 @@ defmodule Map do
   @param keys, "The keys to remove."
   @param_trans keys, zh_CN: "要移除的键。"
   @spec drop(map(k, v), list(k)) :: map(k, v)
+  @example """
+      gan> Map.drop(%{"a" => 1, "b" => 2}, ["a"])
+      {'b': 2}
+  """
   def drop(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k not in <%= keys %>})
 
   @doc "Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy."

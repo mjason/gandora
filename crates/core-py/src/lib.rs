@@ -344,6 +344,14 @@ fn definition(py: Python, target: &str, root: Option<&str>) -> PyResult<PyObject
     }
 }
 
+/// A developer-local preference from `gandora.local.jsonc`
+/// (GEP-0015-R015), or None.
+#[pyfunction]
+#[pyo3(signature = (root, key))]
+fn local_pref(root: &str, key: &str) -> Option<String> {
+    compiler::project::local_pref(std::path::Path::new(root), key)
+}
+
 /// Every reference to `Module.fun` across the project (GEP-0015-R012):
 /// [{"path","line","col","is_def"}] in source order.
 #[pyfunction]
@@ -523,6 +531,7 @@ fn gandora_core(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(symbols, m)?)?;
     m.add_function(wrap_pyfunction!(references, m)?)?;
     m.add_function(wrap_pyfunction!(wsymbols, m)?)?;
+    m.add_function(wrap_pyfunction!(local_pref, m)?)?;
     m.add_function(wrap_pyfunction!(compile_snippet, m)?)?;
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
     m.add_function(wrap_pyfunction!(build, m)?)?;

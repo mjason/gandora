@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 7
+revision: 8
 requires: [12, 13, 14]
 replaces: []
 superseded-by: null
@@ -168,6 +168,18 @@ quick-fix code actions on their diagnostics: inserting
 definition (GEP-0019-R007, GEP-0022-R005), and the `_` prefix for an
 unused binding (GEP-0022-R002).
 
+**GEP-0015-R015:** Documentation language is a **developer**
+preference, never project configuration. Resolution, closest scope
+first: an explicit `--locale` flag; the `docLocale` key of
+`gandora.local.jsonc` (a gitignored, per-developer file next to
+`gandora.jsonc` whose unknown keys are ignored; `gan init` writes the
+gitignore entry); the `GAN_DOC_LOCALE` environment variable (which
+the VS Code setting `gandora.doc.locale` feeds); then the default —
+every language in sections. A specific tag renders that language
+only, parameter docs included, falling back per-item to the default
+text. Hover and signature help honor the preference; `gan lsc doc`
+stays locale-complete JSON so agents pick for themselves.
+
 The server compiles buffers it is sent and executes nothing.
 
 ## Tooling and AI Usage
@@ -197,6 +209,9 @@ and an R014 quick fix carrying the @allow edit.
 
 ## Change History
 
+- Revision 8, 2026-08-03: R015 — developer-level documentation
+  locale (gandora.local.jsonc / GAN_DOC_LOCALE / editor setting),
+  localized hover parameters, single-language rendering.
 - Revision 7, 2026-08-03: R012 references + rename, R013 workspace
   symbols + `lsc check`, R014 lint quick fixes.
 - Revision 6, 2026-08-02: lsc mirrors the full capability set (R001A

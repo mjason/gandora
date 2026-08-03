@@ -29,6 +29,9 @@ def put(kw: list[tuple[str, object]], key: str, value: object) -> list[tuple[str
   - kw: The keyword list.
   - key: The key to set.
   - value: The value to store.
+
+    >>> put([("a", 1)], "b", 2)
+    [('b', 2), ('a', 1)]
 """
     def _gan_fn0(*_gan_args, key=key):
         match _gan_args:
@@ -44,6 +47,9 @@ def keys(kw: list[tuple[str, object]]) -> list[str]:
 ## Parameters
 
   - kw: The keyword list.
+
+    >>> keys([("a", 1), ("b", 2)])
+    ['a', 'b']
 """
     def _gan_fn1(*_gan_args):
         match _gan_args:
@@ -59,6 +65,9 @@ def values(kw: list[tuple[str, object]]) -> list:
 ## Parameters
 
   - kw: The keyword list.
+
+    >>> values([("a", 1), ("b", 2)])
+    [1, 2]
 """
     def _gan_fn2(*_gan_args):
         match _gan_args:
@@ -75,6 +84,9 @@ def has_key_p(kw: list[tuple[str, object]], key: str) -> bool:
 
   - kw: The keyword list.
   - key: The key to test.
+
+    >>> has_key_p([("a", 1)], "a")
+    True
 """
     def _gan_fn3(*_gan_args, key=key):
         match _gan_args:
@@ -91,6 +103,9 @@ def delete(kw: list[tuple[str, object]], key: str) -> list[tuple[str, object]]:
 
   - kw: The keyword list.
   - key: Every entry with this key is removed.
+
+    >>> delete([("a", 1), ("b", 2)], "a")
+    [('b', 2)]
 """
     def _gan_fn4(*_gan_args, key=key):
         match _gan_args:

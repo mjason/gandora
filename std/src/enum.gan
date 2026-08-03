@@ -35,6 +35,10 @@ defmodule Enum do
   @param f, "Drops the elements it returns truthy for."
   @param_trans f, zh_CN: "丢弃使其返回真值的元素。"
   @spec reject(list(a), fun()) :: list(a)
+  @example """
+      gan> Enum.reject([1, 2, 3, 4], fn x -> rem(x, 2) == 0 end)
+      [1, 3]
+  """
   def reject(xs, f), do: ~python([x for x in <%= xs %> if not <%= f %>(x)])
 
   @doc "Folds left with Elixir argument order: `f` receives (element, acc)."
@@ -59,6 +63,10 @@ defmodule Enum do
   @param xs, "The numbers to add."
   @param_trans xs, zh_CN: "要求和的数字。"
   @spec sum(list()) :: number()
+  @example """
+      gan> Enum.sum([1, 2, 3])
+      6
+  """
   def sum(xs), do: $builtins.sum(xs)
 
   @doc "Number of elements."
@@ -66,6 +74,10 @@ defmodule Enum do
   @param xs, "The list to measure."
   @param_trans xs, zh_CN: "要计数的列表。"
   @spec count(list()) :: integer()
+  @example """
+      gan> Enum.count([10, 20, 30])
+      3
+  """
   def count(xs), do: $builtins.len(xs)
 
   @doc "Ascending sort."
@@ -73,6 +85,10 @@ defmodule Enum do
   @param xs, "The list to order ascending."
   @param_trans xs, zh_CN: "要升序排序的列表。"
   @spec sort(list()) :: list()
+  @example """
+      gan> Enum.sort([3, 1, 2])
+      [1, 2, 3]
+  """
   def sort(xs), do: $builtins.sorted(xs)
 
   @doc "Sorts by the key computed by `f` (Python `key=`, not a comparator)."
@@ -93,6 +109,10 @@ defmodule Enum do
   @param xs, "The list to reverse."
   @param_trans xs, zh_CN: "要反转的列表。"
   @spec reverse(list(a)) :: list(a)
+  @example """
+      gan> Enum.reverse([1, 2, 3])
+      [3, 2, 1]
+  """
   def reverse(xs), do: ~python(list(reversed(<%= xs %>)))
 
   @doc "Joins elements (converted by `to_string`) with `sep`."
@@ -115,6 +135,10 @@ defmodule Enum do
   @param index, "Zero-based; negative counts from the end."
   @param_trans index, zh_CN: "从 0 开始；负数自末尾计。"
   @spec at(list(a), integer()) :: a | nil
+  @example """
+      gan> Enum.at([10, 20, 30], 1)
+      20
+  """
   def at(xs, index) do
     if index < $builtins.len(xs) and index >= -$builtins.len(xs) do
       ~python(<%= xs %>[<%= index %>])
@@ -130,6 +154,10 @@ defmodule Enum do
   @param n, "How many leading elements to keep."
   @param_trans n, zh_CN: "保留的前缀长度。"
   @spec take(list(a), integer()) :: list(a)
+  @example """
+      gan> Enum.take([1, 2, 3], 2)
+      [1, 2]
+  """
   def take(xs, n), do: ~python(<%= xs %>[:<%= n %>])
 
   @doc "The elements after the first `n`."
@@ -139,6 +167,10 @@ defmodule Enum do
   @param n, "How many leading elements to skip."
   @param_trans n, zh_CN: "跳过的前缀长度。"
   @spec drop(list(a), integer()) :: list(a)
+  @example """
+      gan> Enum.drop([1, 2, 3], 2)
+      [3]
+  """
   def drop(xs, n), do: ~python(<%= xs %>[<%= n %>:])
 
   @doc "Pairs up two lists into `{a, b}` tuples, stopping at the shorter."
@@ -148,6 +180,10 @@ defmodule Enum do
   @param ys, "The second list."
   @param_trans ys, zh_CN: "第二个列表。"
   @spec zip(list(a), list(b)) :: list(tuple(a, b))
+  @example """
+      gan> Enum.zip([1, 2], ["a", "b"])
+      [(1, 'a'), (2, 'b')]
+  """
   def zip(xs, ys), do: $builtins.list($builtins.zip(xs, ys))
 
   @doc "Each element paired with its index: `{element, index}`."
@@ -168,6 +204,10 @@ defmodule Enum do
   @param x, "The value to look for."
   @param_trans x, zh_CN: "要查找的值。"
   @spec member?(list(a), a) :: boolean()
+  @example """
+      gan> Enum.member?([1, 2, 3], 2)
+      True
+  """
   def member?(xs, x), do: ~python(<%= x %> in <%= xs %>)
 
   @doc "Whether `f` is truthy for every element."
@@ -177,6 +217,10 @@ defmodule Enum do
   @param f, "The predicate every element must satisfy."
   @param_trans f, zh_CN: "每个元素都需满足的谓词。"
   @spec all?(list(a), fun()) :: boolean()
+  @example """
+      gan> Enum.all?([1, 2, 3], fn x -> x > 0 end)
+      True
+  """
   def all?(xs, f), do: ~python(all(<%= f %>(x) for x in <%= xs %>))
 
   @doc "Whether `f` is truthy for any element."
@@ -186,6 +230,10 @@ defmodule Enum do
   @param f, "The predicate at least one element must satisfy."
   @param_trans f, zh_CN: "至少一个元素需满足的谓词。"
   @spec any?(list(a), fun()) :: boolean()
+  @example """
+      gan> Enum.any?([1, 2, 3], fn x -> x > 2 end)
+      True
+  """
   def any?(xs, f), do: ~python(any(<%= f %>(x) for x in <%= xs %>))
 
   @doc "Whether the collection has no elements."
@@ -193,6 +241,10 @@ defmodule Enum do
   @param xs, "The list to test."
   @param_trans xs, zh_CN: "被检验的列表。"
   @spec empty?(list()) :: boolean()
+  @example """
+      gan> Enum.empty?([])
+      True
+  """
   def empty?(xs), do: $builtins.len(xs) == 0
 
   @doc "Removes duplicates, keeping first occurrences in order."
@@ -200,6 +252,10 @@ defmodule Enum do
   @param xs, "The list to deduplicate, keeping first occurrences."
   @param_trans xs, zh_CN: "要去重的列表，保留首次出现。"
   @spec uniq(list(a)) :: list(a)
+  @example """
+      gan> Enum.uniq([1, 2, 1, 3, 2])
+      [1, 2, 3]
+  """
   def uniq(xs), do: ~python(list(dict.fromkeys(<%= xs %>)))
 
   @doc "Maps `f` (which returns a list) and concatenates the results."
@@ -222,6 +278,12 @@ defmodule Enum do
   @param f, "Called on each element for its side effect."
   @param_trans f, zh_CN: "对每个元素调用以产生副作用。"
   @spec each(list(a), fun()) :: atom()
+  @example """
+      gan> Enum.each(["a", "b"], fn x -> IO.puts(x) end)
+      a
+      b
+      'ok'
+  """
   def each(xs, f) do
     ~python([<%= f %>(x) for x in <%= xs %>])
     :ok
@@ -232,6 +294,10 @@ defmodule Enum do
   @param xs, "The non-empty list."
   @param_trans xs, zh_CN: "非空列表。"
   @spec min(list()) :: any()
+  @example """
+      gan> Enum.min([3, 1, 2])
+      1
+  """
   def min(xs), do: $builtins.min(xs)
 
   @doc "The largest element."
@@ -239,6 +305,10 @@ defmodule Enum do
   @param xs, "The non-empty list."
   @param_trans xs, zh_CN: "非空列表。"
   @spec max(list()) :: any()
+  @example """
+      gan> Enum.max([3, 1, 2])
+      3
+  """
   def max(xs), do: $builtins.max(xs)
   @doc "The first element for which `f` is truthy, or nil."
   @doc_trans zh_CN: "首个使 `f` 为真值的元素，无则 nil。"
@@ -260,6 +330,10 @@ defmodule Enum do
   @param f, "The predicate; the index of the first match is returned."
   @param_trans f, zh_CN: "谓词；返回首个匹配的下标。"
   @spec find_index(list(), fun()) :: integer() | nil
+  @example """
+      gan> Enum.find_index(["a", "b", "c"], fn x -> x == "b" end)
+      1
+  """
   def find_index(xs, f),
     do: ~python(next((i for i, x in enumerate(<%= xs %>) if <%= f %>(x)), None))
 
@@ -295,6 +369,10 @@ defmodule Enum do
   @param f, "Maps an element to its comparison key."
   @param_trans f, zh_CN: "将元素映射为比较键。"
   @spec max_by(list(a), fun()) :: a
+  @example """
+      gan> Enum.max_by(["a", "bbb", "cc"], fn s -> String.length(s) end)
+      'bbb'
+  """
   def max_by(xs, f), do: $builtins.max(xs, key: f)
 
   @doc "The element minimizing the key computed by `f`; raises on empty."
@@ -304,6 +382,10 @@ defmodule Enum do
   @param f, "Maps an element to its comparison key."
   @param_trans f, zh_CN: "将元素映射为比较键。"
   @spec min_by(list(a), fun()) :: a
+  @example """
+      gan> Enum.min_by(["a", "bbb", "cc"], fn s -> String.length(s) end)
+      'a'
+  """
   def min_by(xs, f), do: $builtins.min(xs, key: f)
 
   @doc "The product of the elements (1 for an empty collection)."
@@ -311,6 +393,10 @@ defmodule Enum do
   @param xs, "The numbers to multiply."
   @param_trans xs, zh_CN: "要相乘的数字。"
   @spec product(list()) :: number()
+  @example """
+      gan> Enum.product([2, 3, 4])
+      24
+  """
   def product(xs), do: $math.prod(xs)
 
   @doc "Leading elements while `f` stays truthy."
@@ -320,6 +406,10 @@ defmodule Enum do
   @param f, "Elements are taken while it returns truthy."
   @param_trans f, zh_CN: "持续取元素直到其返回假值。"
   @spec take_while(list(a), fun()) :: list(a)
+  @example """
+      gan> Enum.take_while([1, 2, 0, 3], fn x -> x > 0 end)
+      [1, 2]
+  """
   def take_while(xs, f), do: $builtins.list($itertools.takewhile(f, xs))
 
   @doc "Drops leading elements while `f` stays truthy, keeps the rest."
@@ -329,6 +419,10 @@ defmodule Enum do
   @param f, "Elements are dropped while it returns truthy."
   @param_trans f, zh_CN: "持续丢弃元素直到其返回假值。"
   @spec drop_while(list(a), fun()) :: list(a)
+  @example """
+      gan> Enum.drop_while([1, 2, 0, 3], fn x -> x > 0 end)
+      [0, 3]
+  """
   def drop_while(xs, f), do: $builtins.list($itertools.dropwhile(f, xs))
 
   @doc "Splits into chunks of `n` elements; the last chunk may be shorter."
@@ -350,6 +444,10 @@ defmodule Enum do
   @param xss, "A list of lists to flatten one level."
   @param_trans xss, zh_CN: "要展平一层的列表的列表。"
   @spec concat(list(list(a))) :: list(a)
+  @example """
+      gan> Enum.concat([[1, 2], [3], []])
+      [1, 2, 3]
+  """
   def concat(xss), do: ~python([y for x in <%= xss %> for y in x])
 
   @doc "Puts `sep` between every two elements."
@@ -374,6 +472,10 @@ defmodule Enum do
   @param count, "Maximum number of elements."
   @param_trans count, zh_CN: "最多取出的元素个数。"
   @spec slice(list(a), integer(), integer()) :: list(a)
+  @example """
+      gan> Enum.slice([1, 2, 3, 4], 1, 2)
+      [2, 3]
+  """
   def slice(xs, start, count), do: ~python(<%= xs %>[<%= start %>:] [:<%= count %>])
 
   @doc "Collapses consecutive duplicate elements."

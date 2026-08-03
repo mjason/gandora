@@ -2,7 +2,7 @@
   "name": "gandora",
   "displayName": "Gandora",
   "description": "Gandora language support: LSP (diagnostics, hover with recursion shapes, references, rename, quick fixes), compiled-Python preview, run/test/REPL commands, snippets.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {
@@ -174,6 +174,16 @@
           "type": "string",
           "default": "gan",
           "description": "Path to the gan task runner used to start the language server (gan lsp)."
+        },
+        "gandora.doc.locale": {
+          "type": "string",
+          "default": "",
+          "examples": [
+            "all",
+            "zh-CN",
+            "default"
+          ],
+          "description": "Documentation language in hovers and signature help: a BCP 47 tag (e.g. 'zh-CN') shows only that language with fallback; 'all' shows every language in sections; 'default' shows English only. Leave empty to defer to the project's gandora.local.jsonc (docLocale key, per-developer, gitignored) or the GAN_DOC_LOCALE environment variable. The project-local file always wins over this setting."
         },
         "gandora.preview.refreshOnSave": {
           "type": "boolean",

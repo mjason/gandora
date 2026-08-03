@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.10.2 — 2026-08-03
+
+**Docs in your language, examples on every std function.**
+
+- **GEP-0015 rev 8 (R015)**: documentation language is a developer
+  preference — `gandora.local.jsonc` (`docLocale`, gitignored,
+  per-project-per-person) > `GAN_DOC_LOCALE` env / VS Code setting >
+  bilingual sections. Hover and signature help render one language
+  when asked, **localized parameter tables included** (they were
+  English-only before), with per-item fallback.
+- **std: 94/94 functions now carry runnable `@example` doctests**
+  (69 added), every one verified by `gan test`; `Map.new/1` (pairs →
+  map) joins the API; `Enum.each` documents its `:ok` return.
+- **Fixed**: docstrings containing backslashes halved on load
+  (`re.compile("\\d+")` degraded to a SyntaxWarning); docstring
+  emission now escapes them.
+
 ## v0.10.1 — 2026-08-03
 
 **The tour, tools, and std now practice everything they preach.**

@@ -7,6 +7,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec upcase(string()) :: string()
+  @example """
+      gan> String.upcase("abc")
+      'ABC'
+  """
   def upcase(s), do: s.upper()
 
   @doc "Lowercases the string."
@@ -14,6 +18,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec downcase(string()) :: string()
+  @example """
+      gan> String.downcase("AbC")
+      'abc'
+  """
   def downcase(s), do: s.lower()
 
   @doc "Uppercases the first character, lowercases the rest."
@@ -21,6 +29,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec capitalize(string()) :: string()
+  @example """
+      gan> String.capitalize("heLLo")
+      'Hello'
+  """
   def capitalize(s), do: s.capitalize()
 
   @doc "Splits on whitespace runs, dropping empty parts (Elixir semantics)."
@@ -41,6 +53,10 @@ defmodule String do
   @param sep, "The separator to split on."
   @param_trans sep, zh_CN: "切分用的分隔串。"
   @spec split_on(string(), string()) :: list(string())
+  @example """
+      gan> String.split_on("a,b,c", ",")
+      ['a', 'b', 'c']
+  """
   def split_on(s, sep), do: s.split(sep)
 
   @doc "Removes leading and trailing whitespace."
@@ -48,6 +64,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec trim(string()) :: string()
+  @example """
+      gan> String.trim("  x  ")
+      'x'
+  """
   def trim(s), do: s.strip()
 
   @doc "Replaces every occurrence of `pattern` with `replacement`."
@@ -59,6 +79,10 @@ defmodule String do
   @param replacement, "Substituted for every occurrence."
   @param_trans replacement, zh_CN: "替换每处出现的内容。"
   @spec replace(string(), string(), string()) :: string()
+  @example """
+      gan> String.replace("a-b-a", "a", "x")
+      'x-b-x'
+  """
   def replace(s, pattern, replacement), do: s.replace(pattern, replacement)
 
   @doc "Whether the string contains `part`."
@@ -68,6 +92,10 @@ defmodule String do
   @param part, "The substring to look for."
   @param_trans part, zh_CN: "要查找的子串。"
   @spec contains?(string(), string()) :: boolean()
+  @example """
+      gan> String.contains?("hello", "ell")
+      True
+  """
   def contains?(s, part), do: ~python(<%= part %> in <%= s %>)
 
   @doc "Whether the string starts with `prefix`."
@@ -77,6 +105,10 @@ defmodule String do
   @param prefix, "The candidate prefix."
   @param_trans prefix, zh_CN: "候选前缀。"
   @spec starts_with?(string(), string()) :: boolean()
+  @example """
+      gan> String.starts_with?("file.gan", "file")
+      True
+  """
   def starts_with?(s, prefix), do: s.startswith(prefix)
 
   @doc "Whether the string ends with `suffix`."
@@ -86,6 +118,10 @@ defmodule String do
   @param suffix, "The candidate suffix."
   @param_trans suffix, zh_CN: "候选后缀。"
   @spec ends_with?(string(), string()) :: boolean()
+  @example """
+      gan> String.ends_with?("file.gan", ".gan")
+      True
+  """
   def ends_with?(s, suffix), do: s.endswith(suffix)
 
   @doc "The number of characters (Unicode code points, Python `len`)."
@@ -93,6 +129,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec length(string()) :: integer()
+  @example """
+      gan> String.length("héllo")
+      5
+  """
   def length(s), do: $builtins.len(s)
 
   @doc "The substring of `len` characters starting at `start` (negative start counts from the end)."
@@ -117,6 +157,10 @@ defmodule String do
   @param width, "The minimum total width."
   @param_trans width, zh_CN: "目标最小总宽度。"
   @spec pad_leading(string(), integer()) :: string()
+  @example """
+      gan> String.pad_leading("5", 3)
+      '  5'
+  """
   def pad_leading(s, width), do: s.rjust(width)
 
   @doc "Pads on the right with spaces to `width`."
@@ -126,6 +170,10 @@ defmodule String do
   @param width, "The minimum total width."
   @param_trans width, zh_CN: "目标最小总宽度。"
   @spec pad_trailing(string(), integer()) :: string()
+  @example """
+      gan> String.pad_trailing("5", 3)
+      '5  '
+  """
   def pad_trailing(s, width), do: s.ljust(width)
 
   @doc "Parses an integer; raises Python ValueError on bad input."
@@ -133,6 +181,10 @@ defmodule String do
   @param s, "The decimal digits to parse."
   @param_trans s, zh_CN: "要解析的十进制数字串。"
   @spec to_integer(string()) :: integer()
+  @example """
+      gan> String.to_integer("42")
+      42
+  """
   def to_integer(s), do: $builtins.int(s)
 
   @doc "Parses a float; raises Python ValueError on bad input."
@@ -140,6 +192,10 @@ defmodule String do
   @param s, "The number literal to parse."
   @param_trans s, zh_CN: "要解析的数字字面串。"
   @spec to_float(string()) :: float()
+  @example """
+      gan> String.to_float("2.5")
+      2.5
+  """
   def to_float(s), do: $builtins.float(s)
   @doc "The character at `index` (negative counts from the end), or nil."
   @doc_trans zh_CN: "位于 `index` 的字符（负数从尾部数起），越界为 nil。"
@@ -148,6 +204,10 @@ defmodule String do
   @param index, "Zero-based; negative counts from the end."
   @param_trans index, zh_CN: "从 0 开始；负数自末尾计。"
   @spec at(string(), integer()) :: string() | nil
+  @example """
+      gan> String.at("abc", 1)
+      'b'
+  """
   def at(s, index) do
     if index < $builtins.len(s) and index >= -$builtins.len(s) do
       ~python(<%= s %>[<%= index %>])
@@ -161,6 +221,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec reverse(string()) :: string()
+  @example """
+      gan> String.reverse("abc")
+      'cba'
+  """
   def reverse(s), do: ~python(<%= s %>[::-1])
 
   @doc "The string repeated `n` times."
@@ -170,6 +234,10 @@ defmodule String do
   @param n, "How many times."
   @param_trans n, zh_CN: "重复次数。"
   @spec duplicate(string(), integer()) :: string()
+  @example """
+      gan> String.duplicate("ab", 2)
+      'abab'
+  """
   def duplicate(s, n), do: ~python(<%= s %> * <%= n %>)
 
   @doc "Removes leading whitespace."
@@ -177,6 +245,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec trim_leading(string()) :: string()
+  @example """
+      gan> String.trim_leading("  x")
+      'x'
+  """
   def trim_leading(s), do: s.lstrip()
 
   @doc "Removes trailing whitespace."
@@ -184,6 +256,10 @@ defmodule String do
   @param s, "The string."
   @param_trans s, zh_CN: "字符串。"
   @spec trim_trailing(string()) :: string()
+  @example """
+      gan> String.trim_trailing("x  ")
+      'x'
+  """
   def trim_trailing(s), do: s.rstrip()
 
   @doc "The characters as a list of one-character strings."

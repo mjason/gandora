@@ -11,7 +11,7 @@ defmodule Main do
   pyimport gandora_core, as: core
   pyimport lsprotocol.types, as: types
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.1",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.10.2",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -257,14 +257,45 @@ defmodule Main do
     )
   end
 
+  # hover locale preference (GEP-0015-R015): the developer-local
+  # project file first, then the environment (which the VS Code
+  # setting feeds); "all" shows every language in sections
+  @spec doc_locale() :: string()
+  defp doc_locale() do
+    local = try do
+      core.local_pref(root_path(), "docLocale")
+    rescue
+      _e -> nil
+    end
+    if is_nil(local) do
+      $(os).environ.get("GAN_DOC_LOCALE", "all")
+    else
+      local
+    end
+  end
+
+  # the prose + localized parameter list for one locale
+  @spec locale_section(map(), string(), string()) :: string()
+  defp locale_section(info, locale, heading) do
+    prose = Map.get(Map.get(info, "entries", %{}), locale)
+    prose = if is_nil(prose) and locale != "default" do
+      nil
+    else
+      prose
+    end
+    parts = [heading, prose] ++ param_lines(info, locale)
+    parts
+    |> Enum.reject(fn p -> is_nil(p) or p == "" end)
+    |> Enum.join("\n\n")
+  end
+
   defp render_hover(target, info) do
     if is_nil(info) or info.get("hidden") do
       nil
     else
-      params = param_lines(info)
       tco = case Map.get(info, "tco") do
-        "loop" -> ["\n♻ *tail recursion → compiles to a `while` loop (constant stack)*"]
-        "stack" -> ["\n⚠ *self-recursive → native call stack (not tail position)*"]
+        "loop" -> ["♻ *tail recursion → compiles to a `while` loop (constant stack)*"]
+        "stack" -> ["⚠ *self-recursive → native call stack (not tail position)*"]
         _ -> []
       end
       sigs = Map.get(info, "signatures", [])
@@ -276,17 +307,32 @@ defmodule Main do
         "```elixir\n#{sigs}\n```"
       end
       entries = Map.get(info, "entries", %{})
-      prose = Map.get(entries, "default")
-      translations = entries.items()
-      |> Enum.filter(fn {loc, _} -> loc != "default" end)
-      |> Enum.map(fn {loc, text} -> "\n---\n**#{loc}**\n\n#{text.strip()}" end)
+      pref = doc_locale()
+      locales = entries.keys()
+      |> Enum.filter(fn loc -> loc != "default" end)
+      |> Enum.sort()
+      sections = cond do
+        pref == "all" or pref == "" ->
+          [locale_section(info, "default", "")] ++
+            Enum.map(locales, fn loc ->
+              "---\n\n**#{loc}**\n\n" <> locale_section(info, loc, "")
+            end)
+        true ->
+          # one language only; default fills any gap
+          main = locale_section(info, pref, "")
+          if String.trim(main) == "" do
+            [locale_section(info, "default", "")]
+          else
+            [main]
+          end
+      end
       meta = Map.get(info, "meta", [])
-      |> Enum.map(fn {k, v} -> "\n`#{k}`: #{v}" end)
+      |> Enum.map(fn {k, v} -> "`#{k}`: #{v}" end)
       examples = Map.get(info, "examples", [])
-      |> Enum.map(fn ex -> "\n```elixir\n#{ex.strip()}\n```" end)
-      body = [prose] ++ tco ++ params ++ translations ++ meta ++ examples
-      |> Enum.reject(fn part -> is_nil(part) end)
-      |> Enum.join("\n")
+      |> Enum.map(fn ex -> "```elixir\n#{ex.strip()}\n```" end)
+      body = tco ++ sections ++ meta ++ examples
+      |> Enum.reject(fn part -> is_nil(part) or String.trim(part) == "" end)
+      |> Enum.join("\n\n")
       if String.trim(body) == "" and sigs == "" do
         nil
       else
@@ -295,17 +341,26 @@ defmodule Main do
     end
   end
 
-  defp param_lines(info) do
+  # localized parameter bullets with per-name fallback to the default
+  @spec param_lines(map(), string()) :: list(string())
+  defp param_lines(info, locale) do
     entries = Map.get(info, "params", [])
     if Enum.empty?(entries) do
       []
     else
+      heading = if String.starts_with?(locale, "zh") do
+        "**参数**"
+      else
+        "**Parameters**"
+      end
       lines = entries
       |> Enum.map(fn p ->
-        "  - #{Map.get(p, "name")}: #{Map.get(Map.get(p, "entries", %{}), "default", "")}"
+        texts = Map.get(p, "entries", %{})
+        text = Map.get(texts, locale, Map.get(texts, "default", ""))
+        "- `#{Map.get(p, "name")}` — #{text}"
       end)
       |> Enum.join("\n")
-      ["\n**Parameters**\n\n" <> lines]
+      [heading <> "\n\n" <> lines]
     end
   end
 
@@ -316,7 +371,9 @@ defmodule Main do
     if is_nil(entry) do
       nil
     else
-      Map.get(Map.get(entry, "entries", %{}), "default")
+      texts = Map.get(entry, "entries", %{})
+      pref = doc_locale()
+      Map.get(texts, pref, Map.get(texts, "default"))
     end
   end
 

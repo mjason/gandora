@@ -11,6 +11,9 @@ def upcase(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> upcase("abc")
+    'ABC'
 """
     return s.upper()
 
@@ -21,6 +24,9 @@ def downcase(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> downcase("AbC")
+    'abc'
 """
     return s.lower()
 
@@ -31,6 +37,9 @@ def capitalize(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> capitalize("heLLo")
+    'Hello'
 """
     return s.capitalize()
 
@@ -55,6 +64,9 @@ def split_on(s: str, sep: str) -> list[str]:
 
   - s: The string.
   - sep: The separator to split on.
+
+    >>> split_on("a,b,c", ",")
+    ['a', 'b', 'c']
 """
     return s.split(sep)
 
@@ -65,6 +77,9 @@ def trim(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> trim("  x  ")
+    'x'
 """
     return s.strip()
 
@@ -77,6 +92,9 @@ def replace(s: str, pattern: str, replacement: str) -> str:
   - s: The string.
   - pattern: The substring to find.
   - replacement: Substituted for every occurrence.
+
+    >>> replace("a-b-a", "a", "x")
+    'x-b-x'
 """
     return s.replace(pattern, replacement)
 
@@ -88,6 +106,9 @@ def contains_p(s: str, part: str) -> bool:
 
   - s: The string.
   - part: The substring to look for.
+
+    >>> contains_p("hello", "ell")
+    True
 """
     return ((part) in (s))
 
@@ -99,6 +120,9 @@ def starts_with_p(s: str, prefix: str) -> bool:
 
   - s: The string.
   - prefix: The candidate prefix.
+
+    >>> starts_with_p("file.gan", "file")
+    True
 """
     return s.startswith(prefix)
 
@@ -110,6 +134,9 @@ def ends_with_p(s: str, suffix: str) -> bool:
 
   - s: The string.
   - suffix: The candidate suffix.
+
+    >>> ends_with_p("file.gan", ".gan")
+    True
 """
     return s.endswith(suffix)
 
@@ -120,6 +147,9 @@ def length(s: str) -> int:
 ## Parameters
 
   - s: The string.
+
+    >>> length("héllo")
+    5
 """
     return builtins.len(s)
 
@@ -146,6 +176,9 @@ def pad_leading(s: str, width: int) -> str:
 
   - s: The string.
   - width: The minimum total width.
+
+    >>> pad_leading("5", 3)
+    '  5'
 """
     return s.rjust(width)
 
@@ -157,6 +190,9 @@ def pad_trailing(s: str, width: int) -> str:
 
   - s: The string.
   - width: The minimum total width.
+
+    >>> pad_trailing("5", 3)
+    '5  '
 """
     return s.ljust(width)
 
@@ -167,6 +203,9 @@ def to_integer(s: str) -> int:
 ## Parameters
 
   - s: The decimal digits to parse.
+
+    >>> to_integer("42")
+    42
 """
     return builtins.int(s)
 
@@ -177,6 +216,9 @@ def to_float(s: str) -> float:
 ## Parameters
 
   - s: The number literal to parse.
+
+    >>> to_float("2.5")
+    2.5
 """
     return builtins.float(s)
 
@@ -188,6 +230,9 @@ def at(s: str, index: int) -> str | None:
 
   - s: The string.
   - index: Zero-based; negative counts from the end.
+
+    >>> at("abc", 1)
+    'b'
 """
     if (index < builtins.len(s)) and (index >= -(builtins.len(s))):
         return ((s)[(index)])
@@ -201,6 +246,9 @@ def reverse(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> reverse("abc")
+    'cba'
 """
     return ((s)[::-1])
 
@@ -212,6 +260,9 @@ def duplicate(s: str, n: int) -> str:
 
   - s: The string to repeat.
   - n: How many times.
+
+    >>> duplicate("ab", 2)
+    'abab'
 """
     return ((s) * (n))
 
@@ -222,6 +273,9 @@ def trim_leading(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> trim_leading("  x")
+    'x'
 """
     return s.lstrip()
 
@@ -232,6 +286,9 @@ def trim_trailing(s: str) -> str:
 ## Parameters
 
   - s: The string.
+
+    >>> trim_trailing("x  ")
+    'x'
 """
     return s.rstrip()
 
@@ -257,7 +314,7 @@ def match_p(s: str, regex: re.Pattern) -> bool:
   - s: The string to test.
   - regex: A compiled pattern, e.g. from ~r//.
 
-    >>> match_p("gandora-2026", re.compile("\\d+"))
+    >>> match_p("gandora-2026", re.compile("\\\\d+"))
     True
 """
     return not ((regex.search(s) is None))

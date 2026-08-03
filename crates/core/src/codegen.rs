@@ -1499,7 +1499,10 @@ impl Codegen {
         if joined.contains('\n') {
             joined.push('\n');
         }
-        Ok(Some(joined))
+        // the docstring is itself a Python string literal: a bare
+        // backslash would halve on load, corrupting doctests like
+        // re.compile("\\d+") into a SyntaxWarning
+        Ok(Some(joined.replace('\\', "\\\\")))
     }
 
     /// Compile `gan> expr` doctest lines into native Python doctests

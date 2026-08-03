@@ -38,6 +38,21 @@ impl Config {
     }
 }
 
+/// A developer-local preference from `gandora.local.jsonc` next to the
+/// project's `gandora.jsonc` — personal, gitignored, never project
+/// configuration (GEP-0015-R015). Unknown keys are ignored so tools
+/// can grow new preferences without breaking older toolchains.
+pub fn local_pref(root: &Path, key: &str) -> Option<String> {
+    let path = root.join("gandora.local.jsonc");
+    let text = std::fs::read_to_string(&path).ok()?;
+    let value = parse_jsonc(&path.display().to_string(), &text).ok()?;
+    let JsonValue::Object(entries) = value else { return None };
+    entries.into_iter().find_map(|(k, v)| match v {
+        JsonValue::String(s) if k == key => Some(s),
+        _ => None,
+    })
+}
+
 /// Find the nearest ancestor `gandora.jsonc` (GEP-0001-R018).
 pub fn find_config(start: &Path) -> Result<Option<Config>> {
     let mut dir = Some(start.to_path_buf());
