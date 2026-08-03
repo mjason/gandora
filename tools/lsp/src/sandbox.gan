@@ -255,7 +255,7 @@ defmodule Sandbox do
       end
       example_hint = if Enum.count(heads) > 0 and not String.contains?(raw, "@example") do
         [%{"kind" => "practice", "line" => 0,
-          "message" => "No @example doctests — `gan test` verifies them; every function with interesting behavior deserves one (GEP-0007)."}]
+          "message" => "No @example doctests — add one right above a def, e.g.:\n@example \"\"\"\n    gan> double(21)\n    42\n\"\"\"\n(`gan test` runs them; expected output is the Python repr) (GEP-0007)."}]
       else
         []
       end
@@ -263,7 +263,7 @@ defmodule Sandbox do
         []
       else
         [%{"kind" => "practice", "line" => 0,
-          "message" => "Annotation coverage: missing #{missing |> Enum.join("; ")} — the standard is @doc + @spec (+ @param) on every public def (docs/syntax.md)."}]
+          "message" => "Annotation coverage: missing #{missing |> Enum.join("; ")} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md)."}]
       end
       head_hint ++ example_hint
     end
@@ -344,6 +344,7 @@ defmodule Sandbox do
     end
     (from_msg ++ at_line)
     |> Enum.uniq()
+    |> Enum.reject(fn word -> String.contains?(source, "@" <> word) end)
     |> Enum.flat_map(fn word ->
       near = difflib.get_close_matches(word, @keywords, n: 1, cutoff: 0.8)
       if Enum.empty?(near) or Enum.member?(@keywords, word) do
@@ -462,6 +463,12 @@ defmodule Sandbox do
       nil
     else
       String.replace(marked, "__gan_value__ ", "")
+    end
+    # a nil result is silence, as in the repl
+    value = if value == "None" do
+      nil
+    else
+      value
     end
     {plain, value}
   end

@@ -1,0 +1,25 @@
+defmodule TestList do
+  @moduledoc "List 全函数测试:常规、空表、嵌套、边界索引。"
+
+  import Test
+
+  def test_first(), do: Test.assert_eq(List.first([1, 2]), 1)
+  def test_first_empty_is_nil(), do: Test.assert_eq(List.first([]), nil)
+  def test_last(), do: Test.assert_eq(List.last([1, 2]), 2)
+  def test_last_empty_is_nil(), do: Test.assert_eq(List.last([]), nil)
+  def test_flatten(), do: Test.assert_eq(List.flatten([1, [2, [3, 4]], 5]), [1, 2, 3, 4, 5])
+  def test_flatten_flat_input_unchanged(), do: Test.assert_eq(List.flatten([1, 2]), [1, 2])
+  def test_wrap_scalar(), do: Test.assert_eq(List.wrap(1), [1])
+  def test_wrap_list_unchanged(), do: Test.assert_eq(List.wrap([1]), [1])
+  def test_wrap_nil_is_empty(), do: Test.assert_eq(List.wrap(nil), [])
+  def test_duplicate(), do: Test.assert_eq(List.duplicate("x", 3), ["x", "x", "x"])
+  def test_duplicate_zero(), do: Test.assert_eq(List.duplicate("x", 0), [])
+  def test_insert_at(), do: Test.assert_eq(List.insert_at([1, 3], 1, 2), [1, 2, 3])
+  def test_insert_at_end(), do: Test.assert_eq(List.insert_at([1, 2], 9, 3), [1, 2, 3])
+  def test_delete_at(), do: Test.assert_eq(List.delete_at([1, 2, 3], 1), [1, 3])
+  def test_replace_at(), do: Test.assert_eq(List.replace_at([1, 2, 3], 1, 9), [1, 9, 3])
+  def test_to_tuple(), do: Test.assert_eq(List.to_tuple([1, 2]), {1, 2})
+  def test_starts_with(), do: Test.assert_true(List.starts_with?([1, 2, 3], [1, 2]))
+  def test_starts_with_empty_prefix(), do: Test.assert_true(List.starts_with?([1], []))
+  def test_starts_with_mismatch(), do: Test.assert_eq(List.starts_with?([1, 2], [2]), false)
+end

@@ -16,6 +16,7 @@ defmodule Main do
   Usage:
     gan build | check | run <file> [args...] | exec <code> | repl
     gan fmt [--check] [path...] | init <path> | version
+    gan test                doctests + tests/*.gan (GEP-0024)
     gan try <file|-> [--no-run]   sandbox a snippet (gan try --help)
     gan <plugin> ...        delegates to gan-<plugin>, then to ganc
   """

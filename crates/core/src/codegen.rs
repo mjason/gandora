@@ -600,7 +600,8 @@ impl Codegen {
                         None => segs.last().unwrap().clone(),
                         _ => return Err(self.err(call.span, "as: must name a single alias")),
                     };
-                    self.gan_imports.insert(module_py_path(&segs));
+                    let resolved_path = self.resolve_module_path(&segs);
+                    self.gan_imports.insert(resolved_path);
                     self.aliases.insert(short, segs);
                 }
                 "import" => {
@@ -608,7 +609,8 @@ impl Codegen {
                         Some(Term::Alias(segs)) => segs.clone(),
                         _ => return Err(self.err(call.span, "import requires a module name")),
                     };
-                    self.star_imports.insert(module_py_path(&segs));
+                    let resolved_path = self.resolve_module_path(&segs);
+                    self.star_imports.insert(resolved_path);
                 }
                 "require" => { /* compile-time only */ }
                 "defmacro" => { /* compile-time only */ }
@@ -1046,10 +1048,16 @@ impl Codegen {
                 self.typevars.insert(tv.clone());
                 Ok(tv)
             }
-            Term::Var(n, _) => Err(self.err(
-                Span::default(),
-                format!("'{n}' is not a type — did you mean {n}()? (GEP-0017-R002)"),
-            )),
+            Term::Var(n, _) => match spec_type_suggestion(n) {
+                Some(fix) => Err(self.err(
+                    Span::default(),
+                    format!("'{n}' is not a type — write {fix} (GEP-0017-R002)"),
+                )),
+                None => Err(self.err(
+                    Span::default(),
+                    format!("'{n}' is not a type — did you mean {n}()? (GEP-0017-R002)"),
+                )),
+            },
             Term::Call(c) => match &c.callee {
                 // a named argument `name :: type` contributes its type
                 // (GEP-0018-R006)
@@ -1114,10 +1122,23 @@ impl Codegen {
                             self.spec_hint(&c.args[1])?
                         ))
                     }
-                    _ => Err(self.err(
-                        c.span,
-                        format!("'{n}' is not a type (GEP-0017-R002)"),
-                    )),
+                    _ => match spec_type_suggestion(n) {
+                        Some(fix) => Err(self.err(
+                            c.span,
+                            format!(
+                                "'{n}' is not a type — write {fix} \
+                                 (GEP-0017-R002)"
+                            ),
+                        )),
+                        None => Err(self.err(
+                            c.span,
+                            format!(
+                                "'{n}' is not a type; built-ins look like \
+                                 integer(), string(), list(t), sequence(t) \
+                                 (GEP-0017-R002)"
+                            ),
+                        )),
+                    },
                 },
                 Callee::Dot { base, name, .. } => match base.as_ref() {
                     chain_base if pyref_chain(chain_base).is_some() => {
@@ -1166,9 +1187,30 @@ impl Codegen {
                     "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
                 )),
             },
+            Term::Var(n, _) => match spec_type_suggestion(n) {
+                Some(fix) => Err(self.err(
+                    Span::default(),
+                    format!("'{n}' is not a type — write {fix} (GEP-0017-R002)"),
+                )),
+                None => Err(self.err(
+                    Span::default(),
+                    format!(
+                        "'{n}' is not a type; did you mean {n}()? built-ins \
+                         look like integer(), string(), list(t) (GEP-0017-R002)"
+                    ),
+                )),
+            },
+            Term::Atom(a) => Err(self.err(
+                Span::default(),
+                format!(
+                    "':{a}' is a value, not a type — the type of atoms is \
+                     atom(); a nil return is nil (GEP-0017-R002)"
+                ),
+            )),
             other => Err(self.err(
                 other.span(),
-                "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
+                "types are built-ins like integer(), string(), list(t), \
+                 sequence(t), $mod.Type(), or Mod.t() (GEP-0017-R002)",
             )),
         }
     }
@@ -2548,9 +2590,11 @@ impl Codegen {
     /// Precedence: sibling project modules (with the project's pyPackage
     /// prefix), installed-package marker names, then the mechanical
     /// GEP-0001-R014 mapping (GEP-0006-R005A).
-    fn gan_module_import(&mut self, resolved: &[String]) -> String {
+    /// The importable Python path of a Gandora module: project prefix
+    /// and installed markers respected (GEP-0006/GEP-0010).
+    fn resolve_module_path(&self, resolved: &[String]) -> String {
         let joined = resolved.join(".");
-        let path = if self.project_modules.contains(&joined) {
+        if self.project_modules.contains(&joined) {
             match &self.py_prefix {
                 Some(prefix) => format!("{prefix}.{}", module_py_path(resolved)),
                 None => module_py_path(resolved),
@@ -2559,7 +2603,11 @@ impl Codegen {
             installed.clone()
         } else {
             module_py_path(resolved)
-        };
+        }
+    }
+
+    fn gan_module_import(&mut self, resolved: &[String]) -> String {
+        let path = self.resolve_module_path(resolved);
         self.gan_imports.insert(path.clone());
         path
     }
@@ -2998,10 +3046,15 @@ impl Codegen {
                 pre.extend(lines);
                 Ok(self.tmp(t).to_string())
             }
-            ("recur", 1) | ("break", 1) => Err(self.err(
+            ("recur", _) => Err(self.err(
                 call.span,
-                "recur/break are statements; use them directly in a loop body \
-                 (GEP-0014-R005)",
+                "recur restarts the enclosing function and must be the whole \
+                 tail expression, not part of a larger one (GEP-0019-R005)",
+            )),
+            ("break", _) => Err(self.err(
+                call.span,
+                "break was retired with loop (GEP-0014-R007): return the value \
+                 directly from your recursive helper",
             )),
             ("if", _) | ("unless", _) | ("case", _) | ("cond", _) | ("with", _) | ("try", _) | ("for", _)
             | ("loop", _) => {
@@ -4102,6 +4155,27 @@ fn pyref_chain(term: &Term) -> Option<(Vec<String>, bool)> {
 /// The import path for a folded chain (GEP-0003-R010): the leading run of
 /// lowercase segments, stopping before the final segment — dotted
 /// submodules import whole, members resolve as attributes.
+
+/// A directed correction for a misspelled spec type — the errors an
+/// agent guessing from other languages actually makes (GEP-0017-R002).
+fn spec_type_suggestion(name: &str) -> Option<&'static str> {
+    match name.to_ascii_lowercase().as_str() {
+        "int" | "integer" => Some("integer()"),
+        "str" | "string" | "binary" => Some("string()"),
+        "float" | "double" => Some("float()"),
+        "bool" | "boolean" => Some("boolean()"),
+        "number" | "num" => Some("number()"),
+        "atom" | "symbol" => Some("atom()"),
+        "any" | "term" | "object" => Some("term()"),
+        "none" | "nil" | "null" | "void" | "ok" => Some("nil (or atom() for a named atom)"),
+        "list" | "array" => Some("list(term())"),
+        "map" | "dict" => Some("map(term(), term())"),
+        "tuple" => Some("tuple(term(), term())"),
+        "fun" | "function" | "callable" | "lambda" => Some("fun()"),
+        _ => None,
+    }
+}
+
 fn pyref_import_path(segs: &[String], bounded: bool) -> String {
     // `$(...)` declares the boundary explicitly — single-segment or
     // dotted, the heuristic must not extend it (GEP-0003-R010)
@@ -4542,7 +4616,7 @@ mod tests {
         let err = compile_err(
             "defmodule M do\n  @spec f(integer) :: integer()\n  def f(x), do: x\nend",
         );
-        assert!(err.contains("did you mean integer()"), "{err}");
+        assert!(err.contains("write integer()"), "{err}");
     }
 
     #[test]
@@ -5357,6 +5431,11 @@ pub fn compile_snippet(
     cg.project_modules = project_modules;
     cg.installed_modules = installed_modules;
     cg.tmp_names.push("_".to_string());
+    // snippet top level is a scope too: closures over its bindings
+    // snapshot like everywhere else (GEP-0021)
+    let mut snippet_scope = std::collections::BTreeSet::new();
+    scope_binders(term, &mut snippet_scope);
+    cg.scope_bound.push(snippet_scope);
     let result = 0usize;
     let stmts = term.as_block();
     let mut lines: Vec<String> = Vec::new();

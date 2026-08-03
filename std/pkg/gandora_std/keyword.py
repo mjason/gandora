@@ -7,18 +7,26 @@ class GanMatchError(Exception):
     pass
 
 
-def get(kw: list[tuple[str, object]], key: str) -> object:
+def get(*_gan_args) -> object:
     """The first value for `key`, or nil.
 
 ## Parameters
 
   - kw: The keyword list.
   - key: The key to read; first match wins.
+  - default: Returned when the key is absent.
 
     >>> get([("a", 1), ("b", 2)], "a")
     1
 """
-    return (next((v for k, v in (kw) if k == (key)), None))
+    while True:
+        match _gan_args:
+            case (kw, key, default,):
+                return (next((v for k, v in (kw) if k == (key)), (default)))
+            case (kw, key,):
+                _gan_args = (kw, key, None)
+                continue
+        raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
 
 
 def put(kw: list[tuple[str, object]], key: str, value: object) -> list[tuple[str, object]]:

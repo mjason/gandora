@@ -336,6 +336,33 @@ next to `gandora.jsonc`) > the `GAN_DOC_LOCALE` environment variable /
 editor setting > default language only. `gan doc Mod.fun --locale zh-CN`
 asks explicitly; `gan lsc doc` always returns every locale as JSON.
 
+## Testing (GEP-0024)
+
+One command, two layers: `gan test` runs every `@example` doctest,
+then every `test_*` function of `tests/*.gan` — compiled with the
+project's full module resolution and executed by pytest (add it once:
+`uv add --dev pytest`).
+
+```elixir
+# tests/test_stats.gan
+defmodule TestStats do
+  @moduledoc "Edge cases the doctests don't cover."
+
+  import Test
+
+  def test_mean(), do: Test.assert_eq(Stats.mean([1, 2, 3, 4]), 2.5)
+  def test_missing_key_is_nil(), do: Test.assert_nil(Map.get(%{}, "x"))
+  def test_fetch_raises() do
+    _ = Test.assert_raises(fn -> Map.fetch!(%{}, "nope") end)
+    nil
+  end
+end
+```
+
+`Test` (std) provides `assert_eq / assert_true / assert_false /
+assert_nil / assert_raises / assert_contains`. `tests/` never ships —
+it lives outside the source roots.
+
 ## Python interop
 
 `$module` is a first-class module object; `$` marks the interop
@@ -514,6 +541,7 @@ Every language fact is one JSON value on stdout — built for agents:
 gan lsc check --root .                  # whole-project diagnostics, lints included
 gan lsc diagnostics src/x.gan --root .  # one file
 gan lsc doc Enum.take --root .          # specs, prose (all locales), params, tco shape
+gan lsc doc for --root .                # language constructs answer too (for/recur/with...)
 gan lsc references Stats.mean --root .  # every call site (+ definitions)
 gan lsc wsymbols mean --root .          # project-wide symbol search
 gan lsc symbols Stats --root .          # one module's outline

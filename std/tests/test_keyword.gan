@@ -1,0 +1,16 @@
+defmodule TestKeyword do
+  @moduledoc "Keyword 全函数测试:常规、缺键、重复键语义。"
+
+  import Test
+
+  def test_get(), do: Test.assert_eq(Keyword.get([a: 1, b: 2], :b), 2)
+  def test_get_missing_is_nil(), do: Test.assert_eq(Keyword.get([a: 1], :x), nil)
+  def test_get_default(), do: Test.assert_eq(Keyword.get([a: 1], :x, 9), 9)
+  def test_get_first_of_duplicates(), do: Test.assert_eq(Keyword.get([a: 1, a: 2], :a), 1)
+  def test_put_prepends_and_dedupes(), do: Test.assert_eq(Keyword.put([a: 1, b: 2], :a, 9), [{"a", 9}, {"b", 2}])
+  def test_keys(), do: Test.assert_eq(Keyword.keys([a: 1, b: 2]), ["a", "b"])
+  def test_values(), do: Test.assert_eq(Keyword.values([a: 1, b: 2]), [1, 2])
+  def test_has_key(), do: Test.assert_true(Keyword.has_key?([a: 1], :a))
+  def test_has_key_absent(), do: Test.assert_eq(Keyword.has_key?([], :a), false)
+  def test_delete_removes_all(), do: Test.assert_eq(Keyword.delete([a: 1, b: 2, a: 3], :a), [{"b", 2}])
+end

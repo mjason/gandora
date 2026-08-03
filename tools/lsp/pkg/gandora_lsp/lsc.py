@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import sys
+import gandora_lsp.construct_docs
 import gandora_lsp.py_intel
 import gandora_lsp.sandbox
 import gandora_std.enum
@@ -38,6 +39,9 @@ def main() -> None:
         parts = builtins.list(e.args)
         _emit({"error": gandora_std.enum.at(parts, 0), "path": gandora_std.enum.at(parts, 1), "line": gandora_std.enum.at(parts, 2), "col": gandora_std.enum.at(parts, 3)})
         return sys.exit(1)
+    except Exception as e:
+        _emit({"error": f"{builtins.type(e).__name__}: {str(e)}"})
+        return sys.exit(2)
 
 
 def _dispatch(args, root):
@@ -56,7 +60,14 @@ def _dispatch(args, root):
         case ["resolve", module, *_] as _gan_l8 if isinstance(_gan_l8, list):
             return _emit(core.resolve(root, module))
         case ["doc", target, *_] as _gan_l9 if isinstance(_gan_l9, list):
-            return _emit(core.doc(target, root))
+            info = core.doc(target, root)
+            card = gandora_lsp.construct_docs.card(target)
+            if not ((info is None)):
+                return _emit(info)
+            elif not ((card is None)):
+                return _emit({"label": target, "construct": card})
+            else:
+                return _emit(info)
         case ["definition", target, *_] as _gan_l10 if isinstance(_gan_l10, list):
             return _emit(core.definition(target, root))
         case ["symbols", module, *_] as _gan_l11 if isinstance(_gan_l11, list):

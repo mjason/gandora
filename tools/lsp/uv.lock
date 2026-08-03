@@ -26,12 +26,12 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.11.2"
+version = "0.12.0"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lsp"
-version = "0.11.2"
+version = "0.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
@@ -52,12 +52,17 @@ requires-dist = [
 
 [[package]]
 name = "gandora-std"
-version = "0.11.2"
+version = "0.12.0"
 source = { directory = "../../std" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "gandora-tool"
-version = "0.11.2"
+version = "0.12.0"
 source = { directory = "../gan" }
 dependencies = [
     { name = "gandora-core" },
@@ -69,8 +74,12 @@ requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
     { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.4.1" },
     { name = "gandora-std", directory = "../../std" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "jedi"

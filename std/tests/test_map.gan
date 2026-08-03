@@ -1,0 +1,39 @@
+defmodule TestMap do
+  @moduledoc "Map 全函数测试:常规、缺键、默认值、不变性。"
+
+  import Test
+
+  def test_get(), do: Test.assert_eq(Map.get(%{"a" => 1}, "a"), 1)
+  def test_get_missing_is_nil(), do: Test.assert_eq(Map.get(%{"a" => 1}, "x"), nil)
+  def test_get_default(), do: Test.assert_eq(Map.get(%{"a" => 1}, "x", 9), 9)
+  def test_put(), do: Test.assert_eq(Map.put(%{"a" => 1}, "b", 2), %{"a" => 1, "b" => 2})
+  def test_put_overwrites(), do: Test.assert_eq(Map.put(%{"a" => 1}, "a", 9), %{"a" => 9})
+  def test_put_does_not_mutate() do
+    m = %{"a" => 1}
+    _ = Map.put(m, "b", 2)
+    Test.assert_eq(m, %{"a" => 1})
+  end
+  def test_delete(), do: Test.assert_eq(Map.delete(%{"a" => 1, "b" => 2}, "a"), %{"b" => 2})
+  def test_delete_missing_is_noop(), do: Test.assert_eq(Map.delete(%{"a" => 1}, "x"), %{"a" => 1})
+  def test_keys(), do: Test.assert_eq(Map.keys(%{"a" => 1, "b" => 2}), ["a", "b"])
+  def test_values(), do: Test.assert_eq(Map.values(%{"a" => 1, "b" => 2}), [1, 2])
+  def test_merge(), do: Test.assert_eq(Map.merge(%{"a" => 1}, %{"b" => 2}), %{"a" => 1, "b" => 2})
+  def test_merge_right_wins(), do: Test.assert_eq(Map.merge(%{"a" => 1}, %{"a" => 2}), %{"a" => 2})
+  def test_has_key(), do: Test.assert_true(Map.has_key?(%{"a" => 1}, "a"))
+  def test_has_key_absent(), do: Test.assert_eq(Map.has_key?(%{}, "a"), false)
+  def test_to_list(), do: Test.assert_eq(Map.to_list(%{"a" => 1}), [{"a", 1}])
+  def test_new_empty(), do: Test.assert_eq(Map.new(), %{})
+  def test_new_from_pairs(), do: Test.assert_eq(Map.new([{"a", 1}, {"b", 2}]), %{"a" => 1, "b" => 2})
+  def test_fetch_bang(), do: Test.assert_eq(Map.fetch!(%{"a" => 1}, "a"), 1)
+  def test_fetch_bang_missing_raises() do
+    _ = Test.assert_raises(fn -> Map.fetch!(%{}, "nope") end)
+    nil
+  end
+  def test_put_new_keeps_existing(), do: Test.assert_eq(Map.put_new(%{"a" => 1}, "a", 9), %{"a" => 1})
+  def test_put_new_adds_missing(), do: Test.assert_eq(Map.put_new(%{"a" => 1}, "b", 2), %{"a" => 1, "b" => 2})
+  def test_take(), do: Test.assert_eq(Map.take(%{"a" => 1, "b" => 2}, ["a", "x"]), %{"a" => 1})
+  def test_drop(), do: Test.assert_eq(Map.drop(%{"a" => 1, "b" => 2}, ["a", "x"]), %{"b" => 2})
+  def test_update(), do: Test.assert_eq(Map.update(%{"a" => 1}, "a", 0, fn v -> v + 10 end), %{"a" => 11})
+  def test_update_missing_uses_default(), do: Test.assert_eq(Map.update(%{}, "a", 7, fn v -> v + 1 end), %{"a" => 7})
+  def test_filter(), do: Test.assert_eq(Map.filter(%{"a" => 1, "b" => 2}, fn {_k, v} -> v > 1 end), %{"b" => 2})
+end

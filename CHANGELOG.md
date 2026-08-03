@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.12.0 — 2026-08-03
+
+**The official test tool — and the first recursive-improvement round.**
+
+- **GEP-0024**: `gan test` now runs `tests/*.gan` after the doctests —
+  test modules compile with the project's full module resolution and
+  execute under pytest; `Test` (std) ships the assertion family
+  (`assert_eq/true/false/nil/raises/contains`). std carries 134 such
+  tests, the fmt engine 10, the playground a demo suite.
+- **`Keyword.get/3`** (default value) joins std — found by the new
+  test suite.
+- **`gan lsc doc` answers language constructs** (`for`, `recur`,
+  `with`, ...) — the dead end agents hit when asking about concepts is
+  gone; construct cards are shared with hover.
+- **Fixed**: `alias`/`import` of modules in a `pyPackage` project
+  emitted unprefixed imports (`from test import *` instead of
+  `from gandora_std.test import *`); snippet/REPL top level now
+  applies GEP-0021 closure snapshots; expression-position `recur`
+  errors cite GEP-0019, not the retired loop; spec-type errors teach
+  the correction (`:ok` → atom(), `Int` → integer(), 20+ mappings);
+  `gan lsc` never prints a bare traceback.
+- **Sandbox**: practice hints now embed copyable templates; BDD grew
+  to 69 scenarios; the DeepSeek agent evaluation (written in Gandora,
+  `gan-playground/src/agent_eval.gan`) converges 6/6 naive tasks.
+
 ## v0.11.2 — 2026-08-03
 
 - **`gan try`** — the sandbox gets its first-class spelling

@@ -1,0 +1,60 @@
+defmodule TestFmt do
+  @moduledoc "Fmt 纯函数层测试:format_text 规范化、幂等、verify 安全网。"
+
+  import Test
+
+  defp fmt(text) do
+    {:ok, new} = Fmt.format_text(text)
+    new
+  end
+
+  def test_indent_normalized() do
+    Test.assert_eq(fmt("defmodule T do\n      def a(x),   do: x\nend\n"),
+      "defmodule T do\n  def a(x), do: x\nend\n")
+  end
+
+  def test_formatting_is_idempotent() do
+    once = fmt("defmodule T do\n    def a(x), do: x\nend\n")
+    Test.assert_eq(fmt(once), once)
+  end
+
+  def test_clean_input_unchanged() do
+    clean = "defmodule T do\n  def a(x), do: x\nend\n"
+    Test.assert_eq(fmt(clean), clean)
+  end
+
+  def test_blank_runs_collapse() do
+    Test.assert_eq(fmt("defmodule T do\n\n\n\n  def a(x), do: x\nend\n"),
+      "defmodule T do\n\n  def a(x), do: x\nend\n")
+  end
+
+  def test_capture_paren_rule() do
+    got = fmt("defmodule T do\n  def s(), do: &$math.sqrt/1\nend\n")
+    Test.assert_eq(String.contains?(got, "&($math.sqrt/1)"), true)
+  end
+
+  def test_unparsable_is_skipped() do
+    {:skip, _why} = Fmt.format_text("defmodule T do\n  def broken(\nend\n")
+    nil
+  end
+
+  def test_verify_accepts_identity() do
+    Test.assert_eq(Fmt.verify("x = 1  # keep\n", "x = 1  # keep\n"), :ok)
+  end
+
+  def test_verify_rejects_comment_change() do
+    {:error, why} = Fmt.verify("x = 1  # keep\n", "x = 1  # changed\n")
+    Test.assert_eq(String.contains?(why, "comment"), true)
+  end
+
+  def test_verify_rejects_term_change() do
+    {:error, _why} = Fmt.verify("x = 1\n", "x = 2\n")
+    nil
+  end
+
+  def test_heredoc_body_preserved() do
+    src = "defmodule T do\n  @moduledoc \"\"\"\n  docs stay put\n  \"\"\"\n  def a(x), do: x\nend\n"
+    got = fmt(src)
+    Test.assert_eq(String.contains?(got, "docs stay put"), true)
+  end
+end

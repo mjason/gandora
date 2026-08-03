@@ -12,7 +12,7 @@ defmodule Main do
   pyimport lsprotocol.types, as: types
   pyimport os
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.11.2",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.12.0",
     text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -116,30 +116,7 @@ defmodule Main do
 
   # ---- hover (GEP-0015-R005) -----------------------------------------------
 
-  @construct_docs %{
-    "def" => "Defines a public function. `def f(x), do: expr` or a `do ... end` body. Multi-clause heads dispatch by pattern, top to bottom (GEP-0001).",
-    "defp" => "Defines a private function — callable only inside its module; compiled with a leading underscore (GEP-0001).",
-    "defmodule" => "Declares the module for this file. One `defmodule` per file; the name maps to the generated Python module path (GEP-0001-R013).",
-    "defmacro" => "Defines a compile-time macro: it receives quoted arguments and returns quoted code (GEP-0002).",
-    "defstruct" => "Declares the module's struct with defaulted fields; literals `%Mod{...}`, updates `%Mod{s | ...}` and patterns work on it (GEP-0004).",
-    "defattr" => "Registers a custom annotation attribute handled by the module's `@on_definition` hook (GEP-0008).",
-    "quote" => "Returns the quoted AST of its block instead of evaluating it; `unquote` splices values back in (GEP-0002).",
-    "unquote" => "Inside `quote`, splices an evaluated value into the quoted code (GEP-0002).",
-    "case" => "Pattern-matches a value against clauses, top to bottom; the whole form is an expression (GEP-0001).",
-    "cond" => "Evaluates conditions top to bottom and takes the first truthy branch (GEP-0001).",
-    "with" => "Chains `pattern <- expr` matches; the first failure falls to `else` (GEP-0001).",
-    "try" => "Runs a body with `rescue` clauses matching Python exception types and an always-run `after` (GEP-0014).",
-    "rescue" => "Clauses of a `try`: `e in $mod.Type -> ...` matches by exception class; a bare variable catches every Exception (GEP-0014).",
-    "after" => "The cleanup section of `try`: always runs, contributes no value (GEP-0014).",
-    "recur" => "Restarts the enclosing function with new arguments — the explicit, compile-checked spelling of tail recursion: must be in tail position, arity must match a clause (GEP-0019-R005).",
-    "for" => "A comprehension: `for pat <- enum, filter, do: body` compiles to a native Python comprehension; non-matching patterns are skipped, `into: %{}` builds a map (GEP-0020).",
-    "fn" => "An anonymous function: `fn x -> x * 2 end`, called with `f.(x)`; supports multiple clauses and guards (GEP-0001).",
-    "pyimport" => "Declares a Python import at module top: `pyimport numpy, as: np` (GEP-0003).",
-    "use" => "Invokes the target module's `__using__` macro to inject code here (GEP-0008).",
-    "require" => "Makes the target module's macros available in this file (GEP-0002).",
-    "unless" => "`if` with the condition negated (GEP-0001).",
-    "when" => "A guard on a clause head or case pattern (GEP-0001)."
-  }
+  # construct cards live in ConstructDocs (shared with lsc)
 
   @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_HOVER)
   def hover(params) do
@@ -173,8 +150,8 @@ defmodule Main do
             pyref -> pyref_hover(token)
             true -> nil
           end
-        Map.has_key?(@construct_docs, token) ->
-          markdown_hover("`#{token}`\n\n#{Map.get(@construct_docs, token)}")
+        not is_nil(ConstructDocs.card(token)) ->
+          markdown_hover("`#{token}`\n\n#{ConstructDocs.card(token)}")
         true ->
           target = target_of(doc.source, token)
           info = lookup_doc(target)

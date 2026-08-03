@@ -184,7 +184,7 @@ def _coverage_hints(raw, source, in_module):
             _gan_tmp16 = missing + ["@moduledoc"]
         missing = _gan_tmp16
         if (gandora_std.enum.count(heads) > 0) and not (_gan_truthy(gandora_std.string.contains_p(raw, "@example"))):
-            _gan_tmp17 = [{"kind": "practice", "line": 0, "message": "No @example doctests — `gan test` verifies them; every function with interesting behavior deserves one (GEP-0007)."}]
+            _gan_tmp17 = [{"kind": "practice", "line": 0, "message": "No @example doctests — add one right above a def, e.g.:\n@example \"\"\"\n    gan> double(21)\n    42\n\"\"\"\n(`gan test` runs them; expected output is the Python repr) (GEP-0007)."}]
         else:
             _gan_tmp17 = []
         example_hint = _gan_tmp17
@@ -192,7 +192,7 @@ def _coverage_hints(raw, source, in_module):
             _gan_tmp18 = []
         else:
             _gan_fstr19 = gandora_std.enum.join(missing, "; ")
-            _gan_tmp18 = [{"kind": "practice", "line": 0, "message": f"Annotation coverage: missing {_gan_fstr19} — the standard is @doc + @spec (+ @param) on every public def (docs/syntax.md)."}]
+            _gan_tmp18 = [{"kind": "practice", "line": 0, "message": f"Annotation coverage: missing {_gan_fstr19} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md)."}]
         head_hint = _gan_tmp18
         return head_hint + example_hint
 
@@ -268,7 +268,7 @@ def _error_suggestions(source, msg, line):
             return []
         else:
             return [{"kind": "did_you_mean", "line": line, "message": f"`{word}` — did you mean `{gandora_std.enum.at(near, 0)}`?"}]
-    return gandora_std.enum.flat_map(gandora_std.enum.uniq(from_msg + at_line), _gan_fn6)
+    return gandora_std.enum.flat_map(gandora_std.enum.reject(gandora_std.enum.uniq(from_msg + at_line), lambda word, *, source=source: gandora_std.string.contains_p(source, "@" + word)), _gan_fn6)
 
 
 def _member_suggestions(raw, root):
@@ -373,6 +373,11 @@ def _split_value(stdout):
     else:
         _gan_tmp38 = gandora_std.string.replace(marked, "__gan_value__ ", "")
     value = _gan_tmp38
+    if value == "None":
+        _gan_tmp39 = None
+    else:
+        _gan_tmp39 = value
+    value = _gan_tmp39
     return (plain, value)
 
 

@@ -24,7 +24,7 @@ def _gan_truthy(value):
 class GanMatchError(Exception):
     pass
 
-usage = "gan - the Gandora task runner\n\nUsage:\n  gan build | check | run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | init <path> | version\n  gan try <file|-> [--no-run]   sandbox a snippet (gan try --help)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
+usage = "gan - the Gandora task runner\n\nUsage:\n  gan build | check | run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | init <path> | version\n  gan test                doctests + tests/*.gan (GEP-0024)\n  gan try <file|-> [--no-run]   sandbox a snippet (gan try --help)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
 
 gandora_jsonc = "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\"\n}\n"
 

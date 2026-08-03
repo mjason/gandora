@@ -48,6 +48,10 @@ defmodule Lsc do
           "col" => Enum.at(parts, 3)
         })
         $sys.exit(1)
+      e ->
+        # never a bare traceback: every failure is one JSON value
+        emit(%{"error" => "#{$builtins.type(e).__name__}: #{to_string(e)}"})
+        $sys.exit(2)
     end
   end
 
@@ -66,7 +70,14 @@ defmodule Lsc do
       ["resolve", module | _] ->
         emit(core.resolve(root, module))
       ["doc", target | _] ->
-        emit(core.doc(target, root))
+        info = core.doc(target, root)
+        card = ConstructDocs.card(target)
+        cond do
+          not is_nil(info) -> emit(info)
+          not is_nil(card) ->
+            emit(%{"label" => target, "construct" => card})
+          true -> emit(info)
+        end
       ["definition", target | _] ->
         emit(core.definition(target, root))
       ["symbols", module | _] ->

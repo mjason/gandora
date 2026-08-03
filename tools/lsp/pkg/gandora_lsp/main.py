@@ -15,6 +15,7 @@ import os
 import pathlib
 import pygls.lsp.server
 import re
+import gandora_lsp.construct_docs
 import gandora_lsp.py_intel
 import gandora_std.enum
 import gandora_std.map
@@ -34,11 +35,9 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.11.2", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.12.0", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
-
-construct_docs = {"def": "Defines a public function. `def f(x), do: expr` or a `do ... end` body. Multi-clause heads dispatch by pattern, top to bottom (GEP-0001).", "defp": "Defines a private function — callable only inside its module; compiled with a leading underscore (GEP-0001).", "defmodule": "Declares the module for this file. One `defmodule` per file; the name maps to the generated Python module path (GEP-0001-R013).", "defmacro": "Defines a compile-time macro: it receives quoted arguments and returns quoted code (GEP-0002).", "defstruct": "Declares the module's struct with defaulted fields; literals `%Mod{...}`, updates `%Mod{s | ...}` and patterns work on it (GEP-0004).", "defattr": "Registers a custom annotation attribute handled by the module's `@on_definition` hook (GEP-0008).", "quote": "Returns the quoted AST of its block instead of evaluating it; `unquote` splices values back in (GEP-0002).", "unquote": "Inside `quote`, splices an evaluated value into the quoted code (GEP-0002).", "case": "Pattern-matches a value against clauses, top to bottom; the whole form is an expression (GEP-0001).", "cond": "Evaluates conditions top to bottom and takes the first truthy branch (GEP-0001).", "with": "Chains `pattern <- expr` matches; the first failure falls to `else` (GEP-0001).", "try": "Runs a body with `rescue` clauses matching Python exception types and an always-run `after` (GEP-0014).", "rescue": "Clauses of a `try`: `e in $mod.Type -> ...` matches by exception class; a bare variable catches every Exception (GEP-0014).", "after": "The cleanup section of `try`: always runs, contributes no value (GEP-0014).", "recur": "Restarts the enclosing function with new arguments — the explicit, compile-checked spelling of tail recursion: must be in tail position, arity must match a clause (GEP-0019-R005).", "for": "A comprehension: `for pat <- enum, filter, do: body` compiles to a native Python comprehension; non-matching patterns are skipped, `into: %{}` builds a map (GEP-0020).", "fn": "An anonymous function: `fn x -> x * 2 end`, called with `f.(x)`; supports multiple clauses and guards (GEP-0001).", "pyimport": "Declares a Python import at module top: `pyimport numpy, as: np` (GEP-0003).", "use": "Invokes the target module's `__using__` macro to inject code here (GEP-0008).", "require": "Makes the target module's macros available in this file (GEP-0002).", "unless": "`if` with the condition negated (GEP-0001).", "when": "A guard on a clause head or case pattern (GEP-0001)."}
 
 
 @server.feature(lsprotocol.types.TEXT_DOCUMENT_DID_OPEN)
@@ -176,8 +175,8 @@ def hover(params):
                 return _pyref_hover(token)
             else:
                 return None
-        elif _gan_truthy(gandora_std.map.has_key_p(construct_docs, token)):
-            return _markdown_hover(f"`{token}`\n\n{gandora_std.map.get(construct_docs, token)}")
+        elif not ((gandora_lsp.construct_docs.card(token) is None)):
+            return _markdown_hover(f"`{token}`\n\n{gandora_lsp.construct_docs.card(token)}")
         else:
             target = _target_of(doc.source, token)
             info = _lookup_doc(target)

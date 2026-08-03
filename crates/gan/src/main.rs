@@ -849,9 +849,85 @@ fn cmd_test() -> ExitCode {
         }
     }
     println!("doctests: {checked} module(s) checked, {failed} failed");
-    if failed == 0 {
+    // the tests/ directory: test_*.gan compiled with the whole project
+    // context, executed by pytest (GEP-0024)
+    let tests_failed = match run_test_files(&config, &program, &base_args, &cache_root) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if failed == 0 && !tests_failed {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+/// Compile `tests/*.gan` together with the project sources and run
+/// pytest over the compiled tree (GEP-0024). Returns whether anything
+/// failed; quietly does nothing when there is no tests directory.
+fn run_test_files(
+    config: &project::Config,
+    program: &str,
+    base_args: &[String],
+    cache_root: &Path,
+) -> Result<bool, Diagnostic> {
+    let tests_dir = config.root.join("tests");
+    if !tests_dir.is_dir() {
+        return Ok(false);
+    }
+    let mut test_files: Vec<PathBuf> = std::fs::read_dir(&tests_dir)
+        .map_err(io_err(&tests_dir))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "gan"))
+        .collect();
+    test_files.sort();
+    if test_files.is_empty() {
+        return Ok(false);
+    }
+    let mut sources = project::discover_sources(config)?;
+    for f in &test_files {
+        let module = project::module_name_for(f, &tests_dir)?;
+        sources.push((f.clone(), module));
+    }
+    let modules = project::compile_files(&sources, Some(config))?;
+    let out_root = config.root.join(".gandora/tests");
+    // only the test modules live here; project modules import from the
+    // doctest cache via PYTHONPATH
+    let test_names: std::collections::BTreeSet<String> = test_files
+        .iter()
+        .filter_map(|f| f.file_stem().map(|s| s.to_string_lossy().to_string()))
+        .collect();
+    let test_modules: Vec<project::CompiledModule> = modules
+        .into_iter()
+        .filter(|m| {
+            m.py_path
+                .rsplit('/')
+                .next()
+                .map(|f| test_names.contains(f.trim_end_matches(".py")))
+                .unwrap_or(false)
+        })
+        .collect();
+    project::write_outputs(&test_modules, &out_root)?;
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let pythonpath = format!(
+        "{}{sep}{}",
+        cache_root.display(),
+        std::env::var("PYTHONPATH").unwrap_or_default()
+    );
+    let mut command = std::process::Command::new(program);
+    command.args(base_args);
+    command.args(["-m", "pytest", &out_root.display().to_string(), "-q"]);
+    command.env("PYTHONPATH", pythonpath);
+    match command.status() {
+        Ok(status) => Ok(!status.success()),
+        Err(e) => {
+            eprintln!(
+                "ganc: could not run pytest ({e}); add it with `uv add --dev pytest`"
+            );
+            Ok(true)
+        }
     }
 }

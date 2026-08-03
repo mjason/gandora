@@ -15,11 +15,23 @@ FILTER = sys.argv[3] if len(sys.argv) > 3 else ""
 
 
 def run_try(source, *extra):
+    # a "__FILE__:<path>" arg switches to file-target mode (source unused);
+    # bytes sources exercise the non-UTF8 stdin path
+    target = "-"
+    args = []
+    for a in extra:
+        if isinstance(a, str) and a.startswith("__FILE__:"):
+            target = a.split(":", 1)[1]
+        else:
+            args.append(a)
+    binary = isinstance(source, bytes)
     r = subprocess.run(
-        [LSC, "try", "-", "--root", ROOT, *extra],
-        input=source, capture_output=True, text=True, timeout=120, cwd=ROOT,
+        [LSC, "try", target, "--root", ROOT, *args],
+        input=source if target == "-" else None,
+        capture_output=True, text=not binary, timeout=120, cwd=ROOT,
     )
-    return json.loads(r.stdout), r.returncode
+    out = r.stdout.decode() if binary else r.stdout
+    return json.loads(out), r.returncode
 
 
 def kinds(d, kind):
@@ -171,6 +183,91 @@ SCENARIOS = [
     ("lints", "the retired loop gets its migration recipe",
      "defmodule M do\n  def f() do\n    loop x = 1 do\n      break(x)\n    end\n  end\nend",
      [], [stage_is("compile"), diag_contains("GEP-0014-R007")]),
+
+    # ---- Feature: execution edges ------------------------------------------
+    ("execution-edges", "a defs-only module compiles and runs quietly",
+     'defmodule M do\n  @moduledoc "m"\n  @doc "d"\n  @spec f(term()) :: term()\n  @example """\n      gan> 1\n      1\n  """\n  def f(x), do: x\nend',
+     [], [ok, stdout_is("")]),
+    ("execution-edges", "std functions work inside the sandbox",
+     "Enum.sort([3, 1, 2]) |> Enum.sum()", [], [ok, value_is("6")]),
+    ("execution-edges", "Python interop works inside the sandbox",
+     "$math.sqrt(81.0)", [], [ok, value_is("9.0")]),
+    ("execution-edges", "a million-frame tail recursion is fine in the sandbox",
+     'defmodule M do\n  @moduledoc "m"\n  def s(n), do: s(n, 0)\n  def s(0, acc), do: acc\n  def s(n, acc), do: s(n - 1, acc + n)\n  def main(), do: IO.puts(s(1_000_000))\nend',
+     [], [lambda d, rc: d["stdout"] == "500000500000\n"]),
+    ("execution-edges", "a struct roundtrip runs",
+     'defmodule Shopx do\n  @moduledoc "m"\n  defstruct name: nil, price: 0\n  def main() do\n    u = %Shopx{name: "kb", price: 100}\n    IO.puts("#{u.name} #{u.price}")\n  end\nend',
+     [], [lambda d, rc: d["stdout"] == "kb 100\n"]),
+    ("execution-edges", "a dict comprehension with into: runs",
+     'for {k, v} <- [{"a", 1}, {"b", 2}], into: %{}, do: {k, v * 10}', [],
+     [ok, value_is("{'a': 10, 'b': 20}")]),
+    ("execution-edges", "unicode survives the round trip",
+     'IO.puts("中文→émoji ✓")', [], [ok, stdout_is("中文→émoji ✓\n")]),
+    ("execution-edges", "a case expression is a value",
+     'case {:ok, 7} do\n  {:ok, n} -> n * 6\n  _ -> 0\nend', [], [ok, value_is("42")]),
+    ("execution-edges", "IO.puts as the last statement leaves value null",
+     'IO.puts("x")', [], [ok, lambda d, rc: d["value"] is None]),
+    ("execution-edges", "empty input verdicts cleanly instead of crashing",
+     "", [], [lambda d, rc: isinstance(d.get("ok"), bool)]),
+    ("execution-edges", "closures capture by value inside the sandbox",
+     "x = 1\nf = fn -> x end\nx = 2\nf.()", [], [ok, value_is("1")]),
+
+    # ---- Feature: compile-stage precision ----------------------------------
+    ("compile-errors", "recur outside tail position is a compile error",
+     "defmodule M do\n  @moduledoc \"m\"\n  def f(n) do\n    recur(n - 1) + 1\n  end\nend",
+     [], [not_ok, stage_is("compile"), diag_contains("GEP-0019-R005")]),
+    ("compile-errors", "into: with a non-tuple body names the rule",
+     'for x <- [1], into: %{}, do: x', [], [not_ok, stage_is("compile"),
+     diag_contains("GEP-0020")]),
+    ("compile-errors", "@spec naming a missing function is caught",
+     'defmodule M do\n  @moduledoc "m"\n  @spec nope(term()) :: term()\n  def f(x), do: x\nend',
+     [], [not_ok, stage_is("compile"), diag_contains("GEP-0017")]),
+    ("compile-errors", "an unknown @allow target is a compile error",
+     'defmodule M do\n  @moduledoc "m"\n  @allow :stack_recursoin\n  def f(x), do: x\nend',
+     [], [not_ok, diag_contains("does not recognize")]),
+
+    # ---- Feature: project-aware did-you-mean -------------------------------
+    ("project", "a project module member typo is caught against real symbols",
+     "Stats.maen([1, 2, 3])", [], [suggests("did_you_mean", "Stats.mean")]),
+    ("project", "Keyword member typos are caught",
+     "Keyword.kys([a: 1])", [], [suggests("did_you_mean", "Keyword.keys")]),
+    ("project", "List member typos are caught",
+     "List.flaten([1, [2]])", [], [suggests("did_you_mean", "List.flatten")]),
+
+    # ---- Feature: negatives (no false alarms) ------------------------------
+    ("negatives", "a correct member call draws no did-you-mean",
+     "Enum.map([1], fn x -> x end)", [], [ok, no_suggestion_kind("did_you_mean")]),
+    ("negatives", "an unknown module is skipped, not guessed at",
+     "Nonexistent.thing(1)", [], [no_suggestion_kind("did_you_mean")]),
+    ("negatives", "identifiers containing keywords do not trip migration",
+     "returning = 1\nlambdas = 2\nreturning + lambdas", [],
+     [ok, no_suggestion_kind("migration")]),
+    ("negatives", "count != 0 draws no empty? hint",
+     "Enum.count([1]) != 0", [], [no_suggestion_kind("practice")]),
+    ("negatives", "a multi-arg fn wrapper draws no capture hint",
+     "g = fn x -> to_string(x, 16) end\ng", [], [no_suggestion_kind("practice")]),
+    ("negatives", "three refs across different modules draw no pyimport hint",
+     "$json.dumps(1)\n$math.pi\n$os.getcwd()", [], [no_suggestion_kind("practice")]),
+    ("negatives", "a typed rescue draws no bare-rescue hint",
+     'try do\n  1\nrescue\n  e in $builtins.ValueError -> to_string(e)\n  e -> to_string(e)\nend',
+     [], [no_suggestion_kind("practice")]),
+
+    # ---- Feature: robustness (never a bare traceback) ----------------------
+    ("robustness", "a missing input file is a JSON error, not a traceback",
+     None, ["__FILE__:/nonexistent-sandbox-input.gan"],
+     [lambda d, rc: "error" in d and rc == 2]),
+    ("robustness", "non-UTF8 stdin is a JSON error, not a traceback",
+     b"\x00\xff garbage \x01", [], [lambda d, rc: "error" in d and rc == 2]),
+    ("robustness", "a 400-function module still verdicts",
+     "defmodule Big do\n  @moduledoc \"m\"\n" +
+     "".join(f"  def f{i}(x), do: x + {i}\n" for i in range(400)) + "end",
+     ["--no-run"], [lambda d, rc: isinstance(d.get("ok"), bool)]),
+    ("robustness", "a pathologically long line still verdicts",
+     "x = [" + ", ".join(str(i) for i in range(2000)) + "]\nEnum.sum(x)", [],
+     [ok, value_is(str(sum(range(2000))))]),
+    ("robustness", "deep nesting still verdicts",
+     "x = " + "(" * 60 + "1" + ")" * 60 + "\nx", [],
+     [lambda d, rc: isinstance(d.get("ok"), bool)]),
 
     # ---- Feature: silence on good code (trust) -----------------------------
     ("silence", "an idiomatic module draws zero suggestions", CLEAN_MODULE, [], [clean]),

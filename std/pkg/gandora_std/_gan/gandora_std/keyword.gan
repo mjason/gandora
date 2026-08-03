@@ -12,8 +12,10 @@ defmodule Keyword do
   @param_trans kw, zh_CN: "关键字列表。"
   @param key, "The key to read; first match wins."
   @param_trans key, zh_CN: "要读取的键，取首个匹配。"
-  @spec get(keyword(), atom()) :: any()
-  def get(kw, key), do: ~python(next((v for k, v in <%= kw %> if k == <%= key %>), None))
+  @param default, "Returned when the key is absent."
+  @param_trans default, zh_CN: "键缺失时返回的值。"
+  @spec get(keyword(), atom(), any()) :: any()
+  def get(kw, key, default \\ nil), do: ~python(next((v for k, v in <%= kw %> if k == <%= key %>), <%= default %>))
 
   @doc "Replaces `key` with `value`, prepending it (Elixir Keyword.put)."
   @doc_trans zh_CN: "以 `value` 替换 `key` 并将其前置（Elixir 的 Keyword.put）。"

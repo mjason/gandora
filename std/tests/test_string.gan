@@ -1,0 +1,32 @@
+defmodule TestString do
+  @moduledoc "String 全函数测试:常规、Unicode、空串、边界。"
+
+  import Test
+
+  def test_upcase(), do: Test.assert_eq(String.upcase("abc"), "ABC")
+  def test_downcase(), do: Test.assert_eq(String.downcase("AbC"), "abc")
+  def test_capitalize(), do: Test.assert_eq(String.capitalize("heLLo"), "Hello")
+  def test_split_default_whitespace(), do: Test.assert_eq(String.split("a  b\tc"), ["a", "b", "c"])
+  def test_split_on(), do: Test.assert_eq(String.split_on("a,b,,c", ","), ["a", "b", "", "c"])
+  def test_trim(), do: Test.assert_eq(String.trim("  x  "), "x")
+  def test_trim_leading(), do: Test.assert_eq(String.trim_leading("  x  "), "x  ")
+  def test_trim_trailing(), do: Test.assert_eq(String.trim_trailing("  x  "), "  x")
+  def test_replace_all_occurrences(), do: Test.assert_eq(String.replace("a-b-a", "a", "x"), "x-b-x")
+  def test_contains(), do: Test.assert_true(String.contains?("hello", "ell"))
+  def test_starts_with(), do: Test.assert_true(String.starts_with?("file.gan", "file"))
+  def test_ends_with(), do: Test.assert_true(String.ends_with?("file.gan", ".gan"))
+  def test_length_counts_codepoints(), do: Test.assert_eq(String.length("héllo"), 5)
+  def test_length_empty(), do: Test.assert_eq(String.length(""), 0)
+  def test_pad_leading(), do: Test.assert_eq(String.pad_leading("5", 3), "  5")
+  def test_pad_leading_no_shrink(), do: Test.assert_eq(String.pad_leading("abcd", 2), "abcd")
+  def test_pad_trailing(), do: Test.assert_eq(String.pad_trailing("5", 3), "5  ")
+  def test_to_integer(), do: Test.assert_eq(String.to_integer("42"), 42)
+  def test_to_integer_negative(), do: Test.assert_eq(String.to_integer("-7"), -7)
+  def test_to_float(), do: Test.assert_eq(String.to_float("2.5"), 2.5)
+  def test_at(), do: Test.assert_eq(String.at("abc", 1), "b")
+  def test_at_negative(), do: Test.assert_eq(String.at("abc", -1), "c")
+  def test_reverse(), do: Test.assert_eq(String.reverse("abc"), "cba")
+  def test_duplicate(), do: Test.assert_eq(String.duplicate("ab", 2), "abab")
+  def test_match(), do: Test.assert_true(String.match?("gan-2026", ~r/\d+/))
+  def test_downcase_unicode(), do: Test.assert_eq(String.downcase("ÉÀ"), "éà")
+end

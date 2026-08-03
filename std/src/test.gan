@@ -1,0 +1,103 @@
+defmodule Test do
+  @moduledoc """
+  The official test assertions (GEP-0024): write `tests/*.gan` modules
+  whose `test_*` functions call these — `gan test` compiles them and
+  runs pytest underneath. A failure raises; pytest reports it.
+  """
+
+  @doc "Fails unless `got == want`, naming both sides."
+  @doc_trans zh_CN: "断言相等,失败时同时报出期望值与实际值。"
+  @param got, "The actual value."
+  @param_trans got, zh_CN: "实际值。"
+  @param want, "The expected value."
+  @param_trans want, zh_CN: "期望值。"
+  @spec assert_eq(term(), term()) :: nil
+  @example """
+      gan> Test.assert_eq(1 + 1, 2)
+  """
+  def assert_eq(got, want) do
+    if got != want do
+      raise "expected #{inspect(want)}, got #{inspect(got)}"
+    end
+    nil
+  end
+
+  @doc "Fails unless the value is exactly `true`."
+  @doc_trans zh_CN: "断言值恰为 true。"
+  @param value, "The boolean under test."
+  @param_trans value, zh_CN: "被检验的布尔值。"
+  @spec assert_true(term()) :: nil
+  @example """
+      gan> Test.assert_true(2 > 1)
+  """
+  def assert_true(value) do
+    assert_eq(value, true)
+  end
+
+  @doc "Fails unless the value is exactly `false`."
+  @doc_trans zh_CN: "断言值恰为 false。"
+  @param value, "The boolean under test."
+  @param_trans value, zh_CN: "被检验的布尔值。"
+  @spec assert_false(term()) :: nil
+  @example """
+      gan> Test.assert_false(1 > 2)
+  """
+  def assert_false(value) do
+    assert_eq(value, false)
+  end
+
+  @doc "Fails unless the value is `nil`."
+  @doc_trans zh_CN: "断言值为 nil。"
+  @param value, "The value under test."
+  @param_trans value, zh_CN: "被检验的值。"
+  @spec assert_nil(term()) :: nil
+  @example """
+      gan> Test.assert_nil(Map.get(%{}, "missing"))
+  """
+  def assert_nil(value) do
+    if not is_nil(value) do
+      raise "expected nil, got #{inspect(value)}"
+    end
+    nil
+  end
+
+  @doc "Runs `f` and fails unless it raises; returns the message."
+  @doc_trans zh_CN: "断言零元函数会抛异常,返回异常消息。"
+  @param f, "A zero-arity function expected to raise."
+  @param_trans f, zh_CN: "预期抛异常的零元函数。"
+  @spec assert_raises(fun()) :: string()
+  def assert_raises(f) do
+    outcome = try do
+      f.()
+      :no_raise
+    rescue
+      e -> {:raised, to_string(e)}
+    end
+    case outcome do
+      :no_raise -> raise "expected a raise, got none"
+      {:raised, msg} -> msg
+    end
+  end
+
+  @doc "Fails unless `haystack` contains `needle` (string or list)."
+  @doc_trans zh_CN: "断言字符串或列表包含给定元素。"
+  @param haystack, "The string or list searched."
+  @param_trans haystack, zh_CN: "被搜索的字符串或列表。"
+  @param needle, "What must be present."
+  @param_trans needle, zh_CN: "必须存在的内容。"
+  @spec assert_contains(term(), term()) :: nil
+  @example """
+      gan> Test.assert_contains([1, 2, 3], 2)
+  """
+  def assert_contains(haystack, needle) do
+    found = if is_binary(haystack) do
+      String.contains?(haystack, needle)
+    else
+      Enum.member?(haystack, needle)
+    end
+    if not found do
+      raise "expected #{inspect(haystack)} to contain #{inspect(needle)}"
+    end
+    nil
+  end
+end
