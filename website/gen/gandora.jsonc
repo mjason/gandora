@@ -1,0 +1,5 @@
+{
+  "source": ["src"],
+  "outDir": "dist",
+  "targetPython": "3.11"
+}

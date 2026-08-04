@@ -1,0 +1,94 @@
+defmodule GenApi do
+  @moduledoc """
+  Standard-library reference generator for the documentation site —
+  itself Gandora: shells `gan-lsc symbols/doc` over the std project
+  and emits one Markdown page per module, in English and (from the
+  `_trans` metadata already living in the sources) Chinese.
+
+  Run: ganc run src/gen_api.gan <lsc-bin> <std-root> <out-dir>
+  """
+  @moduledoc_trans zh_CN: "文档站标准库参考生成器——本身即 Gandora:对 std 项目跑 gan-lsc symbols/doc,按模块产出 Markdown 页;英文与中文(直接取源内 _trans 元数据)。"
+
+  pyimport json
+  pyimport subprocess
+  pyimport pathlib
+  pyimport os
+  pyimport sys
+
+  @modules ["Enum", "List", "Map", "Keyword", "String", "Test"]
+
+  @doc "Entry: generates <mod>.md and <mod>.zh.md for every std module."
+  @spec main() :: nil
+  def main() do
+    argv = $builtins.list(sys.argv)
+    lsc = Enum.at(argv, 1)
+    root = Enum.at(argv, 2)
+    out = Enum.at(argv, 3)
+    Enum.each(@modules, fn mod ->
+      page(lsc, root, out, mod, "default")
+      page(lsc, root, out, mod, "zh-CN")
+    end)
+    IO.puts("generated #{Enum.count(@modules)} module pages x 2 locales")
+  end
+
+  defp lsc_json(lsc, root, args) do
+    r = subprocess.run([lsc] ++ args ++ ["--root", root],
+      capture_output: true, text: true, timeout: 120)
+    json.loads(r.stdout)
+  end
+
+  defp page(lsc, root, out, mod, locale) do
+    syms = lsc_json(lsc, root, ["symbols", mod])
+    defs = for s <- syms, Map.get(s, "kind") == "def", do: Map.get(s, "name")
+    moddoc = lsc_json(lsc, root, ["doc", mod])
+    sections = Enum.map(defs, fn name -> section(lsc, root, mod, name, locale) end)
+    intro = pick(Map.get(moddoc, "entries", %{}), locale)
+    body = "# #{mod}\n\n#{intro}\n\n" <> Enum.join(sections, "\n")
+    suffix = if locale == "default", do: "", else: ".zh"
+    path = os.path.join(out, mod.lower() <> suffix <> ".md")
+    pathlib.Path(path).write_text(body)
+  end
+
+  # one locale's text, falling back to English
+  defp pick(entries, locale) do
+    hit = Map.get(entries, locale)
+    if is_nil(hit) do
+      Map.get(entries, "default", "")
+    else
+      hit
+    end
+  end
+
+  defp section(lsc, root, mod, name, locale) do
+    info = lsc_json(lsc, root, ["doc", "#{mod}.#{name}"])
+    specs = Map.get(info, "specs", [])
+    prose = pick(Map.get(info, "entries", %{}), locale)
+    spec_block = if Enum.empty?(specs) do
+      ""
+    else
+      "```elixir\n" <> Enum.join(specs, "\n") <> "\n```\n\n"
+    end
+    params = param_table(Map.get(info, "params", []), locale)
+    examples = example_block(Map.get(info, "examples", []))
+    "## #{name}\n\n" <> spec_block <> prose <> "\n" <> params <> examples
+  end
+
+  defp param_table(params, locale) do
+    if Enum.empty?(params) do
+      ""
+    else
+      rows = Enum.map(params, fn p ->
+        "| `#{Map.get(p, "name")}` | #{pick(Map.get(p, "entries", %{}), locale)} |"
+      end)
+      "\n| | |\n| --- | --- |\n" <> Enum.join(rows, "\n") <> "\n"
+    end
+  end
+
+  defp example_block(examples) do
+    if Enum.empty?(examples) do
+      ""
+    else
+      "\n```elixir\n" <> Enum.join(examples, "") <> "```\n"
+    end
+  end
+end

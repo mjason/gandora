@@ -1,0 +1,109 @@
+site_name: Gandora
+site_description: An Elixir-flavored language that compiles to readable Python — built for the AI era.
+site_url: https://mjason.github.io/gandora/
+repo_url: https://github.com/mjason/gandora
+repo_name: mjason/gandora
+edit_uri: edit/main/website/docs/
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: false
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: 简体中文
+          build: true
+          nav_translations:
+            Home: 首页
+            Getting Started: 快速上手
+            Guide: 语言指南
+            Modules & Functions: 模块与函数
+            Data & Pattern Matching: 数据与模式匹配
+            Functions & Pipelines: 函数与管道
+            Iteration & Recursion: 迭代与递归
+            The Type System: 类型系统
+            Structs & Annotations: 结构体与注解
+            Macros: 宏
+            Sigils & Embedded Languages: Sigil 与嵌入语言
+            Python Interop: Python 互操作
+            Testing: 测试
+            Tooling: 工具链
+            The Build Verdict: build 裁决
+            CLI & Editors: 命令行与编辑器
+            Writing Gandora with AI: 用 AI 写 Gandora
+            Standard Library: 标准库
+            GEPs: GEP 规范
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guide:
+      - Modules & Functions: guide/modules.md
+      - Data & Pattern Matching: guide/data.md
+      - Functions & Pipelines: guide/functions.md
+      - Iteration & Recursion: guide/iteration.md
+      - The Type System: guide/types.md
+      - Structs & Annotations: guide/structs.md
+      - Macros: guide/macros.md
+      - Sigils & Embedded Languages: guide/sigils.md
+      - Python Interop: guide/interop.md
+      - Testing: guide/testing.md
+  - Tooling:
+      - The Build Verdict: tooling/build.md
+      - CLI & Editors: tooling/cli.md
+  - Writing Gandora with AI: ai.md
+  - Standard Library:
+      - Enum: reference/enum.md
+      - List: reference/list.md
+      - Map: reference/map.md
+      - Keyword: reference/keyword.md
+      - String: reference/string.md
+      - Test: reference/test.md
+  - GEPs: geps.md
