@@ -182,7 +182,7 @@ def _suggestion(source, name):
     if name == "":
         return ""
     else:
-        idents = gandora_std.enum.uniq(re.compile("[a-z_][A-Za-z0-9_]*[?!]?").findall(source))
+        idents = gandora_std.enum.uniq(re.compile("(?<![A-Za-z0-9_])[a-z_][A-Za-z0-9_]*[?!]?").findall(source))
         near = gandora_std.enum.filter(difflib.get_close_matches(name, idents, n=3, cutoff=0.75), lambda n, *, name=name: n != name)
         if _gan_truthy(gandora_std.enum.empty_p(near)):
             return ""

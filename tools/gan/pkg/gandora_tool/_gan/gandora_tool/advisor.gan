@@ -30,7 +30,9 @@ defmodule Advisor do
     {~r/\bnil\s*==|==\s*nil\b/, "Prefer `is_nil(x)` over comparing with nil."},
     {~r/\$"/, "Quoted module refs were retired: write $(a.b) (GEP-0003-R010)."},
     {~r/\bPython\b/,
-      "There is no `Python` object — interop is `$math.sqrt(x)` inline, or `pyimport math` at module top, then `math.sqrt(x)` (GEP-0003)."}
+      "There is no `Python` object — interop is `$math.sqrt(x)` inline, or `pyimport math` at module top, then `math.sqrt(x)` (GEP-0003)."},
+    {~r/\|>\s*then\(/,
+      "Elixir's `then/2` does not exist — pipe into an anonymous fn `x |> (fn v -> f(v, 1) end).()`, or just bind a variable."}
   ]
 
   # Elixir standard-library reflexes that do not exist here — each one
@@ -193,8 +195,11 @@ defmodule Advisor do
       script_only = heads == ["main"]
       example_hint = if Enum.count(heads) > 0 and not script_only and
         not String.contains?(raw, "@example") do
-          [%{"kind" => "practice", "line" => line_of(source, ~r/(?m)^\s*def /),
-            "message" => "No @example doctests — add one right above a def, e.g.:\n@example \"\"\"\n    gan> double(21)\n    42\n\"\"\"\n(`gan test` runs them; expected output is the Python repr) (GEP-0007)."}]
+          # name a real function so the template is copy-pasteable
+          subject = Enum.at(Enum.filter(heads, fn h -> h != "main" end) ++ heads, 0)
+          [%{"kind" => "practice",
+            "line" => line_of(source, re.compile("(?m)^\\s*def " <> re.escape(subject))),
+            "message" => "No @example doctests — add one right above `def #{subject}`:\n@example \"\"\"\n    gan> #{subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {:ok, 21} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007)."}]
         else
           []
         end
@@ -411,7 +416,7 @@ defmodule Advisor do
       []
     else
       word = m.group(1)
-      idents = ~r/[a-z_][A-Za-z0-9_]*/.findall(source) |> Enum.uniq()
+      idents = ~r/(?<![A-Za-z0-9_])[a-z_][A-Za-z0-9_]*/.findall(source) |> Enum.uniq()
       near = difflib.get_close_matches(word, idents, n: 3, cutoff: 0.7)
       |> Enum.filter(fn n -> n != word end)
       if Enum.empty?(near) do

@@ -18,6 +18,7 @@ defmodule ConstructDocs do
     "case" => "Pattern-matches a value against clauses, top to bottom; the whole form is an expression (GEP-0001).",
     "cond" => "Evaluates conditions top to bottom and takes the first truthy branch (GEP-0001).",
     "with" => "Chains `pattern <- expr` matches; the first failure falls to `else` (GEP-0001). Shape:\nwith {:ok, a} <- parse(s),\n     {:ok, b} <- check(a) do\n  {:ok, b}\nelse\n  {:error, why} -> {:error, why}\nend",
+    "prompt" => "Raw prose sigil for AI prompts (GEP-0009-R006): `~prompt(one line with \"quotes\" and {braces})` or `~prompt\"\"\"...\"\"\"` blocks — no escaping ever; `<%= expr %>` splices values in.",
     "defaults" => "Trailing default parameters: `def f(x, y \\\\ 1, mark \\\\ \"!\")` — callers omit suffix arguments (`f(1)`, `f(1, 2)`); defaults must be trailing, one clause declares them (GEP-0011).",
     "try" => "Runs a body with `rescue` clauses matching Python exception types and an always-run `after` (GEP-0014).",
     "rescue" => "Clauses of a `try`: `e in $mod.Type -> ...` matches by exception class; a bare variable catches every Exception (GEP-0014).",

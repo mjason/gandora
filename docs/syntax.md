@@ -500,6 +500,19 @@ SELECT * FROM sales WHERE units >= <%= min_units %>
 ~markdown(A report for <%= name %>)
 ```
 
+**`~prompt` is the blessed name for AI prose** (GEP-0009-R006): the
+body is raw, so quotes, braces, backslashes, and inline JSON need no
+escaping — never fight `\\\"` again:
+
+```elixir
+@task ~prompt(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
+
+@system ~prompt"""
+You are a coding agent. Reply with {"status": "ok"} when done.
+The user's name is <%= name %>.
+"""
+```
+
 `~python` is the escape hatch for Python-only spellings; splices are
 compiled Gandora expressions, everything else passes through verbatim.
 
