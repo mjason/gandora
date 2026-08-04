@@ -1,14 +1,27 @@
-# Gandora 语言手册
+# The Gandora Language Manual
 
 > 本文件是非规范性翻译，仅供参考；原文为英文版 [syntax.md](../../syntax.md)。
 
-编写 Gandora 的实用指南——面向人类，且有意为之，也面向 AI 智能体。规范性定义收录于 GEP（[`geps/`](../geps/)）中；本手册展示各部分的用法，并在存在多种写法时指明应优先选用哪一种。手册中的每个构造都在 [`examples/tour`](../examples/tour) 中得以实践（其已检入的 [`generated/`](../examples/tour/generated/) 目录展示了每章所编译出的精确 Python 代码），并通过沙盒的自检套件经过了实战检验。
+The practical guide to writing Gandora — for humans and, deliberately,
+for AI agents. Normative definitions live in the GEPs
+([`geps/`](../geps/)); this manual shows how the pieces are used and
+which spelling to prefer when several exist. Every construct here is
+exercised by [`examples/tour`](../examples/tour) (whose checked-in
+[`generated/`](../examples/tour/generated/) shows the exact Python each
+chapter compiles to) and battle-tested by the playground's
+self-checking suite.
 
-以下基本原则贯穿全书：
+Ground rules that shape everything below:
 
-- **零运行时。** 生成的 Python 代码自包含且可读——与审阅者手写的代码无异。辅助函数按模块内联；部署从不依赖 Gandora。
-- **Elixir 语法，Python 语义于底层。** 凡 Elixir 中存在某个构造，Gandora 便以 Elixir 方式拼写；值则是普通的 Python 对象。
-- **编译器会反馈。** 警告是静态可证明的事实，而非观点；悬停提示显示递归是如何编译的；`gan lsc` 将每个事实以 JSON 形式提供。
+- **Zero runtime.** Generated Python is self-contained and readable —
+  what a reviewer would have written by hand. Helpers are inlined per
+  module; deployment never depends on Gandora.
+- **Elixir surface, Python semantics underneath.** Where Elixir has a
+  construct, Gandora spells it the Elixir way; values are ordinary
+  Python objects.
+- **The compiler talks back.** Warnings are statically provable facts,
+  not opinions; hover shows how recursion compiled; `gan lsc` serves
+  every fact as JSON.
 
 ## 模块与函数
 
@@ -31,7 +44,7 @@ defmodule App.Math do
 end
 ```
 
-函数返回其最后一个表达式。`def f(x), do: expr` 是单行形式。守卫（`when`）可以使用布尔型内建函数：`is_list is_map is_tuple is_binary is_integer is_float is_number is_atom is_nil is_function`，比较操作符，`and or not`，算术运算。
+函数返回其最后一个表达式。`def f(x), do: expr` 是单行形式。守卫（`when`）可以使用布尔形状的内置函数：`is_list is_map is_tuple is_binary is_integer is_float is_number is_atom is_nil is_function`、比较运算符、`and or not`、算术运算。
 
 ## 数据
 
@@ -54,7 +67,7 @@ rem(-7, 2)                           # -1 — truncated remainder (not Python %)
 
 ## 模式匹配
 
-`=`、`case`、函数头、`with` 以及 `for` 生成器都会匹配模式：字面量、变量、`_`、元组、`[head | tail]`、映射、针（`^x` — 匹配 *现有* 值 x）以及结构体。
+`=`、`case`、函数头、`with` 以及 `for` 生成器都匹配模式：字面量、变量、`_`、元组、`[head | tail]`、映射、pin（`^x`——匹配 x 的*现有*值）以及结构体。
 
 ```elixir
 {:ok, value} = fetch()
@@ -66,7 +79,7 @@ case result do
   _ -> "anything else"
 end
 
-cond do                       # 第一个为真的条件（非模式）
+cond do                       # 第一个为真的条件（不是模式）
   x > 90 -> :a
   true -> :c
 end
@@ -79,7 +92,7 @@ else
 end
 ```
 
-失败的 `=`/`case` 匹配将引发 `GanMatchError`。重新绑定名称（`x = 1; x = 2`）会创建一个新绑定 —— 在此期间创建的闭包将保留旧值（见下文）。
+失败的 `=`/`case` 匹配会抛出 `GanMatchError`。重新绑定一个名称（`x = 1; x = 2`）会创建一个新的绑定——介于之间创建的闭包会保留旧值（见下文）。
 
 ## 函数作为值
 
@@ -96,7 +109,7 @@ mine = &fact/1                       # capture a module function
 double.(21)                          # calling a function value uses .()
 ```
 
-**闭包在创建时按值捕获**（GEP-0021），与 Elixir 完全一致——后续的重新绑定、尾递归循环迭代或推导步骤绝不会泄露到先前创建的闭包中。编译器通过 Python 自身的惯用法实现这一点（`lambda x, *, n=n: x + n`）；调用元数保持严格。
+**闭包在创建时按值捕获**（GEP-0021），与 Elixir 完全一致——后续的重新绑定、尾递归循环迭代或推导步骤绝不会泄漏到先前创建的闭包中。编译器使用 Python 自身的惯用法（`lambda x, *, n=n: x + n`）来实现这一点；调用参数数量保持严格。
 
 ## 管道
 
@@ -107,36 +120,36 @@ df |> .groupby("k") |> .agg(spec)      # method pipe: calls ON the piped value
 value.method(x).attr                   # postfix chains on anything
 ```
 
-管道可以延续到下一行，只要该行以 `|>` 开头。
+当管道以 `|>` 开头时，可以延续到下一行。
 
-## 迭代：推导式与递归
+## 迭代：推导与递归
 
-没有 `loop` 和 `while`。迭代通过 `for`、`Enum` 族函数或递归实现——编译器确保递归安全。
+没有 `loop` 和 `while`。迭代使用 `for`、`Enum` 家族或递归——而编译器确保递归安全。
 
-### `for` 推导式（GEP-0020）
+### `for` 推导（GEP-0020）
 
 编译为原生 Python 推导式：
 
 ```elixir
 for x <- xs, x > 0, do: x * x                  # [x*x for x in xs if x > 0]
-for x <- [1, 2], y <- [10, 20], do: {x, y}     # 多个生成器
-for {k, v} <- pairs, into: %{}, do: {k, v * 2} # 字典推导式
-for {k, v} <- [{"a", 1}, :bad], do: k          # 不匹配的元素会被跳过
+for x <- [1, 2], y <- [10, 20], do: {x, y}     # multiple generators
+for {k, v} <- pairs, into: %{}, do: {k, v * 2} # dict comprehension
+for {k, v} <- [{"a", 1}, :bad], do: k          # non-matching elements are SKIPPED
 ```
 
-主体是一个表达式；`into: %{}` 要求主体返回 `{key, value}` 元组。推导式**构建一个集合**——若将其用于副作用，编译器会发出警告；请改用 `Enum.each`。
+主体是一个表达式；`into: %{}` 需要一个 `{key, value}` 元组主体。推导式**构建一个集合**——将其用于副作用会导致编译器警告；请改用 `Enum.each`。
 
 ### 尾递归编译为循环（GEP-0019）
 
-对尾位置上的封闭函数的调用，会变成 `while True:` 内部的参数重新绑定——无论深度如何，栈空间恒定：
+对尾位置外部函数的调用变成 `while True:` 内部的参数重新绑定——在任何深度下栈空间恒定：
 
 ```elixir
 def sum_to(n), do: sum_to(n, 0)
 def sum_to(0, acc), do: acc
-def sum_to(n, acc), do: sum_to(n - 1, acc + n)   # 百万级帧数毫无问题
+def sum_to(n, acc), do: sum_to(n - 1, acc + n)   # a million frames is fine
 ```
 
-`recur(args)` 是**经过检查**的同一种跳转写法：它 MUST 位于尾位置并与某个子句的元数匹配，否则构建失败——在需要恒定栈（而非仅期望）时使用它：
+`recur(args)` 是相同跳转的**受检**写法：它必须位于尾位置且匹配子句的参数数量，否则构建失败——当恒定栈空间是要求而非希望时使用它：
 
 ```elixir
 def drain(q) do
@@ -144,7 +157,7 @@ def drain(q) do
 end
 ```
 
-非尾递归（`n * fact(n - 1)`）保留为真实调用，使用 Python 栈（约 1000 帧）；编译器会在定义处**发出警告**。结构递归——深度受数据限制，如树遍历——是合理的：通过显式声明即可消除警告：
+非尾递归（`n * fact(n - 1)`）保持为真实调用并使用 Python 栈（约 1000 帧）；编译器在定义处**发出警告**。结构递归——深度受数据限制，如树遍历——是合法的：确认后警告消失：
 
 ```elixir
 @allow :stack_recursion
@@ -153,11 +166,11 @@ def depth(x) when is_list(x), do: 1 + $builtins.max(for e <- x, do: depth(e))
 def depth(_), do: 0
 ```
 
-每个函数的编译形态均可见：悬停显示 `♻ tail recursion → while loop` 或 `⚠ native call stack`，`gan doc` 打印该信息，`gan lsc doc` 返回 `"tco": "loop" | "stack"`。
+每个函数的编译形态可见：悬停显示 `♻ tail recursion → while loop` 或 `⚠ native call stack`，`gan doc` 会打印它，`gan lsc doc` 返回 `"tco": "loop" | "stack"`。
 
 ## 类型系统（`@spec`）
 
-`@spec` 声明一个函数的类型；编译器会将其与子句进行校验，并在生成的 Python 中发出 **PEP 484 类型注解**，从而让 `pyright`/`mypy` 检查调用方，鼠标悬停时也会显示真实类型。每个定义组只能有一个 `@spec`，放在第一个子句之前的其他注解旁。
+`@spec` 声明函数的类型；编译器会将其与函数子句进行验证，并在生成的 Python 中生成 **PEP 484 注解**，从而让 `pyright`/`mypy` 检查调用方，悬浮提示也能显示真实类型。每个定义组一个 `@spec`，放在该组第一个子句之前的其他注解之后。
 
 ```elixir
 @spec mean(xs :: sequence(number()), precision :: integer()) :: float()
@@ -174,14 +187,14 @@ def mean(xs, precision \\ 2) do ... end
 | `number()` | `int \| float` |
 | `string()` | `str` |
 | `boolean()` | `bool` |
-| `atom()` | `str`（原子是驻留字符串） |
+| `atom()` | `str`（原子是内部字符串） |
 | `nil` | `None` |
 | `term()` / `any()` | `object` |
 | `fun()` | `Callable`（无参数化） |
 
-### 容器——构造时具体，接受时抽象
+### 容器——构建时具体，接收时抽象
 
-具体容器表示“就是这个 Python 类型”：
+具体容器表示“正是这个 Python 类型”：
 
 ```elixir
 list(integer())            # list[int]
@@ -189,16 +202,16 @@ tuple(atom(), string())    # tuple[str, str]
 map(string(), integer())   # dict[str, int]
 ```
 
-抽象容器表示“任何表现类似它的东西”——在**参数**中优先使用它们，这样调用方可以传入元组、区间或生成器，而且因为 Python 类型系统中 `list` 是逆变的，而 `Sequence` 是协变的：
+抽象容器表示“任何行为类似它的东西”——优先在**参数**中使用它们，这样调用方可以传入元组、范围或生成器，同时因为 `list` 在 Python 类型系统中是抗变的，而 `Sequence` 是协变的：
 
 ```elixir
 iterable(t)                # collections.abc.Iterable[t]  — 只会被遍历一次
-sequence(t)                # collections.abc.Sequence[t]  — 支持索引 / 可重复遍历
-mapping(k, v)              # collections.abc.Mapping[k, v] — 只读的类字典
+sequence(t)                # collections.abc.Sequence[t]  — 可索引/可重新遍历
+mapping(k, v)              # collections.abc.Mapping[k, v] — 只读字典
 keyword()                  # 关键字列表：list[tuple[str, object]]
 ```
 
-经验法则：**接受时抽象，返回时具体**——接受 `sequence(t)`，返回 `list(t)`。
+经验法则：**抽象入、具体出**——接收 `sequence(t)`，返回 `list(t)`。
 
 ### 联合类型与 `nil`
 
@@ -209,7 +222,7 @@ keyword()                  # 关键字列表：list[tuple[str, object]]
 
 ### 类型变量（泛型）
 
-一个由**一到两个字符**组成的小写裸名称是一个类型变量；每个变量在输出中会成为模块级的 `typing.TypeVar`。相同的字母在规格中代表“相同的类型”：
+一个由**一或两个字符**组成的裸小写名称是一个类型变量；每个变量在输出中会变成一个模块级的 `typing.TypeVar`。同一个字母在 spec 中表示“同一类型”：
 
 ```elixir
 @spec at(sequence(a), integer()) :: a | nil
@@ -217,11 +230,11 @@ keyword()                  # 关键字列表：list[tuple[str, object]]
 @spec get(map(k, v), k, v) :: v
 ```
 
-较长的裸名称会报错，并附带提示（“你是想写 `name()` 吗？”），因此拼写错误的 `intger` 不会悄无声息地变成一个泛型。
+较长的裸名称会报错，并附带提示（“是否是指 `name()`？”），因此拼写错误的 `intger` 不会无声地变成泛型变量。
 
 ### 命名参数
 
-`name :: type` 为规格中的参数命名——既有自文档作用，也会在签名帮助中显示：
+`name :: type` 在 spec 中为参数命名——既可自文档化，也能在签名帮助中显示：
 
 ```elixir
 @spec slice(xs :: sequence(a), start :: integer(), count :: integer()) :: list(a)
@@ -229,13 +242,13 @@ keyword()                  # 关键字列表：list[tuple[str, object]]
 
 ### 宿主（Python）类型
 
-任何 Python 类型都可以通过 `$module` 出现；括号用于参数化：
+任何 Python 类型都可以通过 `$module` 出现；括号可以参数化：
 
 ```elixir
 @spec sales() :: $pandas.DataFrame()
 @spec compile(string()) :: $re.Pattern()
 @spec run(list(string())) :: $subprocess.CompletedProcess(string())
-# -> subprocess.CompletedProcess[str]，并自动生成导入语句
+# -> subprocess.CompletedProcess[str]，并会生成相应的导入
 ```
 
 ### 结构体类型
@@ -246,13 +259,13 @@ keyword()                  # 关键字列表：list[tuple[str, object]]
 @spec sale(App.Shop.t()) :: App.Shop.t()   # -> def sale(item: Shop) -> Shop
 ```
 
-### 与默认参数及多参数类型的交互
+### 与默认值及多参数列表的交互
 
-一个 `@spec` 覆盖整个定义组；请针对完整的参数列表（包括默认参数）编写。生成的委托函数和调度器会携带这些注解。如果 `@spec` 引用了一个不存在的函数或参数数量，编译时会报错，因此规格不会无声地腐烂。
+一个 spec 覆盖整个函数组；针对完整的参数列表编写（包含默认值）。生成的委托和分发器会携带这些注解。若 `@spec` 指定了一个不存在的函数或参数数量，会在编译时报错，因此 spec 不会静默地腐烂。
 
 ## 文档与文档测试
 
-`def` 之前的注解顺序：`@doc`、`@doc_trans`、`@param`、`@param_trans`、`@spec`、`@example`、`@decorate`、`@allow` —— 这些注解都会累积到下一个定义上。
+`def` 之前的注解顺序：`@doc`、`@doc_trans`、`@param`、`@param_trans`、`@spec`、`@example`、`@decorate`、`@allow` —— 所有注解都会累积到下一个定义上。
 
 ```elixir
 @doc "Word frequencies of a sentence, as a map."
@@ -267,15 +280,15 @@ keyword()                  # 关键字列表：list[tuple[str, object]]
 def word_count(sentence), do: ...
 ```
 
-- `@param` 的名称必须与子句头中的变量匹配 —— 在编译时验证。
-- `@example` 是唯一的文档测试渠道：`gan test` 会将 `gan>` 行编译为原生 Python 文档测试并执行它们。期望的输出是 Python 的 `repr`（即 `inspect/1` 显示的内容）：原子打印为 `'ok'`，映射打印为 `{'k': 1}`，布尔值打印为 `True`。
-- 标准：**每个公开的 `def` 都应带有 `@doc` + `@spec`**（如果有参数，还应带有 `@param`）；面向用户的接口需要添加 `_trans` 对应的注解对。
+- `@param` 的名称必须与子句头部的变量匹配 —— 在编译时进行验证。
+- `@example` 是唯一的文档测试通道：`gan test` 将 `gan>` 行编译为原生 Python 文档测试并执行。预期输出必须是 Python 的 `repr`（即 `inspect/1` 显示的内容）：原子打印为 `'ok'`，映射打印为 `{'k': 1}`，布尔值打印为 `True`。
+- 标准：**每个公共 `def` 必须带有 `@doc` 和 `@spec`**（若含有参数，则还需 `@param`）；面向用户的接口需添加 `_trans` 配对。
 
-文档语言是**开发者**的个人偏好，而非项目配置：`gandora.local.jsonc`（`{"docLocale": "zh-CN"}`，位于 `.gitignore` 中，与 `gandora.jsonc` 同级）> `GAN_DOC_LOCALE` 环境变量 / 编辑器设置 > 默认语言。`gan doc Mod.fun --locale zh-CN` 显式指定语言；`gan lsc doc` 始终以 JSON 格式返回所有语言。
+文档语言是**开发者**的个人偏好，而非项目配置：`gandora.local.jsonc`（`{"docLocale": "zh-CN"}`，位于 `gandora.jsonc` 旁，应被 git 忽略） > `GAN_DOC_LOCALE` 环境变量 / 编辑器设置 > 默认语言。`gan doc Mod.fun --locale zh-CN` 显式指定语言；`gan lsc doc` 始终以 JSON 格式返回所有语言区域。
 
-## Testing (GEP-0024)
+## 测试 (GEP-0024)
 
-一个命令，两层：`gan test` 运行每个 `@example` 文档测试，然后运行 `tests/*.gan` 的每个 `test_*` 函数——这些函数使用项目的完整模块解析进行编译，并由 pytest 执行（只需添加一次：`uv add --dev pytest`）。
+一条命令，两层作用：`gan test` 先运行所有 `@example` 文档测试，然后运行 `tests/*.gan` 中所有 `test_*` 函数——这些函数会以项目的完整模块解析进行编译，并由 pytest 执行（只需添加一次：`uv add --dev pytest`）。
 
 ```elixir
 # tests/test_stats.gan
@@ -302,7 +315,7 @@ defmodule TestStats do
 end
 ```
 
-ExUnit 表面：`test "name" do`（定义 `test_<slug>`），`describe`（为内部名称添加前缀），`assert`/`refute`（比较报告两个操作数），以及 `Test.assert_eq / assert_nil / assert_raise / assert_in_delta / flunk` 作为普通函数。`tests/` 永远不会被分发——它位于源代码根目录之外。
+ExUnit 接口：`test "name" do`（定义 `test_<slug>`）、`describe`（为内部名称添加前缀）、`assert`/`refute`（比较会报告两个操作数），以及作为普通函数的 `Test.assert_eq / assert_nil / assert_raise / assert_in_delta / flunk`。`tests/` 永远不会被打包——它位于源根目录之外。
 
 ## Python 互操作
 
@@ -310,28 +323,28 @@ ExUnit 表面：`test "name" do`（定义 `test_<slug>`），`describe`（为内
 
 ```elixir
 $math.sqrt(2.0)                     # import math; math.sqrt(2.0)
-$importlib.metadata.version(x)      # 点式链：导入 importlib.metadata
+$importlib.metadata.version(x)      # 点链：导入 importlib.metadata
 $(PIL.Image).open(f)                # $(...) 显式锁定模块边界
-$(sys).stderr                       # ...单段也一样：import sys, 属性 stderr
-pyimport numpy, as: np              # 别名导入
+$(sys).stderr                       # ...单段也可：import sys，属性 stderr
+pyimport numpy, as: np              # 带别名的导入
 pyimport sys                        # 裸导入将 `sys` 绑定为普通名称
-np.array([1, 2]) * 10               # 运算符广播——它就是 Python
+np.array([1, 2]) * 10               # 运算符广播——它依然是 Python
 sys.stderr.write("...")             # 裸名称链无导入歧义
-$json.dumps(data, indent: 2)        # 末尾关键字成为 kwargs
+$json.dumps(data, indent: 2)        # 尾随关键字变为关键字参数
 ```
 
-何时使用哪种拼写：
+何时使用何种拼写：
 
 | 场景 | 拼写 |
 | --- | --- |
 | 一次性引用 | `$math.sqrt(x)` |
-| 一次性引用且链式猜测错误时 | `$(os.path).sep`, `$(sys).stderr` |
-| 在一个文件中多次使用的模块 | `pyimport sys`（或 `, as:`）+ 裸名称 |
-| 经常使用的深层属性 | `@environ $(os).environ` 模块属性 |
+| 一次性引用且链式启发式猜测错误时 | `$(os.path).sep`, `$(sys).stderr` |
+| 模块在文件中多次使用 | `pyimport sys`（或 `, as:`）+ 裸名称 |
+| 深层属性频繁使用 | `@environ $(os).environ` 模块属性 |
 
-在一个文件中重复使用 `$(...)` 拼写是一种坏味道——应声明 `pyimport`。永远不要为 Python API 编写包装模块；没有包装正是设计所在。
+同一文件中重复出现 `$(...)` 拼写是一种坏味道——应声明 `pyimport`。切勿为 Python API 编写包装模块；无包装正是设计所在。
 
-装饰器通过 `@decorate` 附加；模块属性保存导入时的状态：
+装饰器通过 `@decorate` 附加；模块属性保存导入时状态：
 
 ```elixir
 @app $fastapi.FastAPI(title: "API")
@@ -348,7 +361,7 @@ def fib(n), do: ...
 
 ## 错误处理
 
-`try/rescue/after` 映射到 Python 异常；`rescue` 子句按异常类进行匹配：
+`try/rescue/after` 映射到 Python 异常；rescue 子句按异常类进行匹配：
 
 ```elixir
 try do
@@ -356,15 +369,15 @@ try do
 rescue
   e in $builtins.ValueError -> {:bad_value, to_string(e)}
   e in $requests.HTTPError -> {:http, e.response.status_code}
-  e -> {:error, to_string(e)}      # 裸变量：任何 Exception
+  e -> {:error, to_string(e)}      # bare variable: any Exception
 after
-  cleanup()                        # 始终执行，不贡献值
+  cleanup()                        # always runs, contributes no value
 end
 
-raise "message"                    # -> 引发 RuntimeError("message")
+raise "message"                    # -> raise RuntimeError("message")
 ```
 
-`try` 是一个表达式。`try` 内部的尾调用 *不* 会进行优化（栈帧必须为处理程序保留）——其中的 `recur` 是编译错误，而非静默的栈消耗。
+`try` 是一个表达式。`try` 内部的尾调用 *不* 会优化（栈帧必须为处理程序存活）——其中的 `recur` 会导致编译错误，而非静默地耗尽栈空间。
 
 ## 结构体
 
@@ -379,11 +392,11 @@ older = %App.User{u | age: u.age + 1}   # dataclasses.replace
 m2 = %{m | count: 2}                    # plain-map update: {**m, ...}
 ```
 
-结构体类型在规范中以 `App.User.t()` 形式出现。
+结构体类型在规范中表示为 `App.User.t()`。
 
-## Macros
+## 宏
 
-编译时，卫生的，Elixir 风格的。宏在编译器内的确定性沙箱中运行，不留下任何运行时痕迹。
+编译时、卫生的、Elixir 风格的。宏在编译器内部的确定性沙箱中运行，不留运行时痕迹。
 
 ```elixir
 defmacro unless_nil(value, fallback) do
@@ -396,18 +409,18 @@ defmacro unless_nil(value, fallback) do
 end
 ```
 
-模板变量在每次展开时被重命名（卫生性）；`var!(name)` 有意地触及调用者的作用域；`unquote_splicing(list)` 拼接序列；`def unquote(head)` 构建定义。使用 `require Mod`（或 `import`/`use`）引入宏。使用 `gan expand file` 或编辑器的 *Expand Macros* 命令检查结果。
+模板变量按扩展重命名（卫生性）；`var!(name)` 有意触及调用者的作用域；`unquote_splicing(list)` 拼接序列；`def unquote(head)` 构建定义。使用 `require Mod`（或 `import`/`use`）引入宏。使用 `gan expand file` 或编辑器的 *Expand Macros* 命令检查结果。
 
-## 符号与内嵌语言
+## 符号（Sigils）与嵌入式语言
 
 ```elixir
 ~w(one two three)            # ["one", "two", "three"]
-~s(no "escaping" needed)     # string, free delimiter choice
-~r/\\d+/                     # re.compile("\\d+") — string escapes apply
-~python(sum(i*i for i in range(n)))   # one verbatim Python expression
+~s(no "escaping" needed)     # 字符串，可自由选择分隔符
+~r/\\d+/                     # re.compile("\\d+") — 字符串转义规则适用
+~python(sum(i*i for i in range(n)))   # 一条逐字嵌入的 Python 表达式
 ```
 
-小写内嵌语言符号可承载整个文档，并通过 `<%= expr %>` 拼接回 Gandora（编辑器会高亮内嵌语言）：
+大写字母开头的嵌入式语言符号可携带整个文档，并通过 `<%= expr %>` 拼接回 Gandora（编辑器会高亮内部语言）：
 
 ```elixir
 ~sql"""
@@ -416,76 +429,73 @@ SELECT * FROM sales WHERE units >= <%= min_units %>
 ~markdown(A report for <%= name %>)
 ```
 
-`~python` 是仅供 Python 专有写法的逃生通道；拼接处是编译后的 Gandora 表达式，其余所有内容原样传递。
+`~python` 是仅用于 Python 拼写的逃生出口；拼接处是编译后的 Gandora 表达式，其余部分逐字通过。
 
-## 编译器检查 — 警告是可证明的事实
+## Compiler lint——警告是可证明的事实
 
-每条警告仅针对静态确定的情况触发，定位在 `gan check`/`gan build`/编辑器波浪线中的定义行上，并具有机械性的修复方法（通常是一键快速修复）：
+每个 lint 仅针对静态确定的项触发，定位在 `gan check`/`gan build`/编辑器波浪线中的定义行，并具有机械修复方案（通常是一键快速修复）：
 
 | 警告 | 含义 | 修复方法 |
 | --- | --- | --- |
-| undefined variable | 读取未绑定的变量 — 保证会引发 `NameError` | 修正名称 |
-| unused binding | 已绑定但从未读取 | `_` 前缀 (`_meta`) |
-| unreachable clause | 无守卫的全变量头部遮蔽了后面相同元数的子句（也包括 `case` 通配符） | 重新排序或删除 |
-| discarded comprehension | 处于语句位置的 `for` | 使用 `Enum.each` |
-| unused `defp` | 死私有函数 | 删除，或使用 `@allow :unused_function` |
-| stack recursion | 自递归，但从未在尾位置 | 累加器形式、`recur`，或使用 `@allow :stack_recursion` |
+| 未定义变量 | 读取的变量未绑定——保证引发 `NameError` | 修正名称 |
+| 未使用的绑定 | 已绑定，从未读取 | `_` 前缀（`_meta`） |
+| 不可达的子句 | 无守卫的纯变量头部遮蔽了后续相同元组的子句（也包括 `case` 通配符） | 重新排序或删除 |
+| 被丢弃的推导 | `for` 处于语句位置 | `Enum.each` |
+| 未使用的 `defp` | 死掉的私有函数 | 删除，或 `@allow :unused_function` |
+| 栈递归 | 自递归，但从未在尾位置 | 累加器形式、`recur` 或 `@allow :stack_recursion` |
 
-`@allow` 目标会被检查 — 拼写错误会导致编译错误。将警告视为缺陷：代码库标准为零。
+`@allow` 目标会被检查——拼写错误是编译错误。将警告视为缺陷：代码库标准为零。
 
 ## 项目与命令行界面
 
-`gandora.jsonc` 配置编译器（`source`、`outDir`、`targetPython`、`exclude`、`package`、`pyPackage`）；`pyproject.toml` + `uv` 负责管理依赖和 `.venv`；`gandora.local.jsonc` 保存每个开发者的偏好设置，并且不纳入 git 管理。
+`gandora.jsonc` 配置编译器（`source`、`outDir`、`targetPython`、`exclude`、`package`、`pyPackage`）；`pyproject.toml` + `uv` 管理依赖项和 `.venv`；`gandora.local.jsonc` 保存开发者个人偏好，不应纳入版本控制。
 
 ```console
-gan init my-app          # new project        gan check      # analyze + lints only
-gan run src/main.gan     # compile + execute  gan build      # compile to outDir
-gan test                 # run @example doctests
-gan fmt src              # format in place    gan fmt --check src   # CI gate
-gan fmt --diff src       # show the diff      echo ... | gan fmt -  # stdin -> stdout
-gan doc Enum.take        # docs (+ --locale)  gan repl       # interactive
-gan expand src/x.gan     # macro output       gan try <file|->  # sandbox
+gan init my-app          # 新建项目           gan check      # 仅分析 + 检查
+gan run src/main.gan     # 编译并执行         gan build      # 编译到 outDir
+gan test                 # 运行 @example 文档测试
+gan fmt src              # 原地格式化         gan fmt --check src   # CI 门禁
+gan fmt --diff src       # 显示差异           echo ... | gan fmt -  # 标准输入 -> 标准输出
+gan doc Enum.take        # 文档（+ --locale） gan repl       # 交互式
+gan expand src/x.gan     # 宏展开输出
 gan init --package name
 ```
 
-包以普通 wheel 的形式发布（`gan build && uv build && uv publish`），包含编译后的 Python、一个 `gandora.toml` 标记以及宏展开所用的 `.gan` 源文件——消费者通过 `uv add` 添加它们，无需引入 Gandora 运行时。
+包以普通 wheel 格式发布（`gan build && uv build && uv publish`），包含编译后的 Python 代码、一个 `gandora.toml` 标记文件，以及宏展开所需的 `.gan` 源文件——使用者通过 `uv add` 安装，无需引入 Gandora 运行时环境。
 
 ## AI 工具箱：`gan lsc`
 
-每个语言事实都是 stdout 上的一个 JSON 值——专为 agent 构建：
+每个语言事实都是 stdout 上的一个 JSON 值——专为代理设计：
 
 ```console
-gan lsc check --root .                  # 整个项目的诊断，包括 lint
-gan lsc review --root .                 # check + 每个文件的实践/迁移建议
-gan lsc diagnostics src/x.gan --root .  # 单个文件
-gan lsc doc Enum.take --root .          # 规格、说明（所有语言）、参数、tco 形状
-gan lsc doc for --root .                # 语言结构也会回答（for/recur/with...）
-gan lsc references Stats.mean --root .  # 所有调用点（+ 定义）
-gan lsc wsymbols mean --root .          # 全项目符号搜索
-gan lsc symbols Stats --root .          # 单个模块的概要
-gan lsc definition Stats.mean --root .  # 定义位置
-gan lsc compile src/x.gan --root .      # 生成的 Python，以文本形式
-gan lsc expand src/x.gan --root .       # 宏展开后的 quoted AST
-gan lsc ast src/x.gan --root .          # 解析树（Elixir 编码）
-gan lsc pydoc numpy.array --root .      # 通过 jedi 获取 Python 侧文档
+gan lsc check --root .                  # the verdict: {diagnostics, suggestions}
+gan lsc diagnostics src/x.gan --root .  # one file
+gan lsc doc Enum.take --root .          # specs, prose (all locales), params, tco shape
+gan lsc doc for --root .                # language constructs answer too (for/recur/with...)
+gan lsc references Stats.mean --root .  # every call site (+ definitions)
+gan lsc wsymbols mean --root .          # project-wide symbol search
+gan lsc symbols Stats --root .          # one module's outline
+gan lsc definition Stats.mean --root .  # where it's defined
+gan lsc compile src/x.gan --root .      # the generated Python, as text
+gan lsc expand src/x.gan --root .       # post-macro quoted AST
+gan lsc ast src/x.gan --root .          # parse tree (Elixir encoding)
+gan lsc pydoc numpy.array --root .      # Python-side docs via jedi
 ```
 
-以及 **沙箱**——在生成的代码接触项目之前进行验证（GEP-0023）：
+**检查判定是编译器的教学通道**（GEP-0025）：`gan check` 输出编译器诊断信息 *和* Advisor 建议（实践差距、跨语言迁移提示、拼写错误名称的“你是否要查找”）；`gan lsc check` 返回相同内容但作为一个 JSON 对象 `{diagnostics, suggestions}`。**`gan build` 首先运行 check** —— 一个重量级编译器，以 Rust 的方式：错误停止构建，警告和建议打印并允许继续。
 
 ```console
-echo 'Enum.mpa([1,2], fn x -> x end)' | gan try -
-# -> {"ok": false, ..., "suggestions": [{"kind": "did_you_mean",
-#     "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?"}]}
+gan lsc check --root .
+# {"diagnostics": [...], "suggestions": [{"kind": "did_you_mean",
+#   "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?", ...}]}
 ```
 
-`try` 会编译、lint、根据真实符号检查拼写（编辑距离）、标记跨语言习惯（`return`、`lambda`、`None`、Python `def ...():` 等）并给出 Gandora 拼写，然后在临时目录下运行并在超时后停止——返回生成的 Python、stdout 以及代码片段的最后一个值。`--no-run` 跳过执行。
+对代理而言的高效循环：**编写 → `gan check`（修复每个发现）→ `gan test` → `gan build`**。当不确定某物生成什么时，使用 `gan lsc compile file`；当不确定语法时，使用 `gan lsc doc <construct>`（`for`、`spec`、`test`、……）。
 
-一个高效的 agent 循环：**生成 → `gan try -` → 应用建议 → 再次 `try` → 写入项目** → 然后 `gan lsc check`（修复所有发现）→ `gan test` → `gan fmt src`。
+## 针对代理的样式检查清单
 
-## 代理风格检查清单
-
-1. 每个公开的 `def`：`@doc` + `@spec`（每个参数加 `@param`）；任何具有有趣行为的代码都需加 `@example`——`gan test` 确保它们准确无误。
-2. 规约：输入使用抽象容器（`sequence`、`mapping`），输出使用具体类型；真正通用的流程使用类型变量；结构体使用 `Mod.t()`；Python 边界处使用 `$mod.Type()`。
-3. 迭代：映射类工作使用 `for`/`Enum`；无界循环使用累加器尾递归（当需要恒定栈时使用 `recur`）；仅对结构有界的递归使用 `@allow :stack_recursion`，且原因必须显而易见。
-4. 互操作：一次性使用 `$`，重复使用 `pyimport`，不写包装器。
-5. 零警告、`gan fmt` 清洁、文档测试通过——工具链、标准库、教程和游乐场都遵循这一准则；请与之保持一致。
+1. 每个公开的 `def`：`@doc` + `@spec`（每个参数对应 `@param`）；对于任何有有趣行为的代码，添加 `@example`——`gan test` 会让它们保持诚实。
+2. 规格：输入使用抽象容器（`sequence`、`mapping`），输出使用具体容器；对真正泛型的流程使用类型变量；结构体使用 `Mod.t()`；在 Python 边界处使用 `$mod.Type()`。
+3. 迭代：`for`/`Enum` 用于映射形状的工作；无界循环使用累加器尾递归（当需要恒定栈时用 `recur`）；`@allow :stack_recursion` 仅用于结构限界递归，且原因必须显而易见。
+4. 互操作：一次性使用 `$`，重复使用用 `pyimport`，不编写包装器。
+5. 零警告，`gan fmt` 整洁，文档测试通过——工具链、标准库、教程和游乐场均坚守此标准；与之保持一致。
