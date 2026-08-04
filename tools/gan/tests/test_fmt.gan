@@ -3,6 +3,14 @@ defmodule TestFmt do
   Fmt's pure layer: format_text normalization, idempotency, and the
   verify safety net.
   """
+
+  def test_heredoc_sigil_closers_do_not_leak_indent() do
+    src = "defmodule M do\n  @tasks [\n    {\"a\",\n      ~prompt\"\"\"\n      first\n      \"\"\"},\n    {\"b\", ~prompt(second)},\n    {\"c\", ~prompt(third)}\n  ]\nend\n"
+    out = fmt(src)
+    Test.assert_eq(out, src)
+    Test.assert_eq(fmt(out), out)
+  end
+
   @moduledoc_trans zh_CN: "Fmt 纯函数层测试:format_text 规范化、幂等、verify 安全网。"
 
   import Test

@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.16.0 — 2026-08-04
+
+**Three embedded tiers by symbol, prompts without escaping, JSON as a
+literal — shaped by ten DeepSeek-in-the-loop rounds that ended 20/20.**
+
+- **The tier/symbol split (GEP-0009 rev 5)**: `~` is uniformly *text*
+  now — any sigil name (including `~python`/`~json`) is just a
+  language tag on a raw string template; **`$python(expr)`** is the
+  code splice (the `$` world — was `~python`, all 51 sites migrated,
+  the Advisor carries the recipe); **`%json`** is the data tier.
+- **`%json` compile-time data literals (GEP-0009-R007)**: the body is
+  parsed by the JSONC reader at compile time (comments and trailing
+  commas fine) and emitted as plain Python data — an OpenAI tool
+  schema pastes verbatim, a typo is a compile error, zero runtime.
+- **`~prompt` blessed (GEP-0009-R006)**: raw prose for AI prompts —
+  quotes, braces, backslashes, inline JSON, no escaping ever; heredoc
+  or one-liner; `<%= %>` splices values. The `\\\"` era is over.
+- **The eval agent is now litellm-powered and pure Gandora**: a
+  tool-calling DeepSeek loop (openai-compatible via api_base) with
+  `~prompt` tasks and a `%json` tool schema — the language writing
+  its own agent tooling is the proof of the AI-era thesis.
+- std: `String.first/2`,`String.last/1` (Elixir parity);
+  number-formatting taught where agents look (String moduledoc,
+  `format` construct card, `defaults`/`with` cards enriched);
+  `then/2` and doctest-repr teaching in the Advisor;
+  did-you-mean identifiers no longer clip capitalized words.
+- Ten recursive rounds, DeepSeek writing code against `gan build`
+  every round: 14/16 baseline → 20 tasks → **20/20 twice in a row**,
+  then four boss tasks (expression evaluator, struct receipt,
+  retry pipeline, doctest-perfect module) **4/4** — convergence
+  driven by verdict teaching, not model size.
+
 ## v0.15.1 — 2026-08-04
 
 **Soft keywords stop being mangled where Python allows them.**

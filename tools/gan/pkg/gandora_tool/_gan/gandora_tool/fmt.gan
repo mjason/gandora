@@ -208,9 +208,17 @@ defmodule Fmt do
         lt = Map.get(buckets, i, [])
         cond do
           Map.has_key?(interior, i) ->
-            # inside a multi-line string: shift by the opener's delta (R005)
+            # inside a multi-line string: shift by the opener's delta
+            # (R005); the closing line may still carry trailing tokens
+            # (`"""},`) whose closers must pop the indent stack
             d = Map.get(deltas, Map.get(interior, i), 0)
-            recur({i + 1, stack, :code, prev_last, prev_hang, deltas, [shift(line, d)] ++ acc},
+            stack2 = if Enum.empty?(lt) do
+              stack
+            else
+              advance(lt, stack, Enum.count(stack))
+            end
+            last2 = if Enum.empty?(lt), do: prev_last, else: last_significant(lt)
+            recur({i + 1, stack2, :code, last2, prev_hang, deltas, [shift(line, d)] ++ acc},
               lines, interior, buckets, n)
           Enum.empty?(lt) ->
             # blank line: collapse runs, drop leading blanks
