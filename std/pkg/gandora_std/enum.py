@@ -492,18 +492,27 @@ def drop_while(xs: collections.abc.Sequence[_T_a], f: collections.abc.Callable) 
     return builtins.list(itertools.dropwhile(f, xs))
 
 
-def chunk_every(xs: collections.abc.Sequence[_T_a], n: int) -> list[list[_T_a]]:
-    """Splits into chunks of `n` elements; the last chunk may be shorter.
+def chunk_every(xs: collections.abc.Sequence[_T_a], n: int, step: int | None = None) -> list[list[_T_a]]:
+    """Chunks of `n` elements; `step` slides the window (Elixir chunk_every/3, default n). The tail chunk may be shorter.
 
 ## Parameters
 
   - xs: The list to split.
   - n: The chunk size; the last chunk may be shorter.
+  - step: How far the window advances between chunks (defaults to `n`).
 
     >>> chunk_every([1, 2, 3, 4, 5], 2)
     [[1, 2], [3, 4], [5]]
+    >>> chunk_every([2, 1, 5, 1, 3, 2], 3, 1)
+    [[2, 1, 5], [1, 5, 1], [5, 1, 3], [1, 3, 2], [3, 2], [2]]
 """
-    return ([(xs)[i:i + (n)] for i in range(0, len((xs)), (n))])
+    while True:
+        if (step is None):
+            _gan_tmp0 = n
+        else:
+            _gan_tmp0 = step
+        s = _gan_tmp0
+        return ([(xs)[i:i + (n)] for i in range(0, len((xs)), (s))])
 
 
 def concat(xss: collections.abc.Sequence[collections.abc.Sequence[_T_a]]) -> list[_T_a]:

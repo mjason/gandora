@@ -152,7 +152,8 @@ def _coverage_hints(raw, source, in_module):
         else:
             _gan_tmp4 = missing + ["@moduledoc"]
         missing = _gan_tmp4
-        if (gandora_std.enum.count(heads) > 0) and not (_gan_truthy(gandora_std.string.contains_p(raw, "@example"))):
+        script_only = heads == ["main"]
+        if (gandora_std.enum.count(heads) > 0) and not (_gan_truthy(script_only)) and not (_gan_truthy(gandora_std.string.contains_p(raw, "@example"))):
             _gan_tmp5 = [{"kind": "practice", "line": _line_of(source, re.compile("(?m)^\\s*def ")), "message": "No @example doctests — add one right above a def, e.g.:\n@example \"\"\"\n    gan> double(21)\n    42\n\"\"\"\n(`gan test` runs them; expected output is the Python repr) (GEP-0007)."}]
         else:
             _gan_tmp5 = []

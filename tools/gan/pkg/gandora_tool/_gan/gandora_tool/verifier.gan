@@ -1,0 +1,228 @@
+defmodule Verifier do
+  @moduledoc """
+  Artifact verification (GEP-0025-R008): after codegen, the generated
+  Python is checked with ty (resolution rules only) — undefined names,
+  dead imports, and missing module members are runtime-fatal facts, so
+  they join the build verdict as errors, mapped back to the .gan source.
+  """
+  @moduledoc_trans zh_CN: "产物验证(GEP-0025-R008):codegen 之后用 ty(仅解析类规则)检查生成的 Python——未定义名、死导入、缺失模块成员是运行时必死事实,作为 error 并入 build 裁决并映射回 .gan 源。"
+
+  pyimport subprocess
+  pyimport shutil
+  pyimport os
+  pyimport re
+  pyimport pathlib
+  pyimport sys
+  pyimport difflib
+
+  # everything except resolution facts stays off in the gold layer —
+  # type-flow opinions never gate a build (GEP-0025-R005 trust line)
+  @ty_config """
+  [tool.ty.src]
+  respect-ignore-files = false
+
+  [tool.ty.rules]
+  unsupported-operator = "ignore"
+  invalid-argument-type = "ignore"
+  invalid-return-type = "ignore"
+  invalid-assignment = "ignore"
+  possibly-missing-attribute = "ignore"
+  call-non-callable = "ignore"
+  no-matching-overload = "ignore"
+  not-iterable = "ignore"
+  unsupported-bool-conversion = "ignore"
+  invalid-parameter-default = "ignore"
+  redundant-cast = "ignore"
+  possibly-unresolved-reference = "ignore"
+  """
+
+  # strict mode lifts the rule blocklist: the full type-flow analysis
+  # runs, reporting as warnings — opinions inform, facts gate
+  @ty_config_strict """
+  [tool.ty.src]
+  respect-ignore-files = false
+  """
+
+  @doc """
+  Verifies compiled modules; returns diagnostics mapped to sources.
+  `modules` is the core.build result: maps with "python"/"source"/"module".
+  With `strict`, full type-flow findings join as warnings.
+  """
+  @param root, "The project root (its .venv resolves third-party imports)."
+  @param cache, "The directory holding the compiled artifacts."
+  @param modules, "The core.build module list."
+  @param strict, "Also report type-flow findings (as warnings)."
+  @spec verify(string(), string(), sequence(mapping(string(), term())), boolean()) :: list(map())
+  def verify(root, cache, modules, strict \\ false) do
+    ty = ty_bin()
+    if is_nil(ty) or not os.path.isdir(cache) do
+      []
+    else
+      config = if strict, do: @ty_config_strict, else: @ty_config
+      pathlib.Path(os.path.join(cache, "pyproject.toml")).write_text(config)
+      py_env = python_env(root)
+      r = subprocess.run(
+        [ty, "check", "--output-format", "concise", "--exit-zero",
+          "--project", cache, "--python", py_env, cache],
+        capture_output: true, text: true, timeout: 120, cwd: root
+      )
+      by_python = Enum.reduce(modules, %{}, fn m, acc ->
+        Map.put(acc, to_string(Map.get(m, "python", "")), m)
+      end)
+      parsed = Enum.map(r.stdout.strip().split("\n"), &parse_line/1)
+      for d <- parsed, not is_nil(d) and (gold?(d) or strict),
+        do: map_to_source(d, by_python, root)
+    end
+  end
+
+  # ty ships with gandora-tool; fall back to PATH for source checkouts
+  defp ty_bin() do
+    local = os.path.join(os.path.dirname(sys.executable), "ty")
+    cond do
+      os.path.exists(local) -> local
+      true -> shutil.which("ty")
+    end
+  end
+
+  defp python_env(root) do
+    venv = os.path.join(root, ".venv")
+    if os.path.exists(venv) do
+      venv
+    else
+      sys.prefix
+    end
+  end
+
+  # concise format: path:line:col: severity[rule] message
+  defp parse_line(line) do
+    m = ~r/^(.*?):(\d+):(\d+): (error|warning)\[([a-z-]+)\] (.*)$/.search(line)
+    if is_nil(m) do
+      nil
+    else
+      %{"python" => m.group(1), "pyline" => $builtins.int(m.group(2)),
+        "severity" => m.group(4), "rule" => m.group(5), "message" => m.group(6)}
+    end
+  end
+
+  # runtime-fatal resolution facts only: an undefined name, a dead
+  # import, or a member no module provides
+  defp gold?(d) do
+    rule = Map.get(d, "rule")
+    msg = Map.get(d, "message")
+    cond do
+      rule == "unresolved-reference" -> true
+      rule == "unresolved-import" -> true
+      rule == "unresolved-attribute" -> String.starts_with?(msg, "Module ")
+      # call-shape facts: a resolved function called with the wrong
+      # number or names of arguments dies at the call site
+      rule == "missing-argument" -> true
+      rule == "too-many-positional-arguments" -> true
+      rule == "unknown-argument" -> true
+      true -> false
+    end
+  end
+
+  # findings point at generated Python — rewrite them against the .gan
+  # source: locate the offending name, add a did-you-mean
+  defp map_to_source(d, by_python, root) do
+    # ty prints paths relative to its cwd (= root); the module table
+    # holds absolute paths
+    p = to_string(Map.get(d, "python"))
+    abs = if os.path.isabs(p) do
+      p
+    else
+      os.path.normpath(os.path.join(root, p))
+    end
+    mod = Map.get(by_python, abs, %{})
+    source_path = to_string(Map.get(mod, "source", Map.get(d, "python")))
+    source = read_source(source_path)
+    name = offending_name(Map.get(d, "message"))
+    gan_name = demangle(name)
+    line = source_line(source, gan_name)
+    # fuzzy candidates come from the source's identifiers — meaningful
+    # for undefined names, nonsense for unresolvable imports; a dead
+    # import named like a Python builtin gets the interop spelling
+    hint = cond do
+      Map.get(d, "rule") == "unresolved-import" and
+          $builtins.hasattr($builtins, gan_name) ->
+        " — `#{gan_name}` is a Python builtin, not a module: write `$builtins.#{gan_name}(...)`"
+      Map.get(d, "rule") == "unresolved-import" ->
+        " — `$x`/`pyimport x` needs an importable module; see `gan lsc doc python`"
+      true -> suggestion(source, gan_name)
+    end
+    # resolution facts gate; strict-only type-flow findings inform
+    severity = if gold?(d), do: "error", else: "warning"
+    tag = if severity == "error", do: "", else: "[type] "
+    %{"severity" => severity, "path" => source_path, "line" => line, "col" => 0,
+      "message" => tag <> rewrite(Map.get(d, "message"), name, gan_name) <> hint <>
+        " (GEP-0025-R008, from the compiled artifact)"}
+  end
+
+  defp read_source(path) do
+    try do
+      pathlib.Path(path).read_text()
+    rescue
+      _e -> ""
+    end
+  end
+
+  # `Name `totl` used when not defined` / `Module `x` has no member `y``
+  defp offending_name(msg) do
+    names = ~r/`([A-Za-z_][A-Za-z0-9_.]*)`/.findall(msg)
+    if Enum.empty?(names) do
+      ""
+    else
+      Enum.at(names, -1)
+    end
+  end
+
+  @doc "The Gandora spelling of a compiled Python identifier."
+  @doc_trans zh_CN: "编译后 Python 标识符对应的 Gandora 拼写。"
+  @param name, "The Python identifier from a ty message."
+  @spec demangle(string()) :: string()
+  @example """
+      gan> Verifier.demangle("member_p")
+      'member?'
+  """
+  def demangle(name) do
+    name |> String.replace("_bang", "!") |> String.replace("_p", "?")
+  end
+
+  defp source_line(source, name) do
+    if name == "" do
+      0
+    else
+      bare = name |> String.replace("?", "\\?") |> String.replace("!", "!")
+      m = re.compile("\\b" <> bare).search(source)
+      if is_nil(m) do
+        0
+      else
+        source.count("\n", 0, m.start()) + 1
+      end
+    end
+  end
+
+  # nearest identifier in the source, the member_suggestions way
+  defp suggestion(source, name) do
+    if name == "" do
+      ""
+    else
+      idents = Enum.uniq(~r/[a-z_][A-Za-z0-9_]*[?!]?/.findall(source))
+      near = difflib.get_close_matches(name, idents, n: 3, cutoff: 0.75)
+      |> Enum.filter(fn n -> n != name end)
+      if Enum.empty?(near) do
+        ""
+      else
+        " — did you mean `#{Enum.at(near, 0)}`?"
+      end
+    end
+  end
+
+  defp rewrite(msg, name, gan_name) do
+    if name == gan_name or name == "" do
+      msg
+    else
+      String.replace(msg, "`" <> name <> "`", "`" <> gan_name <> "`")
+    end
+  end
+end

@@ -15,6 +15,7 @@ import gandora_std.enum
 import gandora_std.map
 import gandora_std.string
 import gandora_tool.advisor
+import gandora_tool.verifier
 
 
 def _gan_truthy(value):
@@ -89,20 +90,33 @@ def _dispatch(args, root):
             return _emit(core.wsymbols(query, root))
         case ["wsymbols"] as _gan_l14 if isinstance(_gan_l14, list):
             return _emit(core.wsymbols("", root))
-        case ["check", *_] as _gan_l15 if isinstance(_gan_l15, list):
+        case ["check", *rest] as _gan_l15 if isinstance(_gan_l15, list):
             diags = core.check(root)
+            errors0 = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
+            if _gan_truthy(gandora_std.enum.empty_p(errors0)):
+                cache = os.path.join(root, ".gandora", "cache")
+                try:
+                    modules = core.build(root, cache)
+                    _gan_tmp17 = gandora_tool.verifier.verify(root, cache, modules, gandora_std.enum.member_p(rest, "--strict"))
+                except Exception as _e:
+                    _gan_tmp17 = []
+                verification = _gan_tmp17
+                _gan_tmp16 = diags + verification
+            else:
+                _gan_tmp16 = diags
+            diags = _gan_tmp16
             try:
-                _gan_tmp16 = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda sym: gandora_std.map.get(sym, "path")))
+                _gan_tmp18 = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda sym: gandora_std.map.get(sym, "path")))
             except Exception as _e:
-                _gan_tmp16 = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("src/**/*.gan")), str)
-            files = _gan_tmp16
+                _gan_tmp18 = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("src/**/*.gan")), str)
+            files = _gan_tmp18
             test_files = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("tests/*.gan")), str)
             def _gan_fn0(path, *, diags=diags, root=root):
                 try:
-                    _gan_tmp17 = _read(path)
+                    _gan_tmp19 = _read(path)
                 except Exception as _e:
-                    _gan_tmp17 = ""
-                text = _gan_tmp17
+                    _gan_tmp19 = ""
+                text = _gan_tmp19
                 per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
                 return gandora_std.enum.map(gandora_tool.advisor.analyze(text, root) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
             suggestions = gandora_tool.advisor.consolidate(gandora_std.enum.flat_map(gandora_std.enum.uniq(files + test_files), _gan_fn0))
@@ -112,13 +126,13 @@ def _dispatch(args, root):
                 return sys.exit(1)
             else:
                 return None
-        case ["pydoc", chain, *_] as _gan_l18 if isinstance(_gan_l18, list):
+        case ["pydoc", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
             return _emit(gandora_lsp.py_intel.hover_markdown(root, import_line(chain), chain))
-        case ["pycomplete", chain, *_] as _gan_l19 if isinstance(_gan_l19, list):
+        case ["pycomplete", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
             return _emit(gandora_lsp.py_intel.complete(root, import_line(chain), chain))
-        case ["pygoto", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
+        case ["pygoto", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
             return _emit(gandora_lsp.py_intel.goto(root, import_line(chain), chain))
-        case ["pysig", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
+        case ["pysig", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
             return _emit(gandora_lsp.py_intel.signatures(root, import_line(chain), chain))
         case _:
             print(usage)
@@ -139,8 +153,8 @@ def import_line(chain: str) -> str:
 
 
 def _take_root(args):
-    _gan_case22 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case22:
+    _gan_case24 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case24:
         case None:
             return (os.getcwd(), args)
         case i:

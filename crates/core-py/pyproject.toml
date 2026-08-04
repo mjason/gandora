@@ -1,6 +1,6 @@
 [project]
 name = "gandora-core"
-version = "0.14.1"
+version = "0.15.0"
 description = "The Gandora compiler as a Python extension module (GEP-0012)"
 readme = "README.md"
 license = "MIT"
@@ -11,6 +11,7 @@ Repository = "https://github.com/mjason/gandora"
 
 [tool.maturin]
 module-name = "gandora_core"
+include = [{ path = "gandora_core.pyi", format = ["sdist", "wheel"] }]
 
 [build-system]
 requires = ["maturin>=1.9,<2.0"]

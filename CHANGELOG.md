@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.15.0 — 2026-08-04
+
+**Build is the verdict (GEP-0025 rev 3): artifact verification with ty,
+one command, and ten more DeepSeek-in-the-loop rounds.**
+
+- **`gan check` merged into `gan build`** (breaking): one command runs
+  diagnostics, Advisor suggestions, and artifact verification, then
+  compiles — errors stop artifacts. The old spelling prints a
+  migration note and delegates. `gan lsc check` stays as the JSON
+  surface (now including verification findings); `gan run` gates
+  unchanged.
+- **Artifact verification (R008)**: the generated Python is checked
+  with [ty](https://docs.astral.sh/ty/) under resolution rules — an
+  undefined function (`totl` → did you mean `total`?), a dead import
+  (`Integer.to_string` → `import integer`), a missing module member
+  (`Enum.mpa`), or a wrong-arity call is now a **build error** mapped
+  back to the `.gan` source line, before anything runs. A dead import
+  named like a Python builtin teaches `$builtins.round(...)`. ty ships
+  as a gandora-tool dependency; the layer degrades to silence without
+  it. gandora-core ships a `.pyi` stub so its own API verifies.
+- **`gan build --strict`**: lifts the rule blocklist — full ty
+  type-flow findings join as `[type]` warnings (opinions inform,
+  facts gate). Same flag on `gan lsc check`.
+- **Native default parameters**: `def f(x, y \\ 1)` with immutable
+  literal defaults now compiles to a real Python signature
+  (`def f(x, y=1):`) instead of a `*args` dispatcher — typed, honest,
+  and arity-checkable; mutable defaults keep the dispatcher (call-time
+  semantics). `Keyword.get/3` and friends gained real signatures.
+- **std**: `Enum.chunk_every/3` (sliding step, Elixir parity).
+- **Teaching**: richer `with` construct card (full chain shape),
+  new `defaults` card, unresolvable-module guidance.
+- DeepSeek-in-the-loop rounds (write → build → self-repair): baseline
+  8/8 → hard set grown to 16 tasks, 14–15/16 green steady-state; the
+  missing-dep scenario converges *because* verification errors teach
+  the adaptation. Eval harness: submit refused while yellow, real venv
+  scratch projects, chat retries.
+- Conformance: +6 BDD (R008 errors, arity, source mapping, clean
+  std-using program); lsp 47, std 148, cargo 175; all five repos hold
+  `clean: true` under their own build.
+
 ## v0.14.1 — 2026-08-04
 
 **The zero-noise verdict (GEP-0025 rev 2) — check recursively sharpened

@@ -16,7 +16,7 @@ _T_k = typing.TypeVar("_T_k")
 _T_v = typing.TypeVar("_T_v")
 
 
-def get(*_gan_args) -> _T_v | _T_d:
+def get(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k, default: _T_d = None) -> _T_v | _T_d:
     """The value for `key`, or `default` (nil unless given) when absent.
 
 ## Parameters
@@ -29,13 +29,7 @@ def get(*_gan_args) -> _T_v | _T_d:
     0
 """
     while True:
-        match _gan_args:
-            case (m, key, default,):
-                return m.get(key, default)
-            case (m, key,):
-                _gan_args = (m, key, None)
-                continue
-        raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
+        return m.get(key, default)
 
 
 def put(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:

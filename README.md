@@ -114,8 +114,8 @@ executes with `.venv/bin/python`, `uv run python`, or `python3` — whichever
 is available first.
 
 ```console
-gan check              # parse, expand, analyze; no output written
-gan build              # compile every module into dist/
+gan build              # the verdict + compile: diagnostics, advice,
+                       # artifact verification; errors stop artifacts
 gan expand src/x.gan   # show a module after macro expansion
 gan compile src/x.gan --out build/
 ```

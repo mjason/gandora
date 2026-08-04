@@ -16,7 +16,10 @@ defmodule Main do
   gan - the Gandora task runner
 
   Usage:
-    gan build | check | run <file> [args...] | exec <code> | repl
+    gan build [--strict]    the verdict + compile: diagnostics, advice,
+                            artifact verification; errors stop artifacts
+                            (--strict adds type-flow warnings via ty)
+    gan run <file> [args...] | exec <code> | repl
     gan fmt [--check] [path...] | init <path> | version
     gan test                doctests + tests/*.gan (GEP-0024)
     gan <plugin> ...        delegates to gan-<plugin>, then to ganc
@@ -31,8 +34,10 @@ defmodule Main do
         IO.puts(@usage)
         sys.exit(2)
       ["version" | _] -> version()
-      ["build" | _] -> build()
-      ["check" | _] -> check()
+      ["build" | rest] -> build(Enum.member?(rest, "--strict"))
+      ["check" | rest] ->
+        IO.puts("note: `gan check` merged into `gan build` (GEP-0025 rev 3)")
+        build(Enum.member?(rest, "--strict"))
       ["run", file | rest] -> run(file, rest)
       ["run"] -> die_usage("run requires a file")
       ["exec", code | _] -> exec_code(code)
@@ -75,13 +80,16 @@ defmodule Main do
 
   defp runner_version(), do: $importlib.metadata.version("gandora-tool")
 
-  @doc "Compiles the project into outDir via gandora_core (GEP-0012)."
-  @spec build() :: nil
-  def build() do
-    # check gates the build (GEP-0025): errors stop before artifacts,
-    # the way a heavy compiler behaves
-    if not run_check() do
-      IO.puts("build aborted: check failed")
+  @doc """
+  The verdict and the artifacts in one command (GEP-0025 rev 3):
+  diagnostics, Advisor suggestions, and artifact verification; any
+  error stops before artifacts are written.
+  """
+  @param strict, "Also surface full type-flow findings as warnings."
+  @spec build(boolean()) :: nil
+  def build(strict \\ false) do
+    if not run_check(true, strict) do
+      IO.puts("build aborted: errors in the verdict")
       sys.exit(1)
     end
     try do
@@ -92,25 +100,26 @@ defmodule Main do
     end
   end
 
-  @doc "The whole-project verdict: diagnostics + Advisor suggestions (GEP-0025)."
-  @spec check() :: nil
-  def check() do
-    ok = run_check()
-    if ok do
-      IO.puts("check passed")
-    else
-      sys.exit(1)
-    end
-  end
-
   # the whole-project verdict (GEP-0025): compiler diagnostics plus
   # Advisor suggestions per file; true when no errors
-  defp run_check() do
-    run_check(true)
-  end
-
-  defp run_check(with_suggestions) do
+  defp run_check(with_suggestions \\ true, strict \\ false) do
     diags = core.check(root())
+    # artifact verification (R008): compile to the cache and let ty
+    # prove every name and import resolves — only when nothing is
+    # already broken
+    errors0 = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+    diags = if Enum.empty?(errors0) do
+      cache = root() <> "/.gandora/cache"
+      verification = try do
+        modules = core.build(root(), cache)
+        Verifier.verify(root(), cache, modules, strict)
+      rescue
+        _e -> []
+      end
+      diags ++ verification
+    else
+      diags
+    end
     Enum.each(diags, fn d ->
       IO.puts("#{Map.get(d, "severity")}: #{Map.get(d, "path")}:#{Map.get(d, "line")}: #{Map.get(d, "message")}")
     end)

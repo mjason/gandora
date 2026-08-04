@@ -441,19 +441,25 @@ defmodule Enum do
   """
   def drop_while(xs, f), do: $builtins.list($itertools.dropwhile(f, xs))
 
-  @doc "Splits into chunks of `n` elements; the last chunk may be shorter."
-  @doc_trans zh_CN: "按每组 `n` 个元素分块；末组可较短。"
+  @doc "Chunks of `n` elements; `step` slides the window (Elixir chunk_every/3, default n). The tail chunk may be shorter."
+  @doc_trans zh_CN: "按每组 `n` 个元素分块;`step` 为滑动步长(Elixir chunk_every/3,默认为 n);末块可较短。"
   @example """
       gan> Enum.chunk_every([1, 2, 3, 4, 5], 2)
       [[1, 2], [3, 4], [5]]
+      gan> Enum.chunk_every([2, 1, 5, 1, 3, 2], 3, 1)
+      [[2, 1, 5], [1, 5, 1], [5, 1, 3], [1, 3, 2], [3, 2], [2]]
   """
   @param xs, "The list to split."
   @param_trans xs, zh_CN: "要切分的列表。"
   @param n, "The chunk size; the last chunk may be shorter."
   @param_trans n, zh_CN: "每块大小；末块可更短。"
-  @spec chunk_every(sequence(a), integer()) :: list(list(a))
-  def chunk_every(xs, n),
-    do: ~python([<%= xs %>[i:i + <%= n %>] for i in range(0, len(<%= xs %>), <%= n %>)])
+  @param step, "How far the window advances between chunks (defaults to `n`)."
+  @param_trans step, zh_CN: "相邻块之间的步长(默认为 `n`)。"
+  @spec chunk_every(sequence(a), integer(), integer() | nil) :: list(list(a))
+  def chunk_every(xs, n, step \\ nil) do
+    s = if is_nil(step), do: n, else: step
+    ~python([<%= xs %>[i:i + <%= n %>] for i in range(0, len(<%= xs %>), <%= s %>)])
+  end
 
   @doc "Concatenates a list of lists (one level)."
   @doc_trans zh_CN: "拼接列表的列表（单层）。"

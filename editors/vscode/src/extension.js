@@ -225,8 +225,8 @@ async function activate(context) {
       runInTerminal("gan run", `${ganCommand()} run ${rel}`);
     }),
 
-    vscode.commands.registerCommand("gandora.checkProject", () =>
-      runInTerminal("gan check", `${ganCommand()} check`)
+    vscode.commands.registerCommand("gandora.buildProject", () =>
+      runInTerminal("gan build", `${ganCommand()} build`)
     ),
 
     vscode.commands.registerCommand("gandora.runTests", () =>
@@ -242,7 +242,7 @@ async function activate(context) {
   context.subscriptions.push(
     vscode.tasks.registerTaskProvider("gan", {
       provideTasks() {
-        return ["build", "check", "test", "fmt --check src"].map((task) => {
+        return ["build", "test", "fmt --check src"].map((task) => {
           const t = new vscode.Task(
             { type: "gan", task },
             vscode.TaskScope.Workspace,
@@ -252,7 +252,7 @@ async function activate(context) {
             "$gandora"
           );
           if (task === "build") t.group = vscode.TaskGroup.Build;
-          if (task === "test" || task === "check") t.group = vscode.TaskGroup.Test;
+          if (task === "test") t.group = vscode.TaskGroup.Test;
           return t;
         });
       },

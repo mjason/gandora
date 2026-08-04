@@ -506,7 +506,7 @@ compiled Gandora expressions, everything else passes through verbatim.
 ## Compiler lints — warnings are provable facts
 
 Each fires only on something statically certain, lands on the
-definition line in `gan check`/`gan build`/editor squiggles, and has a
+definition line in `gan build`/editor squiggles, and has a
 mechanical remedy (often a one-click quick fix):
 
 | Warning | Meaning | Remedy |
@@ -529,8 +529,8 @@ warnings as defects: the codebase standard is zero.
 per-developer preferences and stays out of git.
 
 ```console
-gan init my-app          # new project        gan check      # analyze + lints only
-gan run src/main.gan     # compile + execute  gan build      # compile to outDir
+gan init my-app          # new project
+gan run src/main.gan     # compile + execute  gan build      # verdict + compile to outDir
 gan test                 # run @example doctests
 gan fmt src              # format in place    gan fmt --check src   # CI gate
 gan fmt --diff src       # show the diff      echo ... | gan fmt -  # stdin -> stdout
@@ -563,13 +563,14 @@ gan lsc ast src/x.gan --root .          # parse tree (Elixir encoding)
 gan lsc pydoc numpy.array --root .      # Python-side docs via jedi
 ```
 
-The **check verdict is the compiler's teaching pass** (GEP-0025):
-`gan check` prints compiler diagnostics *and* Advisor suggestions
-(practice gaps, cross-language migration hints, did-you-mean on
-misspelled names); `gan lsc check` returns the same as one JSON object
-`{diagnostics, suggestions}`. **`gan build` runs check first** — a
-heavy compiler, the Rust way: errors stop the build, warnings and
-suggestions print and let it proceed.
+**`gan build` is the verdict** (GEP-0025 rev 3): compiler diagnostics,
+Advisor suggestions (practice gaps, cross-language migration hints,
+did-you-mean on misspelled names), and **artifact verification** — the
+generated Python is type-checked with resolution rules (ty), so an
+undefined function, a dead import, or a missing module member is a
+build **error**, not a runtime surprise. Errors stop artifacts, the
+heavy-compiler way; warnings and suggestions print and let it proceed.
+`gan lsc check` returns the same verdict as one JSON object.
 
 ```console
 gan lsc check --root .
@@ -586,8 +587,8 @@ across many files collapse into one annotated entry, and the surface
 covers `src/` plus top-level `tests/*.gan` (test modules get migration
 and idiom hints but are exempt from library annotation coverage).
 
-A productive loop for an agent: **write → `gan check` (fix every
-finding) → `gan test` → `gan build`**. When unsure what something
+A productive loop for an agent: **write → `gan build` (fix every
+finding) → `gan test` → ship**. When unsure what something
 generates, `gan lsc compile file`; when unsure of syntax,
 `gan lsc doc <construct>` (`for`, `spec`, `test`, ...).
 

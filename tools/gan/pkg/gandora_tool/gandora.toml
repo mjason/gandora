@@ -15,3 +15,8 @@ source = "gandora_tool/_gan/gandora_tool/fmt.gan"
 name = "Main"
 python = "gandora_tool/main.py"
 source = "gandora_tool/_gan/gandora_tool/main.gan"
+
+[[modules]]
+name = "Verifier"
+python = "gandora_tool/verifier.py"
+source = "gandora_tool/_gan/gandora_tool/verifier.gan"

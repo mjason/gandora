@@ -8,6 +8,7 @@ defmodule Lsc do
   pyimport json
   pyimport pathlib
   pyimport sys
+  pyimport os
 
   @usage """
   gan lsc <query> — one JSON value on stdout
@@ -95,8 +96,23 @@ defmodule Lsc do
         emit(core.wsymbols(query, root))
       ["wsymbols"] ->
         emit(core.wsymbols("", root))
-      ["check" | _] ->
+      ["check" | rest] ->
         diags = core.check(root)
+        # artifact verification (GEP-0025-R008) joins the verdict when
+        # the project already compiles; --strict adds type-flow warnings
+        errors0 = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+        diags = if Enum.empty?(errors0) do
+          cache = os.path.join(root, ".gandora", "cache")
+          verification = try do
+            modules = core.build(root, cache)
+            Verifier.verify(root, cache, modules, Enum.member?(rest, "--strict"))
+          rescue
+            _e -> []
+          end
+          diags ++ verification
+        else
+          diags
+        end
         files = try do
           core.wsymbols("", root)
           |> Enum.map(fn sym -> Map.get(sym, "path") end)

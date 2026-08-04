@@ -2,7 +2,7 @@
   "name": "gandora",
   "displayName": "Gandora",
   "description": "Gandora language support: LSP (diagnostics, hover with recursion shapes, references, rename, quick fixes), compiled-Python preview, run/test/REPL commands, snippets.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "publisher": "mjason",
   "license": "MIT",
   "engines": {
@@ -78,8 +78,8 @@
         "category": "Gandora"
       },
       {
-        "command": "gandora.checkProject",
-        "title": "Check Project (Diagnostics + Lints)",
+        "command": "gandora.buildProject",
+        "title": "Build (Verdict + Artifacts)",
         "category": "Gandora"
       },
       {

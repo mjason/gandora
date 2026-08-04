@@ -287,6 +287,10 @@ struct FnDef {
     captures: Vec<String>,
     /// acknowledged lints from `@allow :target` (GEP-0019-R007)
     allows: BTreeSet<String>,
+    /// declared `p \\ expr` defaults (GEP-0011); when the group is one
+    /// real clause and every default is an immutable literal, the
+    /// signature emits native Python defaults instead of a dispatcher
+    defaults: Vec<Term>,
 }
 
 pub struct Codegen {
@@ -700,6 +704,7 @@ impl Codegen {
                             span: call.span,
                             captures: Vec::new(),
                             allows: std::mem::take(&mut pending_allows),
+                            defaults: Vec::new(),
                         });
                         order.insert(key, funs.len() - 1);
                         funs.len() - 1
@@ -712,6 +717,9 @@ impl Codegen {
                     }
                     let arity = params.len();
                     funs[idx].clauses.push((params.clone(), guard, fbody));
+                    if !defaults.is_empty() {
+                        funs[idx].defaults = defaults.clone();
+                    }
                     // each omitted default suffix becomes a delegating clause
                     for j in 1..=defaults.len() {
                         let keep = arity - j;
@@ -1387,7 +1395,24 @@ impl Codegen {
         } else {
             format!(", {}", caps.join(", "))
         };
-        let simple = f.clauses.len() == 1
+        // one real clause whose omitted-suffix delegates can fold into
+        // native Python defaults — only immutable literals, so Python's
+        // def-time evaluation matches Elixir's call-time semantics
+        let const_literal = |t: &Term| {
+            matches!(t, Term::Int(_) | Term::Float(_) | Term::Bool(_) | Term::Nil)
+                || matches!(t, Term::Atom(_))
+                || matches!(t, Term::Str(_) if t.as_plain_str().is_some())
+        };
+        let native_defaults = !f.defaults.is_empty()
+            && f.clauses.len() == f.defaults.len() + 1
+            && f.defaults.iter().all(const_literal)
+            && f.clauses[1..].iter().all(|(ps, g, b)| {
+                g.is_none()
+                    && ps.len() < f.clauses[0].0.len()
+                    && matches!(b, Term::Call(c)
+                        if matches!(&c.callee, Callee::Name(n) if *n == f.name))
+            });
+        let simple = (f.clauses.len() == 1 || native_defaults)
             && f.clauses[0].1.is_none()
             && f.clauses[0]
                 .0
@@ -1402,12 +1427,27 @@ impl Codegen {
                     _ => unreachable!(),
                 })
                 .collect();
+            // trailing `= literal` suffixes for folded defaults
+            let n_defaults = if native_defaults { f.defaults.len() } else { 0 };
+            let mut default_py: Vec<Option<String>> = vec![None; names.len()];
+            for (j, d) in f.defaults.iter().enumerate().take(n_defaults) {
+                let mut pre = Vec::new();
+                let e = self.emit_expr(d, &mut pre)?;
+                default_py[names.len() - n_defaults + j] = Some(e);
+            }
+            // `x: int = 1` annotated, `x=1` bare — the way a reviewer writes
+            let with_default = |i: usize, base: String| match &default_py[i] {
+                Some(d) if base.contains(':') => format!("{base} = {d}"),
+                Some(d) => format!("{base}={d}"),
+                None => base,
+            };
             match &spec_info {
                 Some((hints, ret)) if hints.len() == names.len() => {
                     let typed: Vec<String> = names
                         .iter()
                         .zip(hints)
-                        .map(|(n, h)| format!("{n}: {h}"))
+                        .enumerate()
+                        .map(|(i, (n, h))| with_default(i, format!("{n}: {h}")))
                         .collect();
                     lines.push(format!(
                         "def {py_name}({}) -> {ret}:",
@@ -1415,13 +1455,23 @@ impl Codegen {
                     ));
                 }
                 Some((_, ret)) => {
+                    let sig: Vec<String> = names
+                        .iter()
+                        .enumerate()
+                        .map(|(i, n)| with_default(i, n.clone()))
+                        .collect();
                     lines.push(format!(
                         "def {py_name}({}) -> {ret}:",
-                        with_caps(names.join(", "))
+                        with_caps(sig.join(", "))
                     ));
                 }
                 None => {
-                    lines.push(format!("def {py_name}({}):", with_caps(names.join(", "))))
+                    let sig: Vec<String> = names
+                        .iter()
+                        .enumerate()
+                        .map(|(i, n)| with_default(i, n.clone()))
+                        .collect();
+                    lines.push(format!("def {py_name}({}):", with_caps(sig.join(", "))))
                 }
             }
             let mut body_lines = Vec::new();
@@ -3292,6 +3342,7 @@ impl Codegen {
             decorators: Vec::new(),
             captures,
             allows: BTreeSet::new(),
+            defaults: Vec::new(),
             clauses: clauses
                 .iter()
                 .map(|clause| {
@@ -5436,17 +5487,28 @@ mod gep0011_tests {
     }
 
     #[test]
-    fn defaults_synthesize_delegating_clauses() {
+    fn literal_defaults_fold_into_native_python_defaults() {
+        // one real clause + immutable literal defaults: no dispatcher,
+        // a signature ty can check arity against
         let py = compile(
             "defmodule M do\n  def greet(name, greeting \\\\ \"hello\", mark \\\\ \"!\") do\n    greeting <> \", \" <> name <> mark\n  end\nend",
         );
-        assert!(py.contains("case (name, greeting, mark,):"), "{py}");
-        assert!(py.contains("case (name, greeting,):"), "{py}");
-        assert!(py.contains("case (name,):"), "{py}");
-        // delegate clauses are themselves tail self-calls, so GEP-0019
-        // turns them into rebind-and-continue
-        assert!(py.contains("_gan_args = (name, greeting, \"!\")"), "{py}");
-        assert!(py.contains("_gan_args = (name, \"hello\", \"!\")"), "{py}");
+        assert!(
+            py.contains("def greet(name, greeting=\"hello\", mark=\"!\"):"),
+            "{py}"
+        );
+        assert!(!py.contains("_gan_args"), "{py}");
+    }
+
+    #[test]
+    fn mutable_defaults_keep_the_dispatcher() {
+        // a `[]` default must evaluate per call (Elixir semantics), so
+        // the delegating-clause dispatcher stays
+        let py = compile(
+            "defmodule M do\n  def pad(xs, tail \\\\ []) do\n    xs ++ tail\n  end\nend",
+        );
+        assert!(py.contains("*_gan_args"), "{py}");
+        assert!(py.contains("case (xs,):"), "{py}");
     }
 
     #[test]

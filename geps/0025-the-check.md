@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-04
 updated: 2026-08-04
-revision: 2
+revision: 3
 requires: [12, 13, 22]
 replaces: [23]
 superseded-by: null
@@ -107,6 +107,25 @@ it. Literal masking preserves delimiters and balances nested
 parentheses in sigil bodies — `~python(next((...), None))` never
 leaks its `None` into a migration hint.
 
+**GEP-0025-R008 (artifact verification):** the verdict includes a
+resolution pass over the compiled artifacts: the generated Python is
+checked with ty restricted to resolution rules — an undefined name, an
+unresolvable import, or a member no module provides is runtime-fatal
+fact, so it reports as an **error**, mapped back to the `.gan` source
+(demangled name, source line, did-you-mean). Type-flow opinions
+(operator support, argument types) stay out of the gate; they never
+block a build. The layer degrades to silence when ty is unavailable.
+Native extensions expose their surface through shipped `.pyi` stubs
+(gandora-core ships one).
+
+**GEP-0025-R009 (build is the verdict):** there is no separate check
+command — `gan build` runs the whole verdict (diagnostics, advice,
+artifact verification) and stops before writing artifacts on any
+error. `gan run` gates on the same verdict with suggestions
+suppressed. `gan lsc check` remains the JSON surface of the same
+verdict for tools and agents. The retired `gan check` spelling prints
+a migration note and delegates to build.
+
 ## Rationale
 
 Folding the sandbox into check follows the tool's own lesson: an
@@ -158,6 +177,9 @@ anchors.
 ## Change History
 
 - Revision 1, 2026-08-04: Initial version — supersedes GEP-0023.
+- Revision 3, 2026-08-04: R008 artifact verification (ty resolution
+  rules over the compiled Python, mapped back to source; type-flow
+  never gates); R009 build subsumes check — one verdict, one command.
 - Revision 2, 2026-08-04: R004 traffic light (`ok`/`clean`); R005
   zero-noise trust line with the surviving-rule refinements; R006
   project surface includes top-level tests; R007 cross-file

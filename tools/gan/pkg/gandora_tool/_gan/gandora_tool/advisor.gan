@@ -188,7 +188,11 @@ defmodule Advisor do
       else
         missing ++ ["@moduledoc"]
       end
-      example_hint = if Enum.count(heads) > 0 and not String.contains?(raw, "@example") do
+      # an entry-point-only module is a script, not a library — doctests
+      # are a library discipline (GEP-0025-R005)
+      script_only = heads == ["main"]
+      example_hint = if Enum.count(heads) > 0 and not script_only and
+          not String.contains?(raw, "@example") do
         [%{"kind" => "practice", "line" => line_of(source, ~r/(?m)^\s*def /),
           "message" => "No @example doctests — add one right above a def, e.g.:\n@example \"\"\"\n    gan> double(21)\n    42\n\"\"\"\n(`gan test` runs them; expected output is the Python repr) (GEP-0007)."}]
       else
