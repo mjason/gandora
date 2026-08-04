@@ -1,5 +1,9 @@
 defmodule TestString do
-  @moduledoc "String 全函数测试:常规、Unicode、空串、边界。"
+  @moduledoc """
+  String, exhaustively: regular paths, Unicode, empty strings,
+  boundaries.
+  """
+  @moduledoc_trans zh_CN: "String 全函数测试:常规、Unicode、空串、边界。"
 
   import Test
 

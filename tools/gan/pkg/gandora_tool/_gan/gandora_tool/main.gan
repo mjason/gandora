@@ -17,7 +17,6 @@ defmodule Main do
     gan build | check | run <file> [args...] | exec <code> | repl
     gan fmt [--check] [path...] | init <path> | version
     gan test                doctests + tests/*.gan (GEP-0024)
-    gan try <file|-> [--no-run]   sandbox a snippet (gan try --help)
     gan <plugin> ...        delegates to gan-<plugin>, then to ganc
   """
 
@@ -38,7 +37,6 @@ defmodule Main do
       ["exec"] -> die_usage("exec requires code")
       ["repl" | _] -> repl()
       ["fmt" | rest] -> Fmt.run(rest)
-      ["try" | rest] -> delegate("lsc", ["try"] ++ rest)
       ["init", path | _] -> init(path)
       ["init"] -> die_usage("init requires a path")
       [cmd | rest] -> delegate(cmd, rest)
@@ -78,6 +76,12 @@ defmodule Main do
   @doc "Compiles the project into outDir via gandora_core (GEP-0012)."
   @spec build() :: nil
   def build() do
+    # check gates the build (GEP-0025): errors stop before artifacts,
+    # the way a heavy compiler behaves
+    if not run_check() do
+      IO.puts("build aborted: check failed")
+      $sys.exit(1)
+    end
     try do
       modules = core.build(root())
       IO.puts("compiled #{Enum.count(modules)} module(s)")
@@ -86,19 +90,59 @@ defmodule Main do
     end
   end
 
-  @doc "Full-pipeline analysis without writing output; exits 1 on findings."
+  @doc "The whole-project verdict: diagnostics + Advisor suggestions (GEP-0025)."
   @spec check() :: nil
   def check() do
-    diags = core.check(root())
-    Enum.each(diags, fn d ->
-      IO.puts("#{Map.get(d, "severity")}: #{Map.get(d, "path")}:#{Map.get(d, "line")}: #{Map.get(d, "message")}")
-    end)
-    errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
-    if Enum.empty?(errors) do
+    ok = run_check()
+    if ok do
       IO.puts("check passed")
     else
       $sys.exit(1)
     end
+  end
+
+  # the whole-project verdict (GEP-0025): compiler diagnostics plus
+  # Advisor suggestions per file; true when no errors
+  defp run_check() do
+    run_check(true)
+  end
+
+  defp run_check(with_suggestions) do
+    diags = core.check(root())
+    Enum.each(diags, fn d ->
+      IO.puts("#{Map.get(d, "severity")}: #{Map.get(d, "path")}:#{Map.get(d, "line")}: #{Map.get(d, "message")}")
+    end)
+    sources = if with_suggestions do
+      collect_files(["src"])
+    else
+      []
+    end
+    Enum.each(sources, fn path ->
+      text = try do
+        $pathlib.Path(path).read_text()
+      rescue
+        _e -> ""
+      end
+      per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
+      hints = Advisor.analyze(text, root()) ++ Advisor.lint_hints(text, per_file)
+      Enum.each(hints, fn h ->
+        IO.puts("#{Map.get(h, "kind")}: #{path}: #{Map.get(h, "message")}")
+      end)
+    end)
+    errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+    Enum.empty?(errors)
+  end
+
+  # .gan files under the given roots (shared with fmt's discovery idea)
+  defp collect_files(roots) do
+    Enum.flat_map(roots, fn r ->
+      p = $pathlib.Path(r)
+      if p.is_dir() do
+        Enum.sort(Enum.map($builtins.list(p.rglob("*.gan")), fn f -> to_string(f) end))
+      else
+        []
+      end
+    end)
   end
 
   @doc "Compiles and executes `file` with the project Python (GEP-0013-R002)."
@@ -106,6 +150,11 @@ defmodule Main do
   @param args, "Arguments passed through to the program."
   @spec run(string(), list(string())) :: nil
   def run(file, args) do
+    # errors gate the run; the teaching pass belongs to check/build
+    if not run_check(false) do
+      IO.puts("run aborted: check failed")
+      $sys.exit(1)
+    end
     cache = root() <> "/.gandora/cache"
     try do
       modules = core.build(root(), cache)

@@ -1,6 +1,6 @@
 [project]
 name = "gandora-lsp"
-version = "0.13.0"
+version = "0.14.0"
 description = "gan-lsp — the Gandora language server, written in Gandora (GEP-0015)"
 license = "MIT"
 requires-python = ">=3.11"
@@ -27,3 +27,8 @@ packages = ["pkg/gandora_lsp"]
 gandora-tool = { path = "../gan" }
 gandora-core = { path = "../../crates/core-py" }
 gandora-std = { path = "../../std" }
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]

@@ -1,5 +1,9 @@
 defmodule ConstructDocs do
-  @moduledoc "语言构造卡片:hover 与 lsc doc 共用的一句话文档(GEP-0015)。"
+  @moduledoc """
+  One-line cards for language constructs, shared by hover and
+  `gan lsc doc` (GEP-0015).
+  """
+  @moduledoc_trans zh_CN: "语言构造卡片:hover 与 gan lsc doc 共用的一句话文档(GEP-0015)。"
 
   @cards %{
 
@@ -27,6 +31,8 @@ defmodule ConstructDocs do
     "when" => "A guard on a clause head or case pattern (GEP-0001).",
     "spec" => "@spec name(arg_types) :: return — the whole type language: scalars integer() float() number() string() boolean() atom() nil term(); containers list(t) tuple(a, b) map(k, v); abstract sequence(t) iterable(t) mapping(k, v) keyword(); unions a | b; ok/error tuples tuple(atom(), term()); named args name :: type; type variables are 1-2 lowercase letters; Python types $mod.Type(); struct types Mod.t(); functions fun() (GEP-0017).",
     "example" => "@example \"\"\" / four-space-indented gan> call / expected output (Python repr) / \"\"\" — placed above the def; gan test runs every one (GEP-0007).",
+    "python" => "Python interop: `$math.sqrt(2.0)` imports and calls inline; `pyimport numpy, as: np` then `np.array(...)` for repeated use; `$(PIL.Image).open(f)` locks an explicit module boundary; trailing keywords become kwargs: `$json.dumps(data, indent: 2)` (GEP-0003).",
+    "interop" => "Python interop: `$math.sqrt(2.0)` imports and calls inline; `pyimport numpy, as: np` then bare `np...` for repeated use; `$(...)` locks the module boundary; keyword args become kwargs (GEP-0003).",
     "test" => "Official tests: tests/*.gan modules whose test_* functions use Test.assert_eq / assert_true / assert_nil / assert_raises / assert_contains; `gan test` compiles them with the project and runs pytest (GEP-0024)."
   }
 

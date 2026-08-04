@@ -1,5 +1,10 @@
 schema = 1
-compiler = "0.12.0"
+compiler = "0.14.0"
+
+[[modules]]
+name = "Advisor"
+python = "gandora_tool/advisor.py"
+source = "gandora_tool/_gan/gandora_tool/advisor.gan"
 
 [[modules]]
 name = "Fmt"

@@ -1,5 +1,9 @@
 defmodule TestList do
-  @moduledoc "List 全函数测试:常规、空表、嵌套、边界索引。"
+  @moduledoc """
+  List, exhaustively: regular paths, empty lists, nesting, boundary
+  indices.
+  """
+  @moduledoc_trans zh_CN: "List 全函数测试:常规、空表、嵌套、边界索引。"
 
   import Test
 

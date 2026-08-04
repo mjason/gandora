@@ -1194,6 +1194,27 @@ impl Codegen {
                      atom(); a nil return is nil (GEP-0017-R002)"
                 ),
             )),
+            // a bare capitalized name (Int, String) is a cross-language
+            // reflex, not a struct reference
+            Term::Alias(segs) if segs.len() == 1 => {
+                match spec_type_suggestion(&segs[0]) {
+                    Some(fix) => Err(self.err(
+                        Span::default(),
+                        format!(
+                            "'{}' is not a type — write {fix} (GEP-0017-R002)",
+                            segs[0]
+                        ),
+                    )),
+                    None => Err(self.err(
+                        Span::default(),
+                        format!(
+                            "'{}' is not a type; a struct type is spelled \
+                             {}.t() (GEP-0017-R002)",
+                            segs[0], segs[0]
+                        ),
+                    )),
+                }
+            }
             other => Err(self.err(
                 other.span(),
                 "types are built-ins like integer(), string(), list(t), \

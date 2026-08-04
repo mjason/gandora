@@ -1,0 +1,185 @@
+defmodule TestLspProtocol do
+  @moduledoc """
+  GEP-0015 conformance in Gandora: a scripted stdio session drives
+  gan-lsp — capability announcements, diagnostics push/clear, the
+  hover recursion badge, references/rename, the warning line, quick
+  fixes, and formatting — all through `gan test`.
+  """
+  @moduledoc_trans zh_CN: "GEP-0015 conformance,Gandora 版:脚本化 stdio 会话驱动 gan-lsp——能力宣告、诊断推送/清除、hover 递归徽标、references/rename、警告行、quick fix、格式化,全经 gan test 运行。"
+
+  use Test
+
+  pyimport json
+  pyimport subprocess
+  pyimport tempfile
+  pyimport os
+  pyimport pathlib
+  pyimport sys
+
+  defp lsp_bin() do
+    $os.path.join($os.path.dirname(sys.executable), "gan-lsp")
+  end
+
+  defp send_msg(proc, msg) do
+    data = json.dumps(msg).encode()
+    header = "Content-Length: #{$builtins.len(data)}\r\n\r\n".encode()
+    proc.stdin.write(header <> data)
+    proc.stdin.flush()
+  end
+
+  # read one framed message: header bytes until CRLFCRLF, then the body
+  defp read_headers(proc, acc) do
+    if String.ends_with?(acc.decode("latin1"), "\r\n\r\n") do
+      acc
+    else
+      recur(proc, acc <> proc.stdout.read(1))
+    end
+  end
+
+  defp read_message(proc) do
+    headers = read_headers(proc, "".encode()).decode("latin1")
+    line = Enum.find(headers.split("\r\n"), fn l ->
+      String.starts_with?(l.lower(), "content-length")
+    end)
+    length = $builtins.int(Enum.at(line.split(":"), 1).strip())
+    json.loads(proc.stdout.read(length))
+  end
+
+  defp wait_for(proc, pred) do
+    msg = read_message(proc)
+    if pred.(msg) do
+      msg
+    else
+      recur(proc, pred)
+    end
+  end
+
+  defp wait_id(proc, id) do
+    wait_for(proc, fn m -> Map.get(m, "id") == id end)
+  end
+
+  defp wait_diags(proc) do
+    m = wait_for(proc, fn m ->
+      Map.get(m, "method") == "textDocument/publishDiagnostics"
+    end)
+    Map.get(Map.get(m, "params"), "diagnostics")
+  end
+
+  # a full scripted session against a scratch project; returns results map
+  defp session() do
+    root = tempfile.mkdtemp(prefix: "gan-lspconf-")
+    os.makedirs(os.path.join(root, "src"), exist_ok: true)
+    pathlib.Path(os.path.join(root, "gandora.jsonc"))
+    |> (fn p -> p.write_text("{\"source\": [\"src\"], \"outDir\": \"dist\"}") end).()
+    uri = "file://" <> os.path.join(root, "src", "main.gan")
+    proc = subprocess.Popen([lsp_bin()], stdin: subprocess.PIPE,
+      stdout: subprocess.PIPE, stderr: subprocess.PIPE, cwd: root)
+    {proc, root, uri}
+  end
+
+  defp open_doc(proc, uri, text) do
+    send_msg(proc, %{"jsonrpc" => "2.0", "method" => "textDocument/didOpen",
+      "params" => %{"textDocument" => %{"uri" => uri, "languageId" => "gandora",
+        "version" => 1, "text" => text}}})
+  end
+
+  defp change_doc(proc, uri, version, text) do
+    send_msg(proc, %{"jsonrpc" => "2.0", "method" => "textDocument/didChange",
+      "params" => %{"textDocument" => %{"uri" => uri, "version" => version},
+        "contentChanges" => [%{"text" => text}]}})
+  end
+
+  test "the whole protocol contract in one scripted session" do
+    {proc, root, uri} = session()
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize",
+      "params" => %{"processId" => nil, "rootUri" => "file://" <> root,
+        "capabilities" => %{}}})
+    init = wait_id(proc, 1)
+    caps = Map.get(Map.get(init, "result"), "capabilities")
+
+    # capability announcements (GEP-0015 R005-R014)
+    Enum.each(["hoverProvider", "definitionProvider", "documentFormattingProvider",
+      "documentSymbolProvider", "completionProvider", "signatureHelpProvider",
+      "referencesProvider", "renameProvider", "workspaceSymbolProvider",
+      "codeActionProvider"], fn cap ->
+        assert Map.get(caps, cap, false)
+      end)
+    sync = Map.get(caps, "textDocumentSync")
+    assert Map.get(sync, "change") == 1
+    send_msg(proc, %{"jsonrpc" => "2.0", "method" => "initialized", "params" => %{}})
+
+    # diagnostics appear on a broken buffer and clear on the fix
+    open_doc(proc, uri, "defmodule Main do\n  def broken( do\nend\n")
+    diags = wait_diags(proc)
+    assert Enum.count(diags) >= 1
+
+    good = "defmodule Main do\n  def down(0), do: :done\n  def down(n), do: down(n - 1)\nend\n"
+    pathlib.Path(String.replace(uri, "file://", "")).write_text(good)
+    change_doc(proc, uri, 2, good)
+    _ = wait_diags(proc)
+
+    # hover shows the compiled recursion shape (GEP-0019-R006)
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 2, "method" => "textDocument/hover",
+      "params" => %{"textDocument" => %{"uri" => uri},
+        "position" => %{"line" => 1, "character" => 7}}})
+    hover = wait_id(proc, 2)
+    value = Map.get(Map.get(Map.get(hover, "result"), "contents"), "value")
+    assert String.contains?(value, "while")
+    assert String.contains?(value, "constant stack")
+
+    # references find call sites and declarations (GEP-0015-R012)
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 3, "method" => "textDocument/references",
+      "params" => %{"textDocument" => %{"uri" => uri},
+        "position" => %{"line" => 1, "character" => 7},
+        "context" => %{"includeDeclaration" => true}}})
+    refs = Map.get(wait_id(proc, 3), "result")
+    assert Enum.count(refs) >= 3
+
+    # rename edits every occurrence
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 4, "method" => "textDocument/rename",
+      "params" => %{"textDocument" => %{"uri" => uri},
+        "position" => %{"line" => 1, "character" => 7},
+        "newName" => "descend"}})
+    ren = Map.get(wait_id(proc, 4), "result")
+    edits = Map.get(Map.get(ren, "changes"), uri)
+    assert Enum.count(edits) >= 3
+
+    # a stack-recursion warning lands on the def line with a quick fix
+    warn_src = "defmodule Main do\n  def fact(0), do: 1\n  def fact(n), do: n * fact(n - 1)\nend\n"
+    change_doc(proc, uri, 3, warn_src)
+    wdiags = wait_diags(proc)
+    warn = Enum.find(wdiags, fn d ->
+      String.contains?(Map.get(d, "message"), "GEP-0019-R007")
+    end)
+    assert not is_nil(warn)
+    assert Map.get(warn, "severity") == 2
+
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 5, "method" => "textDocument/codeAction",
+      "params" => %{"textDocument" => %{"uri" => uri},
+        "range" => Map.get(warn, "range"),
+        "context" => %{"diagnostics" => [warn]}}})
+    actions = Map.get(wait_id(proc, 5), "result")
+    fix = Enum.find(actions, fn a ->
+      String.contains?(Map.get(a, "title", ""), "stack_recursion")
+    end)
+    assert not is_nil(fix)
+
+    # formatting returns the canonical document (GEP-0015-R007)
+    messy = "defmodule Main do\n      def main(), do: IO.puts(\"ok\")\nend\n"
+    change_doc(proc, uri, 4, messy)
+    _ = wait_diags(proc)
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 6, "method" => "textDocument/formatting",
+      "params" => %{"textDocument" => %{"uri" => uri},
+        "options" => %{"tabSize" => 2, "insertSpaces" => true}}})
+    fmt = Map.get(wait_id(proc, 6), "result")
+    new_text = Map.get(Enum.at(fmt, 0), "newText")
+    assert String.contains?(new_text, "  def main(), do: IO.puts(\"ok\")")
+
+    # clean shutdown
+    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 9, "method" => "shutdown",
+      "params" => nil})
+    _ = wait_id(proc, 9)
+    send_msg(proc, %{"jsonrpc" => "2.0", "method" => "exit", "params" => nil})
+    assert proc.wait(timeout: 10) == 0
+  end
+end

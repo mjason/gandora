@@ -1,5 +1,9 @@
 defmodule TestMap do
-  @moduledoc "Map 全函数测试:常规、缺键、默认值、不变性。"
+  @moduledoc """
+  Map, exhaustively: regular paths, missing keys, defaults,
+  immutability.
+  """
+  @moduledoc_trans zh_CN: "Map 全函数测试:常规、缺键、默认值、不变性。"
 
   import Test
 

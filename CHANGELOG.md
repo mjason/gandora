@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.14.0 — 2026-08-04
+
+**One verdict, one gate — and a toolchain that tests itself in Gandora.**
+
+- **GEP-0025 (The Check, supersedes GEP-0023)**: `gan try` is gone.
+  `gan check` is the whole verdict — compiler diagnostics plus Advisor
+  suggestions (practice, migration, did-you-mean) per file;
+  `gan lsc check` returns `{ok, clean, diagnostics, suggestions}`.
+  **`gan build` and `gan run` gate on check**: errors stop before
+  anything happens, the heavy-compiler way.
+- **Advisor moves into gandora-tool** — one teaching engine below the
+  runner, lsc, and future surfaces; gains a gandora-std introspection
+  fallback (venv-less projects still get `Enum.mpa → Enum.map`), a
+  `Python.`-guess migration hint, and `lsc doc` falls back to Python
+  module docs (`gan lsc doc math`).
+- **The conformance suites are now Gandora**: the check BDD
+  (`test_check_verdict.gan`), the fmt CLI contract
+  (`test_fmt_cli.gan`), and a JSON-RPC client driving gan-lsp
+  (`test_lsp_protocol.gan`) — all ExUnit-style, all run by `gan test`.
+  The Python harnesses are deleted; CI runs `ganc test`.
+- Breaking: `gan try` / `gan lsc try` / `gan lsc review` removed;
+  `gan lsc check` changes shape.
+
 ## v0.13.0 — 2026-08-04
 
 **ExUnit parity, macros that talk back, and the verdict at project scope.**

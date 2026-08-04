@@ -1,5 +1,9 @@
 defmodule TestKeyword do
-  @moduledoc "Keyword 全函数测试:常规、缺键、重复键语义。"
+  @moduledoc """
+  Keyword, exhaustively: regular paths, missing keys, duplicate-key
+  semantics.
+  """
+  @moduledoc_trans zh_CN: "Keyword 全函数测试:常规、缺键、重复键语义。"
 
   import Test
 

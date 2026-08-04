@@ -1,0 +1,228 @@
+defmodule TestCheckVerdict do
+  @moduledoc """
+  BDD over the check verdict (GEP-0025): Given a source / When
+  `gan lsc check` runs / Then assert the verdict — written in Gandora,
+  organized with the ExUnit surface, run by `gan test`.
+  """
+  @moduledoc_trans zh_CN: "check 裁决 BDD(GEP-0025):Given 源码 / When gan lsc check / Then 断言 verdict——Gandora 写、ExUnit 表面组织、gan test 运行。"
+
+  use Test
+
+  pyimport json
+  pyimport subprocess
+  pyimport tempfile
+  pyimport os
+  pyimport pathlib
+  pyimport sys
+
+  @config "{\"source\": [\"src\"], \"outDir\": \"dist\", \"targetPython\": \"3.11\"}"
+
+  @clean_module """
+  defmodule Prog do
+    @moduledoc "An idiomatic module — the check must stay silent."
+
+    @doc "Doubles every element."
+    @param xs, "The numbers."
+    @spec double_all(sequence(number())) :: list(number())
+    @example \"\"\"
+        gan> Prog.double_all([1, 2])
+        [2, 4]
+    \"\"\"
+    def double_all(xs), do: for x <- xs, do: x * 2
+  end
+  """
+
+  defp lsc_bin() do
+    $os.path.join($os.path.dirname(sys.executable), "gan-lsc")
+  end
+
+  # Given a source, When checked in a throwaway project,
+  # Then {verdict-map, exit-code}
+  defp check(source) do
+    dir = tempfile.mkdtemp(prefix: "gan-bdd-")
+    os.makedirs(os.path.join(dir, "src"), exist_ok: true)
+    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
+    pathlib.Path(os.path.join(dir, "src", "prog.gan")).write_text(source)
+    r = subprocess.run([lsc_bin(), "check", "--root", dir],
+      capture_output: true, text: true, timeout: 120, cwd: dir)
+    {json.loads(r.stdout), r.returncode}
+  end
+
+  defp kind_messages(verdict, kind) do
+    Map.get(verdict, "suggestions", [])
+    |> Enum.filter(fn s -> Map.get(s, "kind") == kind end)
+    |> Enum.map(fn s -> Map.get(s, "message") end)
+  end
+
+  defp suggests?(verdict, kind, needle) do
+    Enum.any?(kind_messages(verdict, kind), fn m -> String.contains?(m, needle) end)
+  end
+
+  defp diag?(verdict, needle) do
+    Map.get(verdict, "diagnostics", [])
+    |> Enum.any?(fn d -> String.contains?(Map.get(d, "message"), needle) end)
+  end
+
+  describe "verdict" do
+    test "a clean idiomatic module is clean" do
+      {v, rc} = check(@clean_module)
+      assert rc == 0
+      assert Map.get(v, "clean") == true
+      assert Map.get(v, "suggestions") == []
+    end
+
+    test "an error flips ok and the exit code" do
+      {v, rc} = check("defmodule Prog do\n  def f( do\nend")
+      assert rc == 1
+      assert Map.get(v, "ok") == false
+    end
+
+    test "warnings do not fail the check but break clean" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(term(), term()) :: term()\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(x, y), do: x\nend"
+      {v, rc} = check(src)
+      assert rc == 0
+      assert Map.get(v, "ok") == true
+      assert Map.get(v, "clean") == false
+      assert diag?(v, "GEP-0022-R002")
+    end
+  end
+
+  describe "did-you-mean" do
+    test "misspelled std member suggests the real one" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: Enum.mpa(xs, fn x -> x end)\nend")
+      assert suggests?(v, "did_you_mean", "Enum.map")
+    end
+
+    test "undefined variable suggests its nearest binding" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(value), do: valeu\nend")
+      assert suggests?(v, "did_you_mean", "`value`")
+    end
+  end
+
+  describe "migration" do
+    test "python habits get the gandora spelling" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(x) do\nreturn x\n  end\nend")
+      assert suggests?(v, "migration", "no `return`")
+    end
+
+    test "None wants nil" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(), do: None\nend")
+      assert suggests?(v, "migration", "`nil`")
+    end
+
+    test "Python-object guesses get the interop spelling" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(), do: Python.math.sqrt(4)\nend")
+      assert suggests?(v, "migration", "$math")
+    end
+
+    test "comparing with nil wants is_nil" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(x), do: x == nil\nend")
+      assert suggests?(v, "migration", "is_nil")
+    end
+  end
+
+  describe "practice" do
+    test "missing annotations become one consolidated report" do
+      {v, _rc} = check("defmodule Prog do\n  def f(x), do: x\nend")
+      assert suggests?(v, "practice", "@spec on: f")
+      assert suggests?(v, "practice", "@moduledoc")
+    end
+
+    test "concrete containers in spec params want abstract ones" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(list(integer())) :: list(integer())\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(xs), do: xs\nend"
+      {v, _rc} = check(src)
+      assert suggests?(v, "practice", "abstract in, concrete out")
+    end
+
+    test "count == 0 wants empty?" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: Enum.count(xs) == 0\nend")
+      assert suggests?(v, "practice", "Enum.empty?")
+    end
+
+    test "map+filter chains want a comprehension" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: xs |> Enum.map(fn x -> x end) |> Enum.filter(fn x -> x end)\nend")
+      assert suggests?(v, "practice", "comprehension")
+    end
+  end
+
+  describe "lints" do
+    test "stack recursion warning arrives with the verdict" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def fact(0), do: 1\n  def fact(n), do: n * fact(n - 1)\nend")
+      assert diag?(v, "GEP-0019-R007")
+    end
+
+    test "spec type errors teach the correction" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  @spec f(Int) :: Int\n  def f(x), do: x\nend")
+      assert diag?(v, "write integer()")
+    end
+  end
+
+  describe "silence" do
+    test "prose never triggers code patterns" do
+      src = "defmodule Prog do\n  @moduledoc \"None shall return while lambda imports self.\"\n  @doc \"d\"\n  @spec f(term()) :: term()\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(x), do: x\nend"
+      {v, _rc} = check(src)
+      assert kind_messages(v, "migration") == []
+    end
+
+    test "comments never trigger code patterns" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(term()) :: term()\n  # return None while lambda\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(x), do: x\nend"
+      {v, _rc} = check(src)
+      assert kind_messages(v, "migration") == []
+    end
+  end
+
+  describe "gauntlet" do
+    test "pure python verdicts as JSON" do
+      {v, _rc} = check("import os\n\ndef main():\n    print(os.getcwd())")
+      assert is_map(v)
+    end
+
+    test "javascript errors without crashing" do
+      {v, rc} = check("const x = 5;\nfunction add(a, b) { return a + b; }")
+      assert rc >= 1
+      refute Map.get(v, "ok", false)
+    end
+
+    test "unclosed blocks and stray ends error cleanly" do
+      {v1, rc1} = check("defmodule Prog do\n  def f(x) do\n    x\nend")
+      assert rc1 >= 1
+      refute Map.get(v1, "ok", false)
+      {v2, rc2} = check("x = 1\nend\nend")
+      assert rc2 >= 1
+      refute Map.get(v2, "ok", false)
+    end
+
+    test "yaml sql and markdown paste verdicts as JSON" do
+      {v1, _} = check("name: test\nsteps:\n  - run: gan build\n")
+      assert is_map(v1)
+      {v2, rc2} = check("SELECT * FROM users;")
+      assert is_map(v2)
+      assert rc2 >= 1
+      {v3, rc3} = check("# Title\n\nSome *bold* claims\n")
+      assert is_map(v3)
+      assert rc3 >= 1
+    end
+
+    test "BEAM reflexes degrade to an error not a crash" do
+      {v, _rc} = check("defmodule Prog do\n  def go() do\n    receive do\n      {:msg, x} -> x\n    end\n  end\nend")
+      assert is_map(v)
+    end
+
+    test "non-UTF8 bytes are a JSON error" do
+      dir = tempfile.mkdtemp(prefix: "gan-bdd-")
+      os.makedirs(os.path.join(dir, "src"), exist_ok: true)
+      pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
+      pathlib.Path(os.path.join(dir, "src", "prog.gan")).write_bytes($builtins.bytes([0, 255, 1]))
+      r = subprocess.run([lsc_bin(), "check", "--root", dir],
+        capture_output: true, text: true, timeout: 120, cwd: dir)
+      v = json.loads(r.stdout)
+      assert is_map(v)
+    end
+
+    test "emoji and unicode survive" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f() :: string()\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(), do: \"🚀→中文\"\nend"
+      {_v, rc} = check(src)
+      assert rc == 0
+    end
+  end
+end

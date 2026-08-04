@@ -78,7 +78,7 @@ jobs:
           uv sync
           ../../target/release/ganc build
           uv sync --reinstall-package gandora-tool
-          python tests/fmt_conformance.py .venv/bin/gan .venv/bin/python
+          ../../target/release/ganc test
           .venv/bin/gan fmt --check src ../lsp/src ../../std/src ../../examples/tour/src
           uv build --out-dir ../../dist-tool
       - name: compile gan-lsp with ganc, then package
@@ -87,7 +87,7 @@ jobs:
           uv sync
           ../../target/release/ganc build
           uv sync --reinstall-package gandora-lsp
-          python tests/lsp_conformance.py .venv/bin/gan-lsp
+          ../../target/release/ganc test
           uv build --out-dir ../../dist-lsp
       - uses: actions/upload-artifact@v4
         with:

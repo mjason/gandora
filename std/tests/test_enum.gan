@@ -1,5 +1,9 @@
 defmodule TestEnum do
-  @moduledoc "Enum 全函数测试:常规、边界(空表/单元素/不变性)。"
+  @moduledoc """
+  Enum, exhaustively: the regular paths and the edges (empty lists,
+  single elements, immutability).
+  """
+  @moduledoc_trans zh_CN: "Enum 全函数测试:常规与边界(空表/单元素/不变性)。"
 
   import Test
 

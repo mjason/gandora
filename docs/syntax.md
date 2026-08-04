@@ -535,7 +535,7 @@ gan test                 # run @example doctests
 gan fmt src              # format in place    gan fmt --check src   # CI gate
 gan fmt --diff src       # show the diff      echo ... | gan fmt -  # stdin -> stdout
 gan doc Enum.take        # docs (+ --locale)  gan repl       # interactive
-gan expand src/x.gan     # macro output       gan try <file|->  # sandbox
+gan expand src/x.gan     # macro output
 gan init --package name
 ```
 
@@ -549,8 +549,7 @@ Gandora runtime introduced.
 Every language fact is one JSON value on stdout — built for agents:
 
 ```console
-gan lsc check --root .                  # whole-project diagnostics, lints included
-gan lsc review --root .                 # check + per-file practice/migration suggestions
+gan lsc check --root .                  # the verdict: {diagnostics, suggestions}
 gan lsc diagnostics src/x.gan --root .  # one file
 gan lsc doc Enum.take --root .          # specs, prose (all locales), params, tco shape
 gan lsc doc for --root .                # language constructs answer too (for/recur/with...)
@@ -564,24 +563,24 @@ gan lsc ast src/x.gan --root .          # parse tree (Elixir encoding)
 gan lsc pydoc numpy.array --root .      # Python-side docs via jedi
 ```
 
-And the **sandbox** — validate generated code before it touches the
-project (GEP-0023):
+The **check verdict is the compiler's teaching pass** (GEP-0025):
+`gan check` prints compiler diagnostics *and* Advisor suggestions
+(practice gaps, cross-language migration hints, did-you-mean on
+misspelled names); `gan lsc check` returns the same as one JSON object
+`{diagnostics, suggestions}`. **`gan build` runs check first** — a
+heavy compiler, the Rust way: errors stop the build, warnings and
+suggestions print and let it proceed.
 
 ```console
-echo 'Enum.mpa([1,2], fn x -> x end)' | gan try -
-# -> {"ok": false, ..., "suggestions": [{"kind": "did_you_mean",
-#     "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?"}]}
+gan lsc check --root .
+# {"diagnostics": [...], "suggestions": [{"kind": "did_you_mean",
+#   "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?", ...}]}
 ```
 
-`try` compiles, lints, spell-checks names against real symbols
-(edit-distance), flags cross-language habits (`return`, `lambda`,
-`None`, Python `def ...():` …) with the Gandora spelling, then runs in
-a temp dir under a timeout — returning the generated Python, stdout,
-and a snippet's last value. `--no-run` skips execution.
-
-A productive loop for an agent: **generate → `gan try -` → apply
-the suggestions → `try` again → write into the project** → then
-`gan lsc check` (fix every finding) → `gan test` → `gan fmt src`.
+A productive loop for an agent: **write → `gan check` (fix every
+finding) → `gan test` → `gan build`**. When unsure what something
+generates, `gan lsc compile file`; when unsure of syntax,
+`gan lsc doc <construct>` (`for`, `spec`, `test`, ...).
 
 ## Style checklist for agents
 

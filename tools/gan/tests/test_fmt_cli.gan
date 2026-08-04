@@ -1,0 +1,94 @@
+defmodule TestFmtCli do
+  @moduledoc """
+  The gan fmt CLI contract (GEP-0016 conformance): fixture
+  canonicalization, idempotency, --check/--diff/stdin exit codes —
+  run by `gan test`.
+  """
+  @moduledoc_trans zh_CN: "gan fmt 的 CLI 契约(GEP-0016 conformance):fixture 规范化、幂等、--check/--diff/stdin 退出码——gan test 运行。"
+
+  use Test
+
+  pyimport subprocess
+  pyimport tempfile
+  pyimport os
+  pyimport pathlib
+  pyimport shutil
+  pyimport sys
+
+  defp gan_bin() do
+    $os.path.join($os.path.dirname(sys.executable), "gan")
+  end
+
+  defp fixtures() do
+    $os.path.join($os.getcwd(), "tests", "fmt")
+  end
+
+  defp fresh_tree() do
+    tmp = tempfile.mkdtemp(prefix: "gan-fmtcli-")
+    src = os.path.join(tmp, "src")
+    os.makedirs(src, exist_ok: true)
+    shutil.copy(os.path.join(fixtures(), "messy.gan.in"), os.path.join(src, "m.gan"))
+    tmp
+  end
+
+  defp run_fmt(args, cwd) do
+    subprocess.run([gan_bin()] ++ args, cwd: cwd, capture_output: true, text: true)
+  end
+
+  describe "gan fmt" do
+    test "check exits 1 on a messy tree and writes nothing" do
+      tmp = fresh_tree()
+      m = os.path.join(tmp, "src", "m.gan")
+      before = pathlib.Path(m).read_text()
+      r = run_fmt(["fmt", "--check", "src"], tmp)
+      assert r.returncode == 1
+      assert pathlib.Path(m).read_text() == before
+    end
+
+    test "formats to the canonical fixture, idempotently" do
+      tmp = fresh_tree()
+      m = os.path.join(tmp, "src", "m.gan")
+      r = run_fmt(["fmt", "src"], tmp)
+      assert r.returncode == 0
+      got = pathlib.Path(m).read_text()
+      want = pathlib.Path(os.path.join(fixtures(), "canonical.gan")).read_text()
+      assert got == want
+      assert String.contains?(got, "&($math.sqrt/1)")
+      assert String.contains?(got, "  docs stay put\n")
+      r2 = run_fmt(["fmt", "src"], tmp)
+      assert String.contains?(r2.stdout, "0 file(s) reformatted")
+      r3 = run_fmt(["fmt", "--check", "src"], tmp)
+      assert r3.returncode == 0
+    end
+
+    test "stdin formats to stdout with exit 0" do
+      tmp = fresh_tree()
+      messy = "defmodule S do\n    def a(x),   do: x\nend\n"
+      r = subprocess.run([gan_bin(), "fmt", "-"], input: messy, cwd: tmp,
+        capture_output: true, text: true)
+      assert r.returncode == 0
+      assert String.contains?(r.stdout, "def a(x), do: x")
+    end
+
+    test "diff shows changes without touching the file" do
+      tmp = fresh_tree()
+      messy = "defmodule S do\n    def a(x),   do: x\nend\n"
+      m = os.path.join(tmp, "src", "messy.gan")
+      pathlib.Path(m).write_text(messy)
+      r = run_fmt(["fmt", "--diff", "src/messy.gan"], tmp)
+      assert r.returncode == 1
+      assert String.contains?(r.stdout, "-    def a(x)")
+      assert pathlib.Path(m).read_text() == messy
+    end
+  end
+
+  describe "verification safety net" do
+    test "verify accepts identity and refuses corruption" do
+      assert Fmt.verify("x = 1  # keep\n", "x = 1  # keep\n") == :ok
+      {:error, why} = Fmt.verify("x = 1  # keep\n", "x = 1  # changed\n")
+      assert String.contains?(why, "comment")
+      {:error, _} = Fmt.verify("x = 1\n", "x = 2\n")
+      nil
+    end
+  end
+end

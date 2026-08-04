@@ -3,7 +3,7 @@ gep: 23
 title: The Sandbox
 description: One query that validates generated code — compile, lint, fuzzy-suggest, execute with a timeout — so agents learn the language by trying it.
 author: MJ
-status: Accepted
+status: Superseded
 type: Standards Track
 areas:
   - Tooling
@@ -12,7 +12,7 @@ updated: 2026-08-03
 revision: 4
 requires: [12, 15, 22]
 replaces: []
-superseded-by: null
+superseded-by: 25
 resolution: null
 translations:
   zh: local/zh/0023-the-sandbox.md

@@ -23,9 +23,7 @@ defmodule Lsc do
     symbols <Mod>               every definition with rendered heads
     references <Mod>.<fun>      every project call site (+ definitions)
     wsymbols [<query>]          project-wide symbol search
-    check                       whole-project diagnostics, lints included
-    review                      check + practice/migration suggestions per file
-    try <file|-> [--no-run]     sandbox: compile, lint, suggest, execute
+    check                       the project verdict: {diagnostics, suggestions}
     pydoc <mod.chain>           Python docstring for a $-style reference
     pycomplete <mod.prefix>     Python member completions
     pygoto <mod.chain>          Python source location
@@ -77,6 +75,13 @@ defmodule Lsc do
           not is_nil(info) -> emit(info)
           not is_nil(card) ->
             emit(%{"label" => target, "construct" => card})
+          String.match?(target, ~r/^[a-z_][a-z0-9_.]*$/) ->
+            md = PyIntel.hover_markdown(root, import_line(target), target)
+            if is_nil(md) do
+              emit(nil)
+            else
+              emit(%{"label" => target, "pydoc" => md})
+            end
           true -> emit(info)
         end
       ["definition", target | _] ->
@@ -90,35 +95,35 @@ defmodule Lsc do
       ["wsymbols"] ->
         emit(core.wsymbols("", root))
       ["check" | _] ->
-        emit(core.check(root))
-      ["review" | _] ->
         diags = core.check(root)
-        files = core.wsymbols("", root)
-        |> Enum.map(fn s -> Map.get(s, "path") end)
-        |> Enum.uniq()
+        files = try do
+          core.wsymbols("", root)
+          |> Enum.map(fn sym -> Map.get(sym, "path") end)
+          |> Enum.uniq()
+        rescue
+          _e ->
+            # a parse-broken file must not silence the whole verdict
+            $builtins.list($pathlib.Path(root).glob("src/**/*.gan"))
+            |> Enum.map(fn p -> to_string(p) end)
+        end
         suggestions = Enum.flat_map(files, fn path ->
           text = try do
             read(path)
           rescue
             _e -> ""
           end
-          Sandbox.analyze(text, root)
-          |> Enum.map(fn s -> Map.put(s, "path", path) end)
+          per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
+          (Advisor.analyze(text, root) ++ Advisor.lint_hints(text, per_file))
+          |> Enum.map(fn h -> Map.put(h, "path", path) end)
         end)
-        emit(%{"diagnostics" => diags, "suggestions" => suggestions})
-      ["try"] ->
-        IO.puts(Sandbox.help())
-      ["try", "--help" | _] ->
-        IO.puts(Sandbox.help())
-      ["try", target | rest] ->
-        source = if target == "-" do
-          $(sys).stdin.read()
-        else
-          read(target)
-        end
-        verdict = Sandbox.try_source(source, root, not Enum.member?(rest, "--no-run"))
-        emit(verdict)
-        if not Map.get(verdict, "ok") do
+        errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+        emit(%{
+          "ok" => Enum.empty?(errors),
+          "clean" => Enum.empty?(errors) and Enum.empty?(diags) and Enum.empty?(suggestions),
+          "diagnostics" => diags,
+          "suggestions" => suggestions
+        })
+        if not Enum.empty?(errors) do
           $sys.exit(1)
         end
       ["pydoc", chain | _] ->

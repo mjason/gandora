@@ -1,5 +1,9 @@
 defmodule TestExunitStyle do
-  @moduledoc "ExUnit 对齐表面自测:test/describe/assert/refute/assert_raise/assert_in_delta/flunk。"
+  @moduledoc """
+  The ExUnit-parity surface, tested with itself: test/describe/assert/
+  refute/assert_raise/assert_in_delta/flunk.
+  """
+  @moduledoc_trans zh_CN: "ExUnit 对齐表面自测:test/describe/assert/refute/assert_raise/assert_in_delta/flunk。"
 
   use Test
 

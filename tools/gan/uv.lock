@@ -35,7 +35,7 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.13.0"
+version = "0.14.0"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
@@ -54,7 +54,7 @@ wheels = [
 
 [[package]]
 name = "gandora-std"
-version = "0.13.0"
+version = "0.14.0"
 source = { directory = "../../std" }
 
 [package.metadata]
@@ -64,7 +64,7 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "gandora-tool"
-version = "0.13.0"
+version = "0.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },

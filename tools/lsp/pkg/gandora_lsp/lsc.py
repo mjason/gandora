@@ -7,21 +7,26 @@ import gandora_core as core
 import json
 import os
 import pathlib
+import re
 import sys
 import gandora_lsp.construct_docs
 import gandora_lsp.py_intel
-import gandora_lsp.sandbox
 import gandora_std.enum
 import gandora_std.map
+import gandora_std.string
+import gandora_tool.advisor
 
 
 def _gan_truthy(value):
     return value is not None and value is not False
 
+def _gan_and(value, then):
+    return then() if _gan_truthy(value) else value
+
 class GanMatchError(Exception):
     pass
 
-usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n  doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples\n  definition <Mod>[.<fun>]    defining source path/line/col\n  symbols <Mod>               every definition with rendered heads\n  references <Mod>.<fun>      every project call site (+ definitions)\n  wsymbols [<query>]          project-wide symbol search\n  check                       whole-project diagnostics, lints included\n  review                      check + practice/migration suggestions per file\n  try <file|-> [--no-run]     sandbox: compile, lint, suggest, execute\n  pydoc <mod.chain>           Python docstring for a $-style reference\n  pycomplete <mod.prefix>     Python member completions\n  pygoto <mod.chain>          Python source location\n  pysig <mod.fun>             Python call signatures\n"
+usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts --root <dir>, default: cwd):\n  version                     compiler/library version\n  diagnostics <file>          full-pipeline diagnostics\n  ast <file>                  quoted term of the source\n  expand <file>               quoted term after macro expansion\n  compile <file>              generated Python source (plain text)\n  resolve <module>            how a module reference resolves\n  doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples\n  definition <Mod>[.<fun>]    defining source path/line/col\n  symbols <Mod>               every definition with rendered heads\n  references <Mod>.<fun>      every project call site (+ definitions)\n  wsymbols [<query>]          project-wide symbol search\n  check                       the project verdict: {diagnostics, suggestions}\n  pydoc <mod.chain>           Python docstring for a $-style reference\n  pycomplete <mod.prefix>     Python member completions\n  pygoto <mod.chain>          Python source location\n  pysig <mod.fun>             Python call signatures\n"
 
 
 def main() -> None:
@@ -66,6 +71,12 @@ def _dispatch(args, root):
                 return _emit(info)
             elif not ((card is None)):
                 return _emit({"label": target, "construct": card})
+            elif _gan_truthy(gandora_std.string.match_p(target, re.compile("^[a-z_][a-z0-9_.]*$"))):
+                md = gandora_lsp.py_intel.hover_markdown(root, _import_line(target), target)
+                if (md is None):
+                    return _emit(None)
+                else:
+                    return _emit({"label": target, "pydoc": md})
             else:
                 return _emit(info)
         case ["definition", target, *_] as _gan_l10 if isinstance(_gan_l10, list):
@@ -79,42 +90,34 @@ def _dispatch(args, root):
         case ["wsymbols"] as _gan_l14 if isinstance(_gan_l14, list):
             return _emit(core.wsymbols("", root))
         case ["check", *_] as _gan_l15 if isinstance(_gan_l15, list):
-            return _emit(core.check(root))
-        case ["review", *_] as _gan_l16 if isinstance(_gan_l16, list):
             diags = core.check(root)
-            files = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda s: gandora_std.map.get(s, "path")))
-            def _gan_fn0(path, *, root=root):
+            try:
+                _gan_tmp16 = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda sym: gandora_std.map.get(sym, "path")))
+            except Exception as _e:
+                _gan_tmp16 = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("src/**/*.gan")), lambda p: str(p))
+            files = _gan_tmp16
+            def _gan_fn0(path, *, diags=diags, root=root):
                 try:
                     _gan_tmp17 = _read(path)
                 except Exception as _e:
                     _gan_tmp17 = ""
                 text = _gan_tmp17
-                return gandora_std.enum.map(gandora_lsp.sandbox.analyze(text, root), lambda s, *, path=path: gandora_std.map.put(s, "path", path))
+                per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
+                return gandora_std.enum.map(gandora_tool.advisor.analyze(text, root) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
             suggestions = gandora_std.enum.flat_map(files, _gan_fn0)
-            return _emit({"diagnostics": diags, "suggestions": suggestions})
-        case ["try"] as _gan_l18 if isinstance(_gan_l18, list):
-            return print(gandora_lsp.sandbox.help())
-        case ["try", "--help", *_] as _gan_l19 if isinstance(_gan_l19, list):
-            return print(gandora_lsp.sandbox.help())
-        case ["try", target, *rest] as _gan_l20 if isinstance(_gan_l20, list):
-            if target == "-":
-                _gan_tmp21 = sys.stdin.read()
-            else:
-                _gan_tmp21 = _read(target)
-            source = _gan_tmp21
-            verdict = gandora_lsp.sandbox.try_source(source, root, not (_gan_truthy(gandora_std.enum.member_p(rest, "--no-run"))))
-            _emit(verdict)
-            if not (_gan_truthy(gandora_std.map.get(verdict, "ok"))):
+            errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
+            _emit({"ok": gandora_std.enum.empty_p(errors), "clean": _gan_and(_gan_and(gandora_std.enum.empty_p(errors), lambda: gandora_std.enum.empty_p(diags)), lambda: gandora_std.enum.empty_p(suggestions)), "diagnostics": diags, "suggestions": suggestions})
+            if not (_gan_truthy(gandora_std.enum.empty_p(errors))):
                 return sys.exit(1)
             else:
                 return None
-        case ["pydoc", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
+        case ["pydoc", chain, *_] as _gan_l18 if isinstance(_gan_l18, list):
             return _emit(gandora_lsp.py_intel.hover_markdown(root, _import_line(chain), chain))
-        case ["pycomplete", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
+        case ["pycomplete", chain, *_] as _gan_l19 if isinstance(_gan_l19, list):
             return _emit(gandora_lsp.py_intel.complete(root, _import_line(chain), chain))
-        case ["pygoto", chain, *_] as _gan_l24 if isinstance(_gan_l24, list):
+        case ["pygoto", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
             return _emit(gandora_lsp.py_intel.goto(root, _import_line(chain), chain))
-        case ["pysig", chain, *_] as _gan_l25 if isinstance(_gan_l25, list):
+        case ["pysig", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
             return _emit(gandora_lsp.py_intel.signatures(root, _import_line(chain), chain))
         case _:
             print(usage)
@@ -126,8 +129,8 @@ def _import_line(chain):
 
 
 def _take_root(args):
-    _gan_case26 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case26:
+    _gan_case22 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case22:
         case None:
             return (os.getcwd(), args)
         case i:
