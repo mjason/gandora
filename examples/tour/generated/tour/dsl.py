@@ -4,7 +4,8 @@ an annotation system in userland, the way @doc itself works.
 """
 
 
-def injected_greeting():
+def injected_greeting() -> str:
+    """Injected by `use Tour.Dsl` — proof the quote landed."""
     return "hello from __using__"
 
 
@@ -16,11 +17,17 @@ def language():
     return "gandora"
 
 
-def list_users():
+def list_users() -> list[str]:
+    """The GET handler — its @route lands in the accumulated table.
+
+    >>> list_users()
+    ['alice', 'bob']
+"""
     return ["alice", "bob"]
 
 
-def create_user():
+def create_user() -> str:
+    """The POST handler — same userland annotation, second entry."""
     return "created"
 
 

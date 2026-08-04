@@ -18,7 +18,12 @@ class GanMatchError(Exception):
 app = fastapi.FastAPI(title="Gandora Tour API")
 
 
-def asgi():
+def asgi() -> object:
+    """The FastAPI instance — hand it to any ASGI server.
+
+    >>> asgi().__class__.__name__
+    'FastAPI'
+"""
     return app
 
 
@@ -29,12 +34,25 @@ def root():
 
 @app.get("/slug/{text}")
 def slug(text):
-    return {"input": text, "slug": text.lower().replace(" ", "-")}
+    return {"input": text, "slug": slugify(text)}
 
 
 @app.get("/fact/{n}")
 def fact_route(n):
     return {"n": n, "fact": _fact(builtins.int(n))}
+
+
+def slugify(text: str) -> str:
+    """URL slug of a title — the pure core of the /slug route.
+
+## Parameters
+
+  - text: The raw text.
+
+    >>> slugify("Hello Gandora World")
+    'hello-gandora-world'
+"""
+    return text.lower().replace(" ", "-")
 
 
 def _fact(*_gan_args):

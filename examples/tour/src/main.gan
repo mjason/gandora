@@ -11,6 +11,17 @@ defmodule Main do
   alias App.Cli
   alias App.Shop
 
+  @doc "Formats the banner line printed above a chapter."
+  @param title, "The chapter name."
+  @spec banner(string()) :: string()
+  @example """
+      gan> banner("basics")
+      '== basics =='
+  """
+  def banner(title), do: "== #{title} =="
+
+  @doc "Runs every chapter in order."
+  @spec main() :: nil
   def main() do
     section("basics", &Basics.demo/0)
     section("patterns", &Patterns.demo/0)
@@ -25,7 +36,7 @@ defmodule Main do
   end
 
   defp section(title, run) do
-    IO.puts("== #{title} ==")
+    IO.puts(banner(title))
     run.()
     IO.puts("")
   end

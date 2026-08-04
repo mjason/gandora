@@ -6,7 +6,10 @@ defmodule Tour.Dsl do
   """
 
   defmacro __using__() do
+    # a generated def can carry annotations too — they travel in the quote
     quote do
+      @doc "Injected by `use Tour.Dsl` — proof the quote landed."
+      @spec injected_greeting() :: string()
       def injected_greeting(), do: "hello from __using__"
     end
   end
@@ -33,9 +36,17 @@ defmodule Tour.Dsl do
   define_getter(:answer, 42)
   define_getter(:language, :gandora)
 
+  @doc "The GET handler — its @route lands in the accumulated table."
+  @spec list_users() :: list(atom())
+  @example """
+      gan> list_users()
+      ['alice', 'bob']
+  """
   @route {:get, "/users"}
   def list_users(), do: [:alice, :bob]
 
+  @doc "The POST handler — same userland annotation, second entry."
+  @spec create_user() :: atom()
   @route {:post, "/users"}
   def create_user(), do: :created
 

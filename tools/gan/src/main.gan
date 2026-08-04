@@ -9,6 +9,8 @@ defmodule Main do
   pyimport subprocess
   pyimport shutil
   pyimport pathlib
+  pyimport sys
+  pyimport os
 
   @usage """
   gan - the Gandora task runner
@@ -23,11 +25,11 @@ defmodule Main do
   @doc "The task-runner entry: one command per invocation (GEP-0013)."
   @spec main() :: nil
   def main() do
-    args = $builtins.list($sys.argv) |> Enum.drop(1)
+    args = $builtins.list(sys.argv) |> Enum.drop(1)
     case args do
       [] ->
         IO.puts(@usage)
-        $sys.exit(2)
+        sys.exit(2)
       ["version" | _] -> version()
       ["build" | _] -> build()
       ["check" | _] -> check()
@@ -46,19 +48,19 @@ defmodule Main do
   defp die_usage(msg) do
     IO.puts("gan: " <> msg)
     IO.puts(@usage)
-    $sys.exit(2)
+    sys.exit(2)
   end
 
-  defp root(), do: $os.getcwd()
+  defp root(), do: os.getcwd()
 
   # "execute with the project Python" (GEP-0013-R002): the venv
   # interpreter when the project has one, else the runner's own
   defp project_python() do
     venv = root() <> "/.venv/bin/python"
-    if $os.path.exists(venv) do
+    if os.path.exists(venv) do
       venv
     else
-      $sys.executable
+      sys.executable
     end
   end
 
@@ -80,7 +82,7 @@ defmodule Main do
     # the way a heavy compiler behaves
     if not run_check() do
       IO.puts("build aborted: check failed")
-      $sys.exit(1)
+      sys.exit(1)
     end
     try do
       modules = core.build(root())
@@ -97,7 +99,7 @@ defmodule Main do
     if ok do
       IO.puts("check passed")
     else
-      $sys.exit(1)
+      sys.exit(1)
     end
   end
 
@@ -113,21 +115,24 @@ defmodule Main do
       IO.puts("#{Map.get(d, "severity")}: #{Map.get(d, "path")}:#{Map.get(d, "line")}: #{Map.get(d, "message")}")
     end)
     sources = if with_suggestions do
-      collect_files(["src"])
+      collect_files(["src", "tests"])
     else
       []
     end
-    Enum.each(sources, fn path ->
+    hints = Enum.flat_map(sources, fn path ->
       text = try do
-        $pathlib.Path(path).read_text()
+        pathlib.Path(path).read_text()
       rescue
         _e -> ""
       end
       per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
-      hints = Advisor.analyze(text, root()) ++ Advisor.lint_hints(text, per_file)
-      Enum.each(hints, fn h ->
-        IO.puts("#{Map.get(h, "kind")}: #{path}: #{Map.get(h, "message")}")
-      end)
+      (Advisor.analyze(text, root()) ++ Advisor.lint_hints(text, per_file))
+      |> Enum.map(fn h -> Map.put(h, "path", path) end)
+    end)
+    Enum.each(Advisor.consolidate(hints), fn h ->
+      line = Map.get(h, "line", 0)
+      at = if line > 0, do: ":#{line}", else: ""
+      IO.puts("#{Map.get(h, "kind")}: #{Map.get(h, "path")}#{at}: #{Map.get(h, "message")}")
     end)
     errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
     Enum.empty?(errors)
@@ -136,11 +141,14 @@ defmodule Main do
   # .gan files under the given roots (shared with fmt's discovery idea)
   defp collect_files(roots) do
     Enum.flat_map(roots, fn r ->
-      p = $pathlib.Path(r)
-      if p.is_dir() do
-        Enum.sort(Enum.map($builtins.list(p.rglob("*.gan")), fn f -> to_string(f) end))
-      else
-        []
+      p = pathlib.Path(r)
+      cond do
+        not p.is_dir() -> []
+        # tests: top level only, mirroring `gan test`; deeper dirs are fixtures
+        r == "tests" ->
+          Enum.sort(Enum.map($builtins.list(p.glob("*.gan")), &to_string/1))
+        true ->
+          Enum.sort(Enum.map($builtins.list(p.rglob("*.gan")), &to_string/1))
       end
     end)
   end
@@ -153,26 +161,26 @@ defmodule Main do
     # errors gate the run; the teaching pass belongs to check/build
     if not run_check(false) do
       IO.puts("run aborted: check failed")
-      $sys.exit(1)
+      sys.exit(1)
     end
     cache = root() <> "/.gandora/cache"
     try do
       modules = core.build(root(), cache)
-      abs = to_string($pathlib.Path(file).resolve())
+      abs = to_string(pathlib.Path(file).resolve())
       target = Enum.find(modules, fn m -> Map.get(m, "source") == abs end)
       cond do
         is_nil(target) ->
           IO.puts("gan: #{file} is not a module of this project")
-          $sys.exit(1)
+          sys.exit(1)
         is_nil(Map.get(target, "python")) ->
           IO.puts("gan: #{Map.get(target, "module")} defines only macros; nothing to run")
-          $sys.exit(1)
+          sys.exit(1)
         true ->
           code = subprocess.call(
             [project_python(), "-P", Map.get(target, "python")] ++ args,
-            env: Map.put($builtins.dict($os.environ), "PYTHONPATH", cache)
+            env: Map.put($builtins.dict(os.environ), "PYTHONPATH", cache)
           )
-          $sys.exit(code)
+          sys.exit(code)
       end
     rescue
       e in core.CompileError -> compile_error(e)
@@ -266,10 +274,10 @@ defmodule Main do
   @param path, "Where to create the project."
   @spec init(string()) :: nil
   def init(path) do
-    p = $pathlib.Path(path)
+    p = pathlib.Path(path)
     if p.exists() do
       IO.puts("gan: #{path} already exists")
-      $sys.exit(1)
+      sys.exit(1)
     end
     (p / "src").mkdir(parents: true)
     name = to_string(p.resolve().name)
@@ -281,13 +289,22 @@ defmodule Main do
     IO.puts("Initialized Gandora project in #{path}")
   end
 
+  @doc "The executable name a plugin subcommand delegates to (GEP-0013-R003)."
+  @example """
+      gan> Main.plugin_name("fmt")
+      'gan-fmt'
+  """
+  @param cmd, "The subcommand."
+  @spec plugin_name(string()) :: string()
+  def plugin_name(cmd), do: "gan-" <> cmd
+
   defp find_plugin(cmd) do
     # project venv first (GEP-0013-R003: installing a plugin is `uv add`),
     # then the surrounding PATH
     venv_bin = root() <> "/.venv/bin"
-    local = shutil.which("gan-" <> cmd, path: venv_bin)
+    local = shutil.which(plugin_name(cmd), path: venv_bin)
     if is_nil(local) do
-      shutil.which("gan-" <> cmd)
+      shutil.which(plugin_name(cmd))
     else
       local
     end
@@ -297,8 +314,8 @@ defmodule Main do
     plugin = find_plugin(cmd)
     ganc = shutil.which("ganc")
     cond do
-      not is_nil(plugin) -> $sys.exit(subprocess.call([plugin] ++ rest))
-      not is_nil(ganc) -> $sys.exit(subprocess.call([ganc, cmd] ++ rest))
+      not is_nil(plugin) -> sys.exit(subprocess.call([plugin] ++ rest))
+      not is_nil(ganc) -> sys.exit(subprocess.call([ganc, cmd] ++ rest))
       true -> die_usage("unknown command '#{cmd}' (no gan-#{cmd} plugin, no ganc)")
     end
   end
@@ -306,6 +323,6 @@ defmodule Main do
   defp compile_error(e) do
     args = $builtins.list(e.args)
     IO.puts("#{Enum.at(args, 1)}:#{Enum.at(args, 2)}:#{Enum.at(args, 3)}: error: #{Enum.at(args, 0)}")
-    $sys.exit(1)
+    sys.exit(1)
   end
 end

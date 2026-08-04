@@ -13,31 +13,37 @@ defmodule Main do
   pyimport os
 
   @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.14.0",
-    text_document_sync_kind: $lsprotocol.types.TextDocumentSyncKind.Full)
+    text_document_sync_kind: types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
 
   # ---- lifecycle + diagnostics (GEP-0015-R002/R003) ------------------------
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DID_OPEN)
+  @doc "Publishes diagnostics for a document on open."
+  @spec did_open($lsprotocol.types.DidOpenTextDocumentParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
   def did_open(params) do
     publish(params.text_document.uri, params.text_document.text)
   end
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DID_CHANGE)
+  @doc "Re-publishes diagnostics on every edit (full sync)."
+  @spec did_change($lsprotocol.types.DidChangeTextDocumentParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
   def did_change(params) do
     text = Enum.at($builtins.list(params.content_changes), -1).text
     publish(params.text_document.uri, text)
   end
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DID_CLOSE)
+  @doc "Clears a document's diagnostics on close."
+  @spec did_close($lsprotocol.types.DidCloseTextDocumentParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
   def did_close(params) do
     send_diagnostics(params.text_document.uri, [])
   end
 
   defp send_diagnostics(uri, items) do
     @server.text_document_publish_diagnostics(
-      $lsprotocol.types.PublishDiagnosticsParams(uri: uri, diagnostics: items)
+      types.PublishDiagnosticsParams(uri: uri, diagnostics: items)
     )
   end
 
@@ -63,8 +69,8 @@ defmodule Main do
     send_diagnostics(uri, lsp)
   end
 
-  defp severity("error"), do: $lsprotocol.types.DiagnosticSeverity.Error
-  defp severity(_), do: $lsprotocol.types.DiagnosticSeverity.Warning
+  defp severity("error"), do: types.DiagnosticSeverity.Error
+  defp severity(_), do: types.DiagnosticSeverity.Warning
 
   # ---- shared cursor resolution --------------------------------------------
 
@@ -118,7 +124,9 @@ defmodule Main do
 
   # construct cards live in ConstructDocs (shared with lsc)
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_HOVER)
+  @doc "Documentation hover for the reference under the cursor (GEP-0015-R005)."
+  @spec hover($lsprotocol.types.HoverParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_HOVER)
   def hover(params) do
     {doc, line} = doc_and_line(params)
     hit = word_at(line, params.position.character)
@@ -200,7 +208,14 @@ defmodule Main do
     end
   end
 
-  defp py_name(name) do
+  @doc "The identifier a Gandora name compiles to in generated Python."
+  @example """
+      gan> Main.py_name("valid?")
+      'valid_p'
+  """
+  @param name, "The Gandora function or variable name."
+  @spec py_name(string()) :: string()
+  def py_name(name) do
     name.replace("?", "_p").replace("!", "_bang")
   end
 
@@ -238,7 +253,7 @@ defmodule Main do
   defp markdown_hover(md) do
     types.Hover(
       contents: types.MarkupContent(
-        kind: $lsprotocol.types.MarkupKind.Markdown,
+        kind: types.MarkupKind.Markdown,
         value: md
       )
     )
@@ -264,7 +279,7 @@ defmodule Main do
   end
 
   # the prose + localized parameter list for one locale
-  @spec locale_section(map(), string(), string()) :: string()
+  @spec locale_section(mapping(string(), term()), string(), string()) :: string()
   defp locale_section(info, locale, heading) do
     prose = Map.get(Map.get(info, "entries", %{}), locale)
     prose = if is_nil(prose) and locale != "default" do
@@ -331,7 +346,7 @@ defmodule Main do
   end
 
   # localized parameter bullets with per-name fallback to the default
-  @spec param_lines(map(), string()) :: list(string())
+  @spec param_lines(mapping(string(), term()), string()) :: list(string())
   defp param_lines(info, locale) do
     entries = Map.get(info, "params", [])
     if Enum.empty?(entries) do
@@ -368,7 +383,9 @@ defmodule Main do
 
   # ---- go to definition (GEP-0015-R006) ------------------------------------
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DEFINITION)
+  @doc "Go-to-definition for Gandora and Python references (GEP-0015-R006)."
+  @spec definition($lsprotocol.types.DefinitionParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_DEFINITION)
   def definition(params) do
     {doc, line} = doc_and_line(params)
     hit = word_at(line, params.position.character)
@@ -427,7 +444,9 @@ defmodule Main do
 
   # ---- document symbols (GEP-0015-R008) ------------------------------------
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
+  @doc "The document's module and definitions as an outline (GEP-0015-R008)."
+  @spec document_symbol($lsprotocol.types.DocumentSymbolParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
   def document_symbol(params) do
     doc = @server.workspace.get_text_document(params.text_document.uri)
     mod = module_of(doc.source)
@@ -458,7 +477,7 @@ defmodule Main do
       zero = types.Position(line: 0, character: 0)
       [types.DocumentSymbol(
         name: mod,
-        kind: $lsprotocol.types.SymbolKind.Module,
+        kind: types.SymbolKind.Module,
         range: types.Range(zero, zero),
         selection_range: types.Range(zero, zero),
         children: children
@@ -466,9 +485,9 @@ defmodule Main do
     end
   end
 
-  defp symbol_kind("defmacro"), do: $lsprotocol.types.SymbolKind.Constructor
-  defp symbol_kind("defp"), do: $lsprotocol.types.SymbolKind.Method
-  defp symbol_kind(_), do: $lsprotocol.types.SymbolKind.Function
+  defp symbol_kind("defmacro"), do: types.SymbolKind.Constructor
+  defp symbol_kind("defp"), do: types.SymbolKind.Method
+  defp symbol_kind(_), do: types.SymbolKind.Function
 
   # ---- references + rename (GEP-0015-R012) ---------------------------------
 
@@ -518,7 +537,9 @@ defmodule Main do
     end)
   end
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_REFERENCES)
+  @doc "Every project reference to the function under the cursor (GEP-0015-R012)."
+  @spec references($lsprotocol.types.ReferenceParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_REFERENCES)
   def references(params) do
     {doc, line} = doc_and_line(params)
     target = fun_target_at(doc, line, params.position.character)
@@ -526,21 +547,20 @@ defmodule Main do
       nil
     else
       include_defs = params.context.include_declaration
-      ref_ranges(target)
-      |> Enum.filter(fn r -> include_defs or not Map.get(r, "is_def") end)
-      |> Enum.map(fn r ->
-        types.Location(
+      for r <- ref_ranges(target), include_defs or not Map.get(r, "is_def"),
+        do: types.Location(
           uri: "file://" <> Map.get(r, "path"),
           range: types.Range(
             types.Position(line: Map.get(r, "line"), character: Map.get(r, "start")),
             types.Position(line: Map.get(r, "line"), character: Map.get(r, "stop"))
           )
         )
-      end)
     end
   end
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_RENAME)
+  @doc "Workspace-wide rename of a project-defined function (GEP-0015-R012)."
+  @spec rename($lsprotocol.types.RenameParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_RENAME)
   def rename(params) do
     {doc, line} = doc_and_line(params)
     target = fun_target_at(doc, line, params.position.character)
@@ -573,7 +593,9 @@ defmodule Main do
 
   # ---- workspace symbols (GEP-0015-R013) -----------------------------------
 
-  @decorate @server.feature($lsprotocol.types.WORKSPACE_SYMBOL)
+  @doc "Project-wide symbol search (GEP-0015-R013)."
+  @spec workspace_symbol($lsprotocol.types.WorkspaceSymbolParams()) :: term()
+  @decorate @server.feature(types.WORKSPACE_SYMBOL)
   def workspace_symbol(params) do
     syms = try do
       core.wsymbols(params.query, root_path())
@@ -596,10 +618,12 @@ defmodule Main do
 
   # ---- quick fixes for compiler lints (GEP-0015-R014) ----------------------
 
+  @doc "Quick fixes for compiler lints (GEP-0015-R014)."
+  @spec code_action($lsprotocol.types.CodeActionParams()) :: term()
   @decorate @server.feature(
-    $lsprotocol.types.TEXT_DOCUMENT_CODE_ACTION,
-    $lsprotocol.types.CodeActionOptions(
-      code_action_kinds: [$lsprotocol.types.CodeActionKind.QuickFix]
+    types.TEXT_DOCUMENT_CODE_ACTION,
+    types.CodeActionOptions(
+      code_action_kinds: [types.CodeActionKind.QuickFix]
     )
   )
   def code_action(params) do
@@ -628,7 +652,7 @@ defmodule Main do
     pos = types.Position(line: line0, character: 0)
     types.CodeAction(
       title: "Acknowledge with @allow :" <> target,
-      kind: $lsprotocol.types.CodeActionKind.QuickFix,
+      kind: types.CodeActionKind.QuickFix,
       diagnostics: [d],
       edit: types.WorkspaceEdit(changes: %{
         uri => [types.TextEdit(
@@ -655,7 +679,7 @@ defmodule Main do
         {s, e} = hit.span()
         [types.CodeAction(
           title: "Rename to _" <> var,
-          kind: $lsprotocol.types.CodeActionKind.QuickFix,
+          kind: types.CodeActionKind.QuickFix,
           diagnostics: [d],
           edit: types.WorkspaceEdit(changes: %{
             uri => [types.TextEdit(
@@ -673,9 +697,11 @@ defmodule Main do
 
   # ---- completion: `Module.` members (GEP-0015-R008) -----------------------
 
+  @doc "`Module.` member and Python attribute completion (GEP-0015-R008)."
+  @spec completion($lsprotocol.types.CompletionParams()) :: term()
   @decorate @server.feature(
-    $lsprotocol.types.TEXT_DOCUMENT_COMPLETION,
-    $lsprotocol.types.CompletionOptions(trigger_characters: ["."])
+    types.TEXT_DOCUMENT_COMPLETION,
+    types.CompletionOptions(trigger_characters: ["."])
   )
   def completion(params) do
     {doc, line} = doc_and_line(params)
@@ -700,11 +726,11 @@ defmodule Main do
     end
   end
 
-  defp py_completion_kind("function"), do: $lsprotocol.types.CompletionItemKind.Function
-  defp py_completion_kind("class"), do: $lsprotocol.types.CompletionItemKind.Class
-  defp py_completion_kind("module"), do: $lsprotocol.types.CompletionItemKind.Module
-  defp py_completion_kind("instance"), do: $lsprotocol.types.CompletionItemKind.Value
-  defp py_completion_kind(_), do: $lsprotocol.types.CompletionItemKind.Field
+  defp py_completion_kind("function"), do: types.CompletionItemKind.Function
+  defp py_completion_kind("class"), do: types.CompletionItemKind.Class
+  defp py_completion_kind("module"), do: types.CompletionItemKind.Module
+  defp py_completion_kind("instance"), do: types.CompletionItemKind.Value
+  defp py_completion_kind(_), do: types.CompletionItemKind.Field
 
   defp gandora_completion(prefix) do
     m = ~r/([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)\.([a-z_][A-Za-z0-9_]*)?$/.search(prefix)
@@ -735,7 +761,7 @@ defmodule Main do
       |> Enum.map(fn s ->
         types.CompletionItem(
           label: Map.get(s, "name"),
-          kind: $lsprotocol.types.CompletionItemKind.Function,
+          kind: types.CompletionItemKind.Function,
           detail: Map.get(s, "head"),
           documentation: Map.get(s, "doc")
         )
@@ -759,7 +785,9 @@ defmodule Main do
 
   # ---- formatting through the GEP-0016 engine (GEP-0015-R007) --------------
 
-  @decorate @server.feature($lsprotocol.types.TEXT_DOCUMENT_FORMATTING)
+  @doc "Whole-document formatting through the GEP-0016 engine (GEP-0015-R007)."
+  @spec formatting($lsprotocol.types.DocumentFormattingParams()) :: term()
+  @decorate @server.feature(types.TEXT_DOCUMENT_FORMATTING)
   def formatting(params) do
     doc = @server.workspace.get_text_document(params.text_document.uri)
     result = Fmt.format_text(doc.source)
@@ -783,9 +811,11 @@ defmodule Main do
 
   # ---- signature help (GEP-0015-R008) --------------------------------------
 
+  @doc "Signature help for the innermost open call (GEP-0015-R008)."
+  @spec signature_help($lsprotocol.types.SignatureHelpParams()) :: term()
   @decorate @server.feature(
-    $lsprotocol.types.TEXT_DOCUMENT_SIGNATURE_HELP,
-    $lsprotocol.types.SignatureHelpOptions(trigger_characters: ["(", ","])
+    types.TEXT_DOCUMENT_SIGNATURE_HELP,
+    types.SignatureHelpOptions(trigger_characters: ["(", ","])
   )
   def signature_help(params) do
     {doc, line} = doc_and_line(params)
@@ -911,6 +941,8 @@ defmodule Main do
     parts |> Enum.map(fn p -> p.strip() end) |> Enum.reject(fn p -> p == "" end)
   end
 
+  @doc "The server entry: speaks LSP over stdio."
+  @spec main() :: nil
   def main() do
     @server.start_io()
   end

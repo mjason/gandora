@@ -1,10 +1,31 @@
 defmodule Sigils do
+  @moduledoc """
+  The sigil family: ~w word lists, ~s strings without escaping, ~r
+  regexes as module attributes, and ~python for expressions that only
+  Python can say.
+  """
+  @moduledoc_trans zh_CN: """
+  印记家族:~w 单词列表、~s 免转义字符串、~r 正则作为模块属性,以及
+  只有 Python 能表达的 ~python 表达式。
+  """
+
   @word_re ~r/\w+/
 
+  @doc "The words of a text — the ~r sigil compiled once, reused everywhere."
+  @param text, "Any text; \\w matches Unicode word characters."
+  @spec words(string()) :: list(string())
+  @example """
+      gan> words("hello, 世界 world!")
+      ['hello', '世界', 'world']
+  """
+  def words(text), do: @word_re.findall(text)
+
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main() do
     IO.puts(inspect(~w(gandora elixir python)))
     IO.puts(~s(no need to escape "quotes" here))
-    IO.puts(inspect(@word_re.findall("hello, 世界 world!")))
+    IO.puts(inspect(words("hello, 世界 world!")))
     total = ~python(sum(i * i for i in range(10)))
     IO.puts("sum of squares: #{total}")
     evens = [1, 2, 3, 4, 5, 6] |> ~python(lambda xs: [x for x in xs if x % 2 == 0]).()

@@ -17,6 +17,9 @@ def cached_add(a: int | float, b: int | float) -> int | float:
 
   - a: First addend.
   - b: Second addend.
+
+    >>> cached_add(20, 22)
+    42
 """
     return a + b
 

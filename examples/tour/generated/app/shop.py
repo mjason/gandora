@@ -45,6 +45,11 @@ def sale(item: Shop) -> Shop:
 ## Parameters
 
   - item: The item on sale.
+
+    >>> sale(Shop(name="kb", price=100)).price
+    50
+    >>> sale(Shop(name="kb", price=100)).tags
+    ['sale']
 """
     return dataclasses.replace(item, price=_gan_div(item.price, 2), tags=item.tags + ["sale"])
 

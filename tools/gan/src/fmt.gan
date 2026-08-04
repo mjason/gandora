@@ -9,11 +9,14 @@ defmodule Fmt do
 
   pyimport gandora_core, as: core
   pyimport sys
+  pyimport pathlib
 
   # ---- entry ---------------------------------------------------------------
 
+  @doc "The `gan fmt` entry: formats the given paths, or stdin with `-`."
+  @doc_trans zh_CN: "`gan fmt` 入口：格式化给定路径，`-` 表示读取 stdin。"
   @param args, "CLI arguments after `fmt`: paths, `-` for stdin, --check, --diff."
-  @spec run(list(string())) :: nil
+  @spec run(sequence(string())) :: nil
   def run(args) do
     check = Enum.member?(args, "--check")
     diff = Enum.member?(args, "--diff")
@@ -24,20 +27,20 @@ defmodule Fmt do
       files = collect_files(paths)
       if Enum.empty?(files) do
         IO.puts("gan fmt: no .gan files found")
-        $sys.exit(1)
+        sys.exit(1)
       end
       results = Enum.map(files, fn f -> format_file(f, check or diff) end)
       changed = Enum.filter(results, fn {_, status} -> status == :changed end)
       errors = Enum.filter(results, fn {_, status} -> status == :error end)
       cond do
         not Enum.empty?(errors) ->
-          $sys.exit(2)
+          sys.exit(2)
         diff ->
           Enum.each(changed, fn {f, _} -> print_diff(f) end)
-          if not Enum.empty?(changed), do: $sys.exit(1)
+          if not Enum.empty?(changed), do: sys.exit(1)
         check and not Enum.empty?(changed) ->
           Enum.each(changed, fn {f, _} -> IO.puts("would reformat #{f}") end)
-          $sys.exit(1)
+          sys.exit(1)
         true ->
           IO.puts("#{Enum.count(changed)} file(s) reformatted, #{Enum.count(files)} checked")
       end
@@ -53,7 +56,7 @@ defmodule Fmt do
         if new != text and verify(text, new) != :ok do
           sys.stderr.write("gan fmt: verification failed; input left as-is\n")
           sys.stdout.write(text)
-          $sys.exit(2)
+          sys.exit(2)
         else
           sys.stdout.write(new)
           nil
@@ -61,14 +64,14 @@ defmodule Fmt do
       _ ->
         sys.stderr.write("gan fmt: cannot parse input\n")
         sys.stdout.write(text)
-        $sys.exit(2)
+        sys.exit(2)
     end
   end
 
   # unified diff of what --diff would change, nothing rewritten
   # (GEP-0016-R010)
   defp print_diff(file) do
-    text = $pathlib.Path(file).read_text()
+    text = pathlib.Path(file).read_text()
     case format_text(text) do
       {:ok, new} ->
         lines = $difflib.unified_diff(
@@ -89,10 +92,10 @@ defmodule Fmt do
       paths
     end
     Enum.flat_map(roots, fn p ->
-      path = $pathlib.Path(p)
+      path = pathlib.Path(p)
       cond do
         path.is_dir() ->
-          Enum.sort(Enum.map($builtins.list(path.rglob("*.gan")), fn f -> to_string(f) end))
+          Enum.sort(Enum.map($builtins.list(path.rglob("*.gan")), &to_string/1))
         String.ends_with?(p, ".gan") -> [p]
         true -> []
       end
@@ -100,7 +103,7 @@ defmodule Fmt do
   end
 
   defp format_file(file, check) do
-    text = $pathlib.Path(file).read_text()
+    text = pathlib.Path(file).read_text()
     case format_text(text) do
       {:ok, new} ->
         cond do
@@ -109,7 +112,7 @@ defmodule Fmt do
           true ->
             case verify(text, new) do
               :ok ->
-                $pathlib.Path(file).write_text(new)
+                pathlib.Path(file).write_text(new)
                 IO.puts("reformatted #{file}")
                 {file, :changed}
               {:error, why} ->
@@ -125,6 +128,14 @@ defmodule Fmt do
 
   # ---- verification (R006) -------------------------------------------------
 
+  @doc "Confirms a rewrite preserves comments and parsed terms (R006)."
+  @doc_trans zh_CN: "校验重写保持注释与解析结果不变（R006）。"
+  @example """
+      gan> Fmt.verify("x = 1", "x = 1")
+      'ok'
+      gan> Fmt.verify("x = 1", "x = 2")
+      ('error', 'parsed terms changed')
+  """
   @param old_text, "The original source."
   @param new_text, "The candidate rewrite that must preserve comments and parse."
   @spec verify(string(), string()) :: atom() | tuple(atom(), string())
@@ -139,9 +150,8 @@ defmodule Fmt do
   end
 
   defp comments_of(text) do
-    core.tokens(text)
-    |> Enum.filter(fn t -> Map.get(t, "kind") == "comment" end)
-    |> Enum.map(fn t -> Map.get(t, "value").rstrip() end)
+    for t <- core.tokens(text), Map.get(t, "kind") == "comment",
+      do: Map.get(t, "value").rstrip()
   end
 
   @allow :stack_recursion
@@ -150,15 +160,17 @@ defmodule Fmt do
       $builtins.isinstance(t, $builtins.tuple) and $builtins.len(t) == 3 ->
         {strip_meta(elem(t, 0)), strip_meta(elem(t, 2))}
       $builtins.isinstance(t, $builtins.tuple) ->
-        $builtins.tuple(Enum.map($builtins.list(t), fn x -> strip_meta(x) end))
+        $builtins.tuple(Enum.map($builtins.list(t), &strip_meta/1))
       $builtins.isinstance(t, $builtins.list) ->
-        Enum.map(t, fn x -> strip_meta(x) end)
+        Enum.map(t, &strip_meta/1)
       true -> t
     end
   end
 
   # ---- formatting ----------------------------------------------------------
 
+  @doc "Formats one source text: `{:ok, new}` or `{:skip, why}`."
+  @doc_trans zh_CN: "格式化单个源文本：返回 `{:ok, new}` 或 `{:skip, why}`。"
   @param text, "The source to normalize."
   @spec format_text(string()) :: tuple(atom(), string())
   def format_text(text) do
@@ -212,7 +224,7 @@ defmodule Fmt do
           true ->
             {level, stack2, hung} = line_level(lt, stack, prev_last, prev_hang)
             indent = String.duplicate("  ", level)
-            multi = Enum.find(lt, fn t -> multiline?(t) end)
+            multi = Enum.find(lt, &multiline?/1)
             rendered = if is_nil(multi) do
               indent <> render_tokens(capture_parens(lt), lines)
             else

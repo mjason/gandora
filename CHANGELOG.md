@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.14.1 — 2026-08-04
+
+**The zero-noise verdict (GEP-0025 rev 2) — check recursively sharpened
+over 20+ rounds against the language's own codebases and a weak-model
+agent gauntlet (DeepSeek eval: 2/8 → 7/8+ green).**
+
+- **The trust line (R005)**: an idiomatic project now verdicts **zero
+  suggestions** — std, the toolchain, the tour, and the playground all
+  hold `clean: true` under their own check. Rules earned exemptions by
+  surviving that bar: `$builtins` repetition, `rescue _e ->` swallows,
+  `Mod.t()` / `$mod.Type()` spellings on `@spec` lines, dot-call
+  `fn x -> g.(x) end` wraps (not capturable), and test modules
+  (exempt from library annotation coverage).
+- **Verdict ergonomics (R004/R007)**: `ok`/`clean` traffic light
+  specified; identical findings consolidate across files with the
+  spread annotated; every suggestion carries the line of its first
+  evidence; `gan check` prints `path:line`.
+- **The project surface (R006)**: check now covers top-level
+  `tests/*.gan` (Advisor pass) — exactly what `gan test` runs; deeper
+  fixture directories are not advised.
+- **Masking hardened**: paren-sigil bodies are masked with a
+  balanced-parenthesis scan — `~python(next((...), None))` no longer
+  leaks `None` into migration hints.
+- **Compiler fix (found by dogfooding the Advisor's own advice)**:
+  `&f/1` captures of a `defp` now resolve to the private compiled
+  name, and `&to_string/1` / `&inspect/1` compile to `str` / `repr`
+  (kernel forms have no function object). With regression test.
+- **Dogfood sweep**: every remaining true finding applied across
+  std/toolchain/tour/playground — abstract `sequence()`/`mapping()`
+  spec params in std, pyimport graduations, capture conversions,
+  comprehension rewrites, doctests on every module (tour 16/16),
+  precise `$lsprotocol.types.*Params()` specs on all LSP handlers
+  (also fixes a pygls injection hazard with `term()` annotations),
+  playground verify grew to 164 cases.
+- **Elixir-reflex teaching**: `Integer.` / `Stream.` / `File.` /
+  `GenServer.` and 12 other Elixir-stdlib reflexes that would compile
+  to a dead bare import now get a targeted migration hint; bare Python
+  exception names (`ZeroDivisionError`) teach the `$builtins.` spelling;
+  `%{x | field: v}` on a struct value teaches `%Mod{x | field: v}`;
+  `{:ok, t}` tuple literals in specs teach `tuple(atom(), x)`.
+- **std fix (found by the check's own dogfood)**: `Enum.take/2` and
+  `Enum.drop/2` now honor Elixir's negative-count semantics (take -2 =
+  last two; drop -2 = drop the last two) — they previously sliced the
+  wrong end. With doctests and unit tests.
+- **Agent eval hardened** (gan-playground): 8 tasks; submit is refused
+  while the verdict is yellow (the gate teaches); scratch projects get
+  a real venv so std resolves; runtime errors show the traceback tail.
+  DeepSeek weak-model run: 2/8 → 7/8 green before the struct hint.
+- Conformance: +17 BDD scenarios (R004–R007, each R005 exemption,
+  every new reflex/exception/struct hint, tuple-spec teaching);
+  lsp suite 42, fmt 15, std 147, cargo 174.
+
 ## v0.14.0 — 2026-08-04
 
 **One verdict, one gate — and a toolchain that tests itself in Gandora.**

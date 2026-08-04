@@ -9,7 +9,16 @@ import functools
 
 
 @functools.lru_cache(maxsize=128)
-def fib(n):
+def fib(n: int) -> int:
+    """Fibonacci — @cache 128 wraps it in functools.lru_cache via the hook.
+
+## Parameters
+
+  - n: Which Fibonacci number to compute.
+
+    >>> fib(10)
+    55
+"""
     if n < 2:
         return n
     else:

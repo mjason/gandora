@@ -18,6 +18,12 @@ defmodule App.Shop do
   @doc "Half price, tagged — struct update syntax under a decorator."
   @param item, "The item on sale."
   @spec sale(App.Shop.t()) :: App.Shop.t()
+  @example """
+      gan> sale(%App.Shop{name: "kb", price: 100}).price
+      50
+      gan> sale(%App.Shop{name: "kb", price: 100}).tags
+      ['sale']
+  """
   @decorate route("/sale")
   def sale(item) do
     %App.Shop{item | price: item.price // 2, tags: item.tags ++ [:sale]}

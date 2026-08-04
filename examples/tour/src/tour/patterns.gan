@@ -5,6 +5,12 @@ defmodule Tour.Patterns do
   @doc "Multi-clause dispatch with guards, top to bottom."
   @param n, "The number to describe."
   @spec describe(integer()) :: string()
+  @example """
+      gan> describe(0)
+      'zero'
+      gan> [describe(-3), describe(4), describe(7)]
+      ['negative -3', 'even 4', 'odd 7']
+  """
   def describe(0), do: "zero"
   def describe(n) when n < 0, do: "negative #{n}"
   def describe(n) when rem(n, 2) == 0, do: "even #{n}"

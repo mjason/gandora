@@ -23,7 +23,11 @@ def literals() -> list:
 
 
 def arithmetic() -> tuple[int, float, int, int]:
-    """Elixir arithmetic semantics: `/` is true division, `//` and `rem` truncate."""
+    """Elixir arithmetic semantics: `/` is true division, `//` and `rem` truncate.
+
+    >>> arithmetic()
+    (13, 2.5, 2, -1)
+"""
     a = 7 + (3 * 2)
     b = 10 / 4
     c = _gan_div(10, 4)

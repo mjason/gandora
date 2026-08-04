@@ -28,6 +28,13 @@ defmodule Tour.Annotations do
 
   @on_definition Tour.Annotations.on_def
 
+  @doc "Fibonacci — @cache 128 wraps it in functools.lru_cache via the hook."
+  @param n, "Which Fibonacci number to compute."
+  @spec fib(integer()) :: integer()
+  @example """
+      gan> fib(10)
+      55
+  """
   @cache 128
   @allow :stack_recursion
   def fib(n) do

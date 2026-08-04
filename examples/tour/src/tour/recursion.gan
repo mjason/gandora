@@ -13,6 +13,10 @@ defmodule Tour.Recursion do
   @param n, "The upper bound; a million frames is fine."
   @param_trans n, zh_CN: "上界;百万帧也没问题。"
   @spec sum_to(integer()) :: integer()
+  @example """
+      gan> sum_to(100)
+      5050
+  """
   def sum_to(n), do: sum_to(n, 0)
   def sum_to(0, acc), do: acc
   def sum_to(n, acc), do: sum_to(n - 1, acc + n)

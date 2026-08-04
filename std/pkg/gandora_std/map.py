@@ -38,7 +38,7 @@ def get(*_gan_args) -> _T_v | _T_d:
         raise GanMatchError("no clause of get/2,3 matched " + repr(_gan_args))
 
 
-def put(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
+def put(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
     """A new map with `key` set to `value`.
 
 ## Parameters
@@ -53,7 +53,7 @@ def put(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
     return ({**(m), (key): (value)})
 
 
-def delete(m: dict[_T_k, _T_v], key: _T_k) -> dict[_T_k, _T_v]:
+def delete(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k) -> dict[_T_k, _T_v]:
     """A new map without `key`.
 
 ## Parameters
@@ -67,7 +67,7 @@ def delete(m: dict[_T_k, _T_v], key: _T_k) -> dict[_T_k, _T_v]:
     return ({k: v for k, v in (m).items() if k != (key)})
 
 
-def keys(m: dict[_T_k, _T_v]) -> list[_T_k]:
+def keys(m: collections.abc.Mapping[_T_k, _T_v]) -> list[_T_k]:
     """The keys as a list.
 
 ## Parameters
@@ -80,7 +80,7 @@ def keys(m: dict[_T_k, _T_v]) -> list[_T_k]:
     return builtins.list(m.keys())
 
 
-def values(m: dict[_T_k, _T_v]) -> list[_T_v]:
+def values(m: collections.abc.Mapping[_T_k, _T_v]) -> list[_T_v]:
     """The values as a list.
 
 ## Parameters
@@ -93,7 +93,7 @@ def values(m: dict[_T_k, _T_v]) -> list[_T_v]:
     return builtins.list(m.values())
 
 
-def merge(m1: dict[_T_k, _T_v], m2: dict[_T_k, _T_v]) -> dict[_T_k, _T_v]:
+def merge(m1: collections.abc.Mapping[_T_k, _T_v], m2: collections.abc.Mapping[_T_k, _T_v]) -> dict[_T_k, _T_v]:
     """Merges `m2` into `m1`; `m2` wins on conflicts.
 
 ## Parameters
@@ -107,7 +107,7 @@ def merge(m1: dict[_T_k, _T_v], m2: dict[_T_k, _T_v]) -> dict[_T_k, _T_v]:
     return ({**(m1), **(m2)})
 
 
-def has_key_p(m: dict[_T_k, _T_v], key: _T_k) -> bool:
+def has_key_p(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k) -> bool:
     """Whether `key` is present.
 
 ## Parameters
@@ -121,7 +121,7 @@ def has_key_p(m: dict[_T_k, _T_v], key: _T_k) -> bool:
     return ((key) in (m))
 
 
-def to_list(m: dict[_T_k, _T_v]) -> list[tuple[_T_k, _T_v]]:
+def to_list(m: collections.abc.Mapping[_T_k, _T_v]) -> list[tuple[_T_k, _T_v]]:
     """The entries as a list of `{key, value}` tuples.
 
 ## Parameters
@@ -148,7 +148,7 @@ def new(*_gan_args) -> dict:
     raise GanMatchError("no clause of new/0,1 matched " + repr(_gan_args))
 
 
-def update(m: dict[_T_k, _T_v], key: _T_k, default: _T_v, f: collections.abc.Callable) -> dict[_T_k, _T_v]:
+def update(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k, default: _T_v, f: collections.abc.Callable) -> dict[_T_k, _T_v]:
     """Updates `key` by `f`; uses `default` when the key is absent (Elixir Map.update/4).
 
 ## Parameters
@@ -167,7 +167,7 @@ def update(m: dict[_T_k, _T_v], key: _T_k, default: _T_v, f: collections.abc.Cal
         return put(m, key, default)
 
 
-def fetch_bang(m: dict[_T_k, _T_v], key: _T_k) -> _T_v:
+def fetch_bang(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k) -> _T_v:
     """The value for `key`; raises Python KeyError when absent.
 
 ## Parameters
@@ -181,7 +181,7 @@ def fetch_bang(m: dict[_T_k, _T_v], key: _T_k) -> _T_v:
     return ((m)[(key)])
 
 
-def put_new(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
+def put_new(m: collections.abc.Mapping[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
     """Sets `key` only when absent.
 
 ## Parameters
@@ -199,7 +199,7 @@ def put_new(m: dict[_T_k, _T_v], key: _T_k, value: _T_v) -> dict[_T_k, _T_v]:
         return put(m, key, value)
 
 
-def take(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
+def take(m: collections.abc.Mapping[_T_k, _T_v], keys: collections.abc.Sequence[_T_k]) -> dict[_T_k, _T_v]:
     """The submap with only `keys` (missing keys ignored).
 
 ## Parameters
@@ -213,7 +213,7 @@ def take(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
     return ({k: v for k, v in (m).items() if k in (keys)})
 
 
-def drop(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
+def drop(m: collections.abc.Mapping[_T_k, _T_v], keys: collections.abc.Sequence[_T_k]) -> dict[_T_k, _T_v]:
     """The map without `keys`.
 
 ## Parameters
@@ -227,7 +227,7 @@ def drop(m: dict[_T_k, _T_v], keys: list[_T_k]) -> dict[_T_k, _T_v]:
     return ({k: v for k, v in (m).items() if k not in (keys)})
 
 
-def filter(m: dict[_T_k, _T_v], f: collections.abc.Callable) -> dict[_T_k, _T_v]:
+def filter(m: collections.abc.Mapping[_T_k, _T_v], f: collections.abc.Callable) -> dict[_T_k, _T_v]:
     """Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy.
 
 ## Parameters

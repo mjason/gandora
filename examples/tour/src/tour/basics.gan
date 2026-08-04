@@ -22,6 +22,10 @@ defmodule Tour.Basics do
 
   @doc "Elixir arithmetic semantics: `/` is true division, `//` and `rem` truncate."
   @spec arithmetic() :: tuple(integer(), float(), integer(), integer())
+  @example """
+      gan> arithmetic()
+      (13, 2.5, 2, -1)
+  """
   def arithmetic() do
     a = 7 + 3 * 2 # 13, Elixir precedence
     b = 10 / 4 # 2.5, / is true division

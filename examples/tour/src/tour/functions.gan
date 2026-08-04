@@ -2,7 +2,16 @@ defmodule Tour.Functions do
   @moduledoc "Anonymous functions, captures, and data-first pipelines."
 
   # data-first wrappers make Python's function-first APIs pipe-friendly
-  defp map_list(xs, f), do: $builtins.list($builtins.map(f, xs))
+  @doc "Data-first map: puts the collection first so Python's `map` can pipe."
+  @param xs, "The collection."
+  @param f, "Applied to each element."
+  @spec map_list(iterable(term()), fun()) :: list(term())
+  @example """
+      gan> map_list([1, 2, 3], &(&1 * 2))
+      [2, 4, 6]
+  """
+  def map_list(xs, f), do: $builtins.list($builtins.map(f, xs))
+
   defp keep(xs, f), do: $builtins.list($builtins.filter(f, xs))
 
   @doc "Runs the chapter."

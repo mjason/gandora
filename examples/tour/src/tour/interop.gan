@@ -12,6 +12,10 @@ defmodule Tour.Interop do
   @param a, "First addend."
   @param b, "Second addend."
   @spec cached_add(number(), number()) :: number()
+  @example """
+      gan> cached_add(20, 22)
+      42
+  """
   def cached_add(a, b) do
     a + b
   end

@@ -80,7 +80,7 @@ def assert_raises(f: collections.abc.Callable) -> str:
     try:
         f()
         _gan_tmp0 = "no_raise"
-    except Exception as e:
+    except builtins.Exception as e:
         _gan_tmp0 = ("raised", str(e))
     outcome = _gan_tmp0
     _gan_case1 = outcome

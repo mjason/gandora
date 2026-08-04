@@ -573,9 +573,18 @@ suggestions print and let it proceed.
 
 ```console
 gan lsc check --root .
-# {"diagnostics": [...], "suggestions": [{"kind": "did_you_mean",
+# {"ok": true, "clean": false, "diagnostics": [...],
+#  "suggestions": [{"kind": "did_you_mean", "line": 3,
 #   "message": "`Enum.mpa` is not a function of Enum — did you mean `Enum.map`?", ...}]}
 ```
+
+The verdict leads with a traffic light: `ok` (compiles — no errors)
+and `clean` (ok **and** zero warnings **and** zero suggestions).
+Red → fix errors; yellow → read the suggestions; green → submit.
+Suggestions carry the line of their first evidence, identical findings
+across many files collapse into one annotated entry, and the surface
+covers `src/` plus top-level `tests/*.gan` (test modules get migration
+and idiom hints but are exempt from library annotation coverage).
 
 A productive loop for an agent: **write → `gan check` (fix every
 finding) → `gan test` → `gan build`**. When unsure what something

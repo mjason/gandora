@@ -12,7 +12,21 @@ import tour.recursion
 import tour.templates
 
 
-def main():
+def banner(title: str) -> str:
+    """Formats the banner line printed above a chapter.
+
+## Parameters
+
+  - title: The chapter name.
+
+    >>> banner("basics")
+    '== basics =='
+"""
+    return f"== {title} =="
+
+
+def main() -> None:
+    """Runs every chapter in order."""
     _section("basics", tour.basics.demo)
     _section("patterns", tour.patterns.demo)
     _section("functions", tour.functions.demo)
@@ -26,7 +40,7 @@ def main():
 
 
 def _section(title, run):
-    print(f"== {title} ==")
+    print(banner(title))
     run()
     return print("")
 

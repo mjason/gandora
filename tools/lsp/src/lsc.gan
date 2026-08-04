@@ -7,6 +7,7 @@ defmodule Lsc do
   pyimport gandora_core, as: core
   pyimport json
   pyimport pathlib
+  pyimport sys
 
   @usage """
   gan lsc <query> — one JSON value on stdout
@@ -33,7 +34,7 @@ defmodule Lsc do
   @doc "Entry: parses --root, dispatches one query, emits one JSON value."
   @spec main() :: nil
   def main() do
-    args = $builtins.list($sys.argv) |> Enum.drop(1)
+    args = $builtins.list(sys.argv) |> Enum.drop(1)
     {root, args} = take_root(args)
     try do
       dispatch(args, root)
@@ -46,11 +47,11 @@ defmodule Lsc do
           "line" => Enum.at(parts, 2),
           "col" => Enum.at(parts, 3)
         })
-        $sys.exit(1)
+        sys.exit(1)
       e ->
         # never a bare traceback: every failure is one JSON value
         emit(%{"error" => "#{$builtins.type(e).__name__}: #{to_string(e)}"})
-        $sys.exit(2)
+        sys.exit(2)
     end
   end
 
@@ -103,10 +104,16 @@ defmodule Lsc do
         rescue
           _e ->
             # a parse-broken file must not silence the whole verdict
-            $builtins.list($pathlib.Path(root).glob("src/**/*.gan"))
-            |> Enum.map(fn p -> to_string(p) end)
+            $builtins.list(pathlib.Path(root).glob("src/**/*.gan"))
+            |> Enum.map(&to_string/1)
         end
-        suggestions = Enum.flat_map(files, fn path ->
+        # tests are part of the project surface too (Advisor pass only —
+        # their compile diagnostics belong to `gan test`)
+        # top-level only, mirroring what `gan test` runs — deeper
+        # directories hold fixtures, not tests
+        test_files = $builtins.list(pathlib.Path(root).glob("tests/*.gan"))
+        |> Enum.map(&to_string/1)
+        suggestions = Enum.flat_map(Enum.uniq(files ++ test_files), fn path ->
           text = try do
             read(path)
           rescue
@@ -116,6 +123,7 @@ defmodule Lsc do
           (Advisor.analyze(text, root) ++ Advisor.lint_hints(text, per_file))
           |> Enum.map(fn h -> Map.put(h, "path", path) end)
         end)
+        |> Advisor.consolidate()
         errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
         emit(%{
           "ok" => Enum.empty?(errors),
@@ -124,7 +132,7 @@ defmodule Lsc do
           "suggestions" => suggestions
         })
         if not Enum.empty?(errors) do
-          $sys.exit(1)
+          sys.exit(1)
         end
       ["pydoc", chain | _] ->
         emit(PyIntel.hover_markdown(root, import_line(chain), chain))
@@ -136,11 +144,18 @@ defmodule Lsc do
         emit(PyIntel.signatures(root, import_line(chain), chain))
       _ ->
         IO.puts(@usage)
-        $sys.exit(2)
+        sys.exit(2)
     end
   end
 
-  defp import_line(chain) do
+  @doc "The import statement that brings a dotted Python chain into scope."
+  @example """
+      gan> Lsc.import_line("os.path.join")
+      'import os'
+  """
+  @param chain, "The dotted `$module`-style reference."
+  @spec import_line(string()) :: string()
+  def import_line(chain) do
     "import " <> Enum.at(chain.split("."), 0)
   end
 
@@ -153,7 +168,7 @@ defmodule Lsc do
     end
   end
 
-  defp read(file), do: $pathlib.Path(file).read_text()
+  defp read(file), do: pathlib.Path(file).read_text()
 
   defp emit(value), do: IO.puts(json.dumps(value))
 end

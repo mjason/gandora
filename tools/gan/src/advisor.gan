@@ -33,6 +33,27 @@ defmodule Advisor do
       "There is no `Python` object — interop is `$math.sqrt(x)` inline, or `pyimport math` at module top, then `math.sqrt(x)` (GEP-0003)."}
   ]
 
+  # Elixir standard-library reflexes that do not exist here — each one
+  # compiles to a bare Python import and dies at runtime, so the check
+  # must catch them (GEP-0025-R005: check passes only what can run)
+  @elixir_reflexes %{
+    "Integer" => "no `Integer` module — `to_string/1`, `rem/2`, `div/2` are built-ins; parse with `$builtins.int(s)`",
+    "Float" => "no `Float` module — `$builtins.float(s)` parses, `$builtins.round(x, n)` rounds",
+    "Kernel" => "no `Kernel` module — its functions (to_string, inspect, rem, div, elem...) are bare built-ins",
+    "Tuple" => "no `Tuple` module — pattern matching and `elem/2` cover tuples",
+    "Atom" => "no `Atom` module — `to_string/1` renders an atom",
+    "Range" => "no `Range` module — `1..n` literals feed `for`/Enum directly",
+    "Regex" => "no `Regex` module — `~r/.../ ` sigils plus `$re` (Python re) methods",
+    "Stream" => "no `Stream` module — `for` comprehensions and Enum are eager; reach for `$itertools` when you need laziness",
+    "Process" => "no BEAM processes — this compiles to plain Python; use functions and data",
+    "GenServer" => "no BEAM — no GenServer; model state as data passed through functions",
+    "Agent" => "no BEAM — no Agent; carry state explicitly",
+    "Task" => "no BEAM — no Task; call functions directly or use Python concurrency via $-interop",
+    "File" => "no `File` module — `$pathlib.Path(p).read_text()` and friends",
+    "Path" => "no `Path` module — `$os.path` or `$pathlib`",
+    "System" => "no `System` module — `$sys` / `$os` cover arguments and environment"
+  }
+
   @keywords ["defmodule", "def", "defp", "defmacro", "defstruct", "case", "cond",
     "with", "for", "fn", "try", "rescue", "after", "else", "end", "do", "quote",
     "unquote", "pyimport", "import", "require", "alias", "use", "recur", "when",
@@ -46,7 +67,9 @@ defmodule Advisor do
   @param root, "Project root for symbol resolution."
   @spec analyze(string(), string()) :: list(map())
   def analyze(source, root) do
-    dedupe(common_mistakes(source) ++ practice_hints(source) ++
+    dedupe(common_mistakes(source) ++ reflex_hints(source) ++
+        exception_hints(source) ++ struct_update_hints(source) ++
+        practice_hints(source) ++
         member_suggestions(source, root))
   end
 
@@ -66,13 +89,48 @@ defmodule Advisor do
     spaces = fn text -> re.sub("\\S", " ", text) end
     masked = re.sub("\"\"\"([\\s\\S]*?)\"\"\"",
       fn m -> "\"\"\"" <> spaces.(m.group(1)) <> "\"\"\"" end, source)
-    masked = re.sub("(~[a-zA-Z]+\\()([^)]*)\\)",
-      fn m -> m.group(1) <> spaces.(m.group(2)) <> ")" end, masked)
+    masked = mask_paren_sigils(masked)
     masked = re.sub("(~[a-zA-Z]+/)([^/\\n]*)/",
       fn m -> m.group(1) <> spaces.(m.group(2)) <> "/" end, masked)
     masked = re.sub("\"((?:[^\"\\\\\\n]|\\\\.)*)\"",
       fn m -> "\"" <> spaces.(m.group(1)) <> "\"" end, masked)
     re.sub("#(?!\\{)([^\\n]*)", fn m -> "#" <> spaces.(m.group(1)) end, masked)
+  end
+
+  # paren sigil bodies (~python(...)) nest parens — mask with a
+  # balanced scan, not a regex, so trailing args never leak
+  defp mask_paren_sigils(source) do
+    starts = Enum.map($builtins.list(re.finditer("~[a-zA-Z]+\\(", source)),
+      fn m -> ~python(<%= m %>.end()) end)
+    Enum.reduce(starts, source, fn start, acc ->
+      stop = balance_from(acc, start, 1)
+      cut(acc, 0, start) <> re.sub("\\S", " ", cut(acc, start, stop)) <>
+        cut(acc, stop, $builtins.len(acc))
+    end)
+  end
+
+  defp cut(s, a, b), do: ~python(<%= s %>[<%= a %>:<%= b %>])
+
+  defp char_at(s, i), do: ~python(<%= s %>[<%= i %>])
+
+  # index of the closing paren that balances depth, scanning from i
+  defp balance_from(source, i, depth) do
+    cond do
+      i >= $builtins.len(source) or depth == 0 -> i - 1
+      char_at(source, i) == "(" -> recur(source, i + 1, depth + 1)
+      char_at(source, i) == ")" -> recur(source, i + 1, depth - 1)
+      true -> recur(source, i + 1, depth)
+    end
+  end
+
+  # 1-based line of the first match of `pattern` in `source` (0 if none)
+  defp line_of(source, pattern) do
+    m = pattern.search(source)
+    if is_nil(m) do
+      0
+    else
+      source.count("\n", 0, m.start()) + 1
+    end
   end
 
   defp common_mistakes(source) do
@@ -102,10 +160,15 @@ defmodule Advisor do
 
   # one consolidated annotation-coverage report, not one nag per def
   defp coverage_hints(raw, source, in_module) do
-    if not in_module do
+    # test modules are consumers, not library surface — annotation
+    # coverage is a library discipline (GEP-0024)
+    test_module = String.match?(source, ~r/(?m)^\s*use Test\b/) or
+      String.match?(source, ~r/defmodule Test[A-Z]/)
+    if not in_module or test_module do
       []
     else
       heads = Enum.uniq(~r/(?m)^\s*def ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source))
+      |> Enum.filter(fn h -> h != "unquote" end)
       specs = ~r/(?m)^\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
       docs = count_attr_blocks(source, "@doc")
       no_spec = Enum.filter(heads, fn h -> not Enum.member?(specs, h) end)
@@ -126,7 +189,7 @@ defmodule Advisor do
         missing ++ ["@moduledoc"]
       end
       example_hint = if Enum.count(heads) > 0 and not String.contains?(raw, "@example") do
-        [%{"kind" => "practice", "line" => 0,
+        [%{"kind" => "practice", "line" => line_of(source, ~r/(?m)^\s*def /),
           "message" => "No @example doctests — add one right above a def, e.g.:\n@example \"\"\"\n    gan> double(21)\n    42\n\"\"\"\n(`gan test` runs them; expected output is the Python repr) (GEP-0007)."}]
       else
         []
@@ -134,7 +197,12 @@ defmodule Advisor do
       head_hint = if Enum.empty?(missing) do
         []
       else
-        [%{"kind" => "practice", "line" => 0,
+        first = if Enum.empty?(no_spec) do
+          ~r/(?m)^\s*def /
+        else
+          re.compile("(?m)^\\s*def " <> re.escape(Enum.at(no_spec, 0)))
+        end
+        [%{"kind" => "practice", "line" => line_of(source, first),
           "message" => "Annotation coverage: missing #{missing |> Enum.join("; ")} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md)."}]
       end
       head_hint ++ example_hint
@@ -153,7 +221,8 @@ defmodule Advisor do
     if Enum.empty?(offenders) do
       []
     else
-      [%{"kind" => "practice", "line" => 0,
+      first = re.compile("(?m)^\\s*@spec\\s+" <> re.escape(Enum.at(offenders, 0)))
+      [%{"kind" => "practice", "line" => line_of(source, first),
         "message" => "Concrete `list()`/`map()` in parameter position of @spec #{offenders |> Enum.join(", ")} — accept `sequence(t)`/`iterable(t)`/`mapping(k, v)`, return concrete (\"abstract in, concrete out\", docs/syntax.md)."}]
     end
   end
@@ -161,7 +230,7 @@ defmodule Advisor do
   # idiom shortcuts an agent skips when hurrying
   defp idiom_hints(source) do
     checks = [
-      {~r/fn (\w+) -> ([a-z_][A-Za-z0-9_.]*[?!]?)\(\1\) end/,
+      {~r/fn (\w+) -> ((?:[A-Z][A-Za-z0-9_.]*\.)?[a-z_][A-Za-z0-9_]*[?!]?)\(\1\) end/,
         "`fn x -> f(x) end` wraps a single call — the capture `&f/1` says the same thing."},
       {~r/Enum\.count\([^)]*\)\s*==\s*0|length\([^)]*\)\s*==\s*0/,
         "`... == 0` on a count — `Enum.empty?(xs)` reads better."},
@@ -174,13 +243,17 @@ defmodule Advisor do
       if is_nil(pattern.search(source)) do
         []
       else
-        [%{"kind" => "practice", "line" => 0, "message" => advice}]
+        [%{"kind" => "practice", "line" => line_of(source, pattern),
+          "message" => advice}]
       end
     end)
-    rescue_only_bare = String.match?(source, ~r/rescue\s*\n\s*[a-z_][A-Za-z0-9_]* ->/) and
+    # `rescue _e ->` is a deliberate swallow — only an undiscarded bare
+    # binder earns the hint
+    bare_pat = ~r/rescue\s*\n\s*[a-z][A-Za-z0-9_]* ->/
+    rescue_only_bare = String.match?(source, bare_pat) and
       not String.match?(source, ~r/rescue[\s\S]{0,200}? in /)
     bare_hint = if rescue_only_bare do
-      [%{"kind" => "practice", "line" => 0,
+      [%{"kind" => "practice", "line" => line_of(source, bare_pat),
         "message" => "A bare `rescue e ->` catches every Exception — rescue specific types first: `e in $builtins.ValueError -> ...` (GEP-0014)."}]
     else
       []
@@ -189,14 +262,18 @@ defmodule Advisor do
   end
 
   defp pyimport_hints(source) do
-    refs = ~r/\$([a-z_][a-z0-9_]*)/.findall(source)
+    # `$mod.Type()` on a @spec line is the host-type spelling mandated
+    # by GEP-0017 — it cannot graduate to a pyimport alias, so spec
+    # lines do not count toward repetition (GEP-0025-R005)
+    value_source = source.split("\n")
+    |> Enum.filter(fn l -> not String.match?(l, ~r/^\s*@spec /) end)
+    |> Enum.join("\n")
+    refs = ~r/\$([a-z_][a-z0-9_]*)/.findall(value_source)
     counts = Enum.reduce(refs, %{}, fn m, acc -> Map.put(acc, m, Map.get(acc, m, 0) + 1) end)
-    counts.items()
-    |> Enum.filter(fn {_, n} -> n >= 3 end)
-    |> Enum.map(fn {m, n} ->
-      %{"kind" => "practice", "line" => 0,
-        "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name (GEP-0003 rev 6)."}
-    end)
+    # $builtins is the ambient namespace — repeating it is the idiom
+    for {m, n} <- counts.items(), n >= 3 and m != "builtins",
+      do: %{"kind" => "practice", "line" => line_of(source, re.compile("\\$" <> m)),
+        "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name; a dotted chain imports as `pyimport #{m}.sub, as: s` (GEP-0003 rev 6)."}
   end
 
   # fuzzy candidates for a compile error: the token at the error line
@@ -230,13 +307,53 @@ defmodule Advisor do
 
   # `Mod.fun` calls whose function does not exist on the module: the
   # classic AI typo (Enum.mpa). Checked against real module symbols.
-  defp member_suggestions(raw, root) do
+  # Elixir stdlib modules that do not exist here (would compile to a
+  # dead bare import) — one targeted migration hint each
+  defp reflex_hints(raw) do
     source = mask_literals(raw)
+    for {mod, advice} <- @elixir_reflexes.items(),
+      not is_nil(re.compile("\\b" <> mod <> "\\.[a-z_]").search(source)),
+      do: %{"kind" => "migration",
+        "line" => line_of(source, re.compile("\\b" <> mod <> "\\.[a-z_]")),
+        "message" => "`#{mod}.` — #{advice} (GEP-0003)."}
+  end
+
+  # map-update syntax on a struct value dies at runtime (dict spread
+  # over a dataclass) — the struct update names the struct
+  defp struct_update_hints(raw) do
+    source = mask_literals(raw)
+    pat = ~r/%\{[a-z_][A-Za-z0-9_]*\s*\|/
+    if String.match?(source, ~r/defstruct/) and String.match?(source, pat) do
+      [%{"kind" => "migration", "line" => line_of(source, pat),
+        "message" => "`%{x | field: v}` updates a plain map — a struct value updates as `%Mod{x | field: v}` (compiles to a dataclass replace) (GEP-0009)."}]
+    else
+      []
+    end
+  end
+
+  # a bare Python exception name in Gandora source is unresolvable —
+  # the interop spelling is $builtins.Name (or $module.Name)
+  defp exception_hints(raw) do
+    source = mask_literals(raw)
+    pat = ~r/(?<![.\w])([A-Z][A-Za-z0-9]*(?:Error|Exception))\b/
+    hits = Enum.uniq(pat.findall(source))
+    if Enum.empty?(hits) do
+      []
+    else
+      [%{"kind" => "migration", "line" => line_of(source, pat),
+        "message" => "Python exceptions are spelled through their module: `$builtins.#{Enum.at(hits, 0)}` (rescue e in $builtins.#{Enum.at(hits, 0)} -> ...) (GEP-0014)."}]
+    end
+  end
+
+  defp member_suggestions(raw, root) do
+    # @spec/@type lines spell types (App.Shop.t()), not calls
+    source = re.sub("(?m)^\\s*@(spec|type|opaque)[^\\n]*", "", mask_literals(raw))
     calls = ~r/\b([A-Z][A-Za-z0-9_.]*)\.([a-z_][A-Za-z0-9_]*[?!]?)\(/.findall(source)
     Enum.uniq(calls)
     |> Enum.flat_map(fn {mod, fun} ->
       names = module_functions(mod, root)
       cond do
+        fun == "t" -> []
         Enum.empty?(names) -> []
         Enum.member?(names, fun) -> []
         true ->
@@ -246,7 +363,8 @@ defmodule Advisor do
           else
             "did you mean #{near |> Enum.map(fn n -> "`#{mod}.#{n}`" end) |> Enum.join(" / ")}?"
           end
-          [%{"kind" => "did_you_mean", "line" => 0,
+          [%{"kind" => "did_you_mean",
+            "line" => line_of(source, re.compile(re.escape("#{mod}.#{fun}("))),
             "message" => "`#{mod}.#{fun}` is not a function of #{mod} — #{hint}"}]
       end
     end)
@@ -276,11 +394,8 @@ defmodule Advisor do
       []
     else
       m = $importlib.import_module("gandora_std." <> pymod)
-      $builtins.dir(m)
-      |> Enum.filter(fn n -> not String.starts_with?(n, "_") end)
-      |> Enum.map(fn n ->
-        n |> String.replace("_bang", "!") |> String.replace("_p", "?")
-      end)
+      for n <- $builtins.dir(m), not String.starts_with?(n, "_"),
+        do: n |> String.replace("_bang", "!") |> String.replace("_p", "?")
     end
   end
 
@@ -307,12 +422,38 @@ defmodule Advisor do
   @doc "Did-you-mean hints for undefined-variable lints."
   @param source, "The source the lints came from."
   @param diags, "The diagnostics list from core.check/diagnostics."
-  @spec lint_hints(string(), list(map())) :: list(map())
+  @spec lint_hints(string(), sequence(mapping())) :: list(map())
   def lint_hints(source, diags) do
     dedupe(Enum.flat_map(diags, fn d -> lint_suggestions(source, d) end))
   end
 
-  @spec dedupe(list(map())) :: list(map())
+  @doc """
+  Project-level view: identical messages from many files collapse to
+  the first occurrence, annotated with the spread — 16 modules missing
+  doctests is one line, not sixteen.
+  """
+  @param suggestions, "Per-file suggestion maps (may carry \"path\")."
+  @spec consolidate(sequence(mapping())) :: list(map())
+  def consolidate(suggestions) do
+    counts = Enum.reduce(suggestions, %{}, fn s, acc ->
+      msg = Map.get(s, "message")
+      Map.put(acc, msg, Map.get(acc, msg, 0) + 1)
+    end)
+    {out, _} = Enum.reduce(suggestions, {[], []}, fn s, {acc, seen} ->
+      msg = Map.get(s, "message")
+      cond do
+        Enum.member?(seen, msg) -> {acc, seen}
+        Map.get(counts, msg, 1) > 1 ->
+          n = Map.get(counts, msg) - 1
+          {acc ++ [Map.put(s, "message", "#{msg} (also in #{n} other file(s))")],
+            seen ++ [msg]}
+        true -> {acc ++ [s], seen ++ [msg]}
+      end
+    end)
+    out
+  end
+
+  @spec dedupe(sequence(mapping())) :: list(map())
   defp dedupe(suggestions) do
     {out, _} = Enum.reduce(suggestions, {[], []}, fn s, {acc, seen} ->
       msg = Map.get(s, "message")

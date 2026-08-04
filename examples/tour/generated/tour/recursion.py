@@ -29,6 +29,9 @@ def sum_to(*_gan_args) -> int:
 ## Parameters
 
   - n: The upper bound; a million frames is fine.
+
+    >>> sum_to(100)
+    5050
 """
     while True:
         match _gan_args:

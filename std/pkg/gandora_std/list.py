@@ -8,7 +8,7 @@ import gandora_std.enum
 _T_a = typing.TypeVar("_T_a")
 
 
-def first(xs: list[_T_a]) -> _T_a | None:
+def first(xs: collections.abc.Sequence[_T_a]) -> _T_a | None:
     """The first element, or nil for an empty list.
 
 ## Parameters
@@ -21,7 +21,7 @@ def first(xs: list[_T_a]) -> _T_a | None:
     return gandora_std.enum.at(xs, 0)
 
 
-def last(xs: list[_T_a]) -> _T_a | None:
+def last(xs: collections.abc.Sequence[_T_a]) -> _T_a | None:
     """The last element, or nil for an empty list.
 
 ## Parameters
@@ -34,7 +34,7 @@ def last(xs: list[_T_a]) -> _T_a | None:
     return gandora_std.enum.at(xs, -1)
 
 
-def flatten(xs: list) -> list:
+def flatten(xs: collections.abc.Sequence) -> list:
     """Flattens nested lists to any depth.
 
 ## Parameters
@@ -84,7 +84,7 @@ def duplicate(value: _T_a, n: int) -> list[_T_a]:
     return ([(value)] * (n))
 
 
-def insert_at(xs: list[_T_a], index: int, value: _T_a) -> list[_T_a]:
+def insert_at(xs: collections.abc.Sequence[_T_a], index: int, value: _T_a) -> list[_T_a]:
     """Inserts `value` at `index` (negative counts from the end, as in Elixir).
 
 ## Parameters
@@ -99,7 +99,7 @@ def insert_at(xs: list[_T_a], index: int, value: _T_a) -> list[_T_a]:
     return ((xs)[:(index)] + [(value)] + (xs)[(index):])
 
 
-def delete_at(xs: list[_T_a], index: int) -> list[_T_a]:
+def delete_at(xs: collections.abc.Sequence[_T_a], index: int) -> list[_T_a]:
     """Removes the element at `index`; out-of-range leaves the list unchanged.
 
 ## Parameters
@@ -113,7 +113,7 @@ def delete_at(xs: list[_T_a], index: int) -> list[_T_a]:
     return ((xs)[:(index)] + (xs)[(index):][1:])
 
 
-def to_tuple(xs: list) -> tuple:
+def to_tuple(xs: collections.abc.Sequence) -> tuple:
     """The list as a tuple.
 
 ## Parameters
@@ -126,7 +126,7 @@ def to_tuple(xs: list) -> tuple:
     return builtins.tuple(xs)
 
 
-def starts_with_p(xs: list[_T_a], prefix: list[_T_a]) -> bool:
+def starts_with_p(xs: collections.abc.Sequence[_T_a], prefix: collections.abc.Sequence[_T_a]) -> bool:
     """Whether the list starts with `prefix`.
 
 ## Parameters
@@ -140,7 +140,7 @@ def starts_with_p(xs: list[_T_a], prefix: list[_T_a]) -> bool:
     return ((xs)[:len((prefix))] == (prefix))
 
 
-def replace_at(xs: list[_T_a], index: int, value: _T_a) -> list[_T_a]:
+def replace_at(xs: collections.abc.Sequence[_T_a], index: int, value: _T_a) -> list[_T_a]:
     """Replaces the element at `index` (negative counts from the end).
 
 ## Parameters
@@ -155,7 +155,7 @@ def replace_at(xs: list[_T_a], index: int, value: _T_a) -> list[_T_a]:
     return ((xs)[:(index)] + [(value)] + (xs)[(index):][1:])
 
 
-def update_at(xs: list[_T_a], index: int, f: collections.abc.Callable) -> list[_T_a]:
+def update_at(xs: collections.abc.Sequence[_T_a], index: int, f: collections.abc.Callable) -> list[_T_a]:
     """Updates the element at `index` by `f`.
 
 ## Parameters

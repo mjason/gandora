@@ -49,9 +49,8 @@ defmodule TestCheckVerdict do
   end
 
   defp kind_messages(verdict, kind) do
-    Map.get(verdict, "suggestions", [])
-    |> Enum.filter(fn s -> Map.get(s, "kind") == kind end)
-    |> Enum.map(fn s -> Map.get(s, "message") end)
+    for s <- Map.get(verdict, "suggestions", []), Map.get(s, "kind") == kind,
+      do: Map.get(s, "message")
   end
 
   defp suggests?(verdict, kind, needle) do
@@ -121,6 +120,34 @@ defmodule TestCheckVerdict do
     end
   end
 
+  describe "elixir reflexes" do
+    test "Integer module habits get the built-in spelling" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(x), do: Integer.to_string(x)\nend")
+      assert suggests?(v, "migration", "no `Integer` module")
+    end
+
+    test "Stream habits point at comprehensions" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: Stream.map(xs, fn x -> x end)\nend")
+      assert suggests?(v, "migration", "no `Stream` module")
+    end
+
+    test "bare Python exception names get the interop spelling" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f() do\n    try do\n      1\n    rescue\n      e in ZeroDivisionError -> nil\n    end\n  end\nend")
+      assert suggests?(v, "migration", "$builtins.ZeroDivisionError")
+    end
+
+    test "map-update on a struct teaches the struct spelling" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  defstruct [:age]\n  def f(p), do: %{p | age: 30}\nend")
+      assert suggests?(v, "migration", "%Mod{x | field: v}")
+    end
+
+    test "dotted exception spellings stay silent" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f() :: term()\n  @example \"\"\"\n      gan> Prog.f()\n      1\n  \"\"\"\n  def f() do\n    try do\n      1\n    rescue\n      _e in $builtins.ValueError -> nil\n    end\n  end\nend"
+      {v, _rc} = check(src)
+      refute suggests?(v, "migration", "exceptions are spelled")
+    end
+  end
+
   describe "practice" do
     test "missing annotations become one consolidated report" do
       {v, _rc} = check("defmodule Prog do\n  def f(x), do: x\nend")
@@ -132,6 +159,18 @@ defmodule TestCheckVerdict do
       src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(list(integer())) :: list(integer())\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(xs), do: xs\nend"
       {v, _rc} = check(src)
       assert suggests?(v, "practice", "abstract in, concrete out")
+    end
+
+    test "repeated value-level $refs want a pyimport" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(term()) :: term()\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(x), do: [$json.dumps(x), $json.dumps(x), $json.dumps(x)]\nend"
+      {v, _rc} = check(src)
+      assert suggests?(v, "practice", "pyimport json")
+    end
+
+    test "host types on @spec lines never count as $ref repetition" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n\n  pyimport pandas, as: pd\n\n  @doc \"d\"\n  @spec f($pandas.DataFrame()) :: $pandas.DataFrame()\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(df), do: pd.concat([df])\n\n  @doc \"d\"\n  @spec g() :: $pandas.DataFrame()\n  def g(), do: pd.DataFrame()\nend"
+      {v, _rc} = check(src)
+      assert Map.get(v, "suggestions") == []
     end
 
     test "count == 0 wants empty?" do
@@ -151,6 +190,12 @@ defmodule TestCheckVerdict do
       assert diag?(v, "GEP-0019-R007")
     end
 
+    test "tuple literal specs teach the tuple spelling" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @spec f(term()) :: {:ok, float()}\n  def f(x), do: {:ok, x}\nend"
+      {v, _rc} = check(src)
+      assert diag?(v, "tuple(atom(), x)")
+    end
+
     test "spec type errors teach the correction" do
       {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  @spec f(Int) :: Int\n  def f(x), do: x\nend")
       assert diag?(v, "write integer()")
@@ -168,6 +213,97 @@ defmodule TestCheckVerdict do
       src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(term()) :: term()\n  # return None while lambda\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(x), do: x\nend"
       {v, _rc} = check(src)
       assert kind_messages(v, "migration") == []
+    end
+  end
+
+  # multi-file scratch project: [{relpath, source}] -> {verdict, exit}
+  defp check_files(files) do
+    dir = tempfile.mkdtemp(prefix: "gan-bdd-")
+    os.makedirs(os.path.join(dir, "src"), exist_ok: true)
+    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
+    Enum.each(files, fn {rel, source} ->
+      p = pathlib.Path(os.path.join(dir, rel))
+      p.parent.mkdir(parents: true, exist_ok: true)
+      p.write_text(source)
+    end)
+    r = subprocess.run([lsc_bin(), "check", "--root", dir],
+      capture_output: true, text: true, timeout: 120, cwd: dir)
+    {json.loads(r.stdout), r.returncode}
+  end
+
+  describe "trust line (GEP-0025-R005)" do
+    test "a test module is exempt from coverage nags" do
+      {v, rc} = check_files([
+        {"src/test_prog.gan", "defmodule TestProg do\n  def test_add(), do: 1 + 1\nend"}
+      ])
+      assert rc == 0
+      assert kind_messages(v, "practice") == []
+    end
+
+    test "rescue _e is a deliberate swallow, not a bare rescue" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  def f() do\n    try do\n      1\n    rescue\n      _e -> nil\n    end\n  end\nend"
+      {v, _rc} = check(src)
+      refute suggests?(v, "practice", "bare `rescue")
+    end
+
+    test "struct type refs in specs are never member typos" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @spec f(App.Shop.t()) :: App.Shop.t()\n  def f(s), do: s\nend"
+      {v, _rc} = check(src)
+      assert kind_messages(v, "did_you_mean") == []
+    end
+
+    test "dot-call wraps are not capture candidates" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  def f(g, xs), do: Enum.map(xs, fn x -> g.(x) end)\nend"
+      {v, _rc} = check(src)
+      refute suggests?(v, "practice", "wraps a single call")
+    end
+
+    test "builtins repetition is the idiom" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  def f(x), do: {$builtins.len(x), $builtins.min(x), $builtins.max(x)}\nend"
+      {v, _rc} = check(src)
+      refute suggests?(v, "practice", "$builtins")
+    end
+
+    test "nested paren sigils never leak their contents" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: ~python(next((x for x in <%= xs %>), None))\nend"
+      {v, _rc} = check(src)
+      refute suggests?(v, "migration", "`nil`")
+    end
+  end
+
+  describe "surface and consolidation (GEP-0025-R006/R007)" do
+    test "identical messages consolidate across files with the spread" do
+      files = [
+        {"src/a.gan", "defmodule A do\n  def f(x), do: x\nend"},
+        {"src/b.gan", "defmodule B do\n  def f(x), do: x\nend"}
+      ]
+      {v, _rc} = check_files(files)
+      hits = Enum.filter(kind_messages(v, "practice"), fn m ->
+        String.contains?(m, "No @example")
+      end)
+      assert Enum.count(hits) == 1
+      assert String.contains?(Enum.at(hits, 0), "also in 1 other file(s)")
+    end
+
+    test "suggestions carry line anchors" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(x), do: x\nend")
+      anchored = Map.get(v, "suggestions", [])
+      |> Enum.filter(fn s -> Map.get(s, "kind") == "practice" end)
+      assert Enum.any?(anchored, fn s -> Map.get(s, "line", 0) > 0 end)
+    end
+
+    test "top-level tests are advised, fixture dirs are not" do
+      files = [
+        {"src/prog.gan", "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec f(term()) :: term()\n  @example \"\"\"\n      gan> 1\n      1\n  \"\"\"\n  def f(x), do: x\nend"},
+        {"tests/t.gan", "defmodule TestT do\n  def test_f() do\nreturn 1\n  end\nend"},
+        {"tests/fixtures/fx.gan", "defmodule Fx do\n  def f() do\nreturn 2\n  end\nend"}
+      ]
+      {v, _rc} = check_files(files)
+      migr = Map.get(v, "suggestions", [])
+      |> Enum.filter(fn s -> Map.get(s, "kind") == "migration" end)
+      paths = Enum.map(migr, fn s -> to_string(Map.get(s, "path", "")) end)
+      assert Enum.any?(paths, fn p -> String.ends_with?(p, "tests/t.gan") end)
+      refute Enum.any?(paths, fn p -> String.contains?(p, "fixtures") end)
     end
   end
 

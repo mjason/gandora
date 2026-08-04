@@ -4,10 +4,16 @@ defmodule Tour.Dataframe do
   wrapper code. Needs `uv sync` first, then: gan run src/tour/dataframe.gan
   """
 
+  # repeated $pandas refs graduate to one pyimport (GEP-0003 rev 6);
+  # specs still name the host boundary explicitly: $pandas.DataFrame()
   pyimport pandas, as: pd
 
   @doc "A demo frame — host types appear in specs as `$pandas.DataFrame()`."
   @spec sales() :: $pandas.DataFrame()
+  @example """
+      gan> sales().shape
+      (6, 4)
+  """
   def sales() do
     pd.DataFrame(%{
       "product" => ~w(keyboard mouse monitor cable keyboard monitor),

@@ -6,6 +6,15 @@ defmodule Tour.Numpy do
 
   pyimport numpy, as: np
 
+  @doc "Euclidean norm of a vector — numpy scalars unwrap with $builtins.float."
+  @param xs, "The vector components."
+  @spec norm(sequence(number())) :: float()
+  @example """
+      gan> norm([3.0, 4.0])
+      5.0
+  """
+  def norm(xs), do: $builtins.float(np.linalg.norm(np.array(xs)))
+
   @doc "numpy without wrappers: arrays, broadcasting, reductions."
   @spec demo() :: nil
   def demo() do
@@ -20,7 +29,7 @@ defmodule Tour.Numpy do
     IO.puts("row sums     = #{m.sum(axis: 1)}")
     IO.puts("col means    = #{m.mean(axis: 0)}")
 
-    IO.puts("norm([3,4])  = #{np.linalg.norm(np.array([3.0, 4.0]))}")
+    IO.puts("norm([3,4])  = #{norm([3.0, 4.0])}")
 
     # boolean indexing has no Gandora spelling; ~python says it directly
     evens = ~python(lambda arr: arr[arr % 2 == 0]).(m)
@@ -34,5 +43,7 @@ defmodule Tour.Numpy do
     IO.puts("std          = #{stats}")
   end
 
+  @doc "Runs the chapter."
+  @spec main() :: nil
   def main(), do: demo()
 end

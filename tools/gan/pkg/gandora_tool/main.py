@@ -7,7 +7,6 @@ import builtins
 import gandora_core as core
 import importlib.metadata
 import os
-import os.path
 import pathlib
 import shutil
 import subprocess
@@ -138,7 +137,7 @@ def _run_check(*_gan_args):
                     return print(f"{_gan_fstr18}: {_gan_fstr19}:{_gan_fstr20}: {_gan_fstr21}")
                 gandora_std.enum.each(diags, _gan_fn0)
                 if _gan_truthy(with_suggestions):
-                    _gan_tmp22 = _collect_files(["src"])
+                    _gan_tmp22 = _collect_files(["src", "tests"])
                 else:
                     _gan_tmp22 = []
                 sources = _gan_tmp22
@@ -149,13 +148,20 @@ def _run_check(*_gan_args):
                         _gan_tmp23 = ""
                     text = _gan_tmp23
                     per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
-                    hints = gandora_tool.advisor.analyze(text, _root()) + gandora_tool.advisor.lint_hints(text, per_file)
-                    def _gan_fn2(h, *, path=path):
-                        _gan_fstr26 = gandora_std.map.get(h, "kind")
-                        _gan_fstr27 = gandora_std.map.get(h, "message")
-                        return print(f"{_gan_fstr26}: {path}: {_gan_fstr27}")
-                    return gandora_std.enum.each(hints, _gan_fn2)
-                gandora_std.enum.each(sources, _gan_fn1)
+                    return gandora_std.enum.map(gandora_tool.advisor.analyze(text, _root()) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
+                hints = gandora_std.enum.flat_map(sources, _gan_fn1)
+                def _gan_fn2(h):
+                    line = gandora_std.map.get(h, "line", 0)
+                    if line > 0:
+                        _gan_tmp24 = f":{line}"
+                    else:
+                        _gan_tmp24 = ""
+                    at = _gan_tmp24
+                    _gan_fstr25 = gandora_std.map.get(h, "kind")
+                    _gan_fstr26 = gandora_std.map.get(h, "path")
+                    _gan_fstr27 = gandora_std.map.get(h, "message")
+                    return print(f"{_gan_fstr25}: {_gan_fstr26}{at}: {_gan_fstr27}")
+                gandora_std.enum.each(gandora_tool.advisor.consolidate(hints), _gan_fn2)
                 errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
                 return gandora_std.enum.empty_p(errors)
         raise GanMatchError("no clause of run_check/0,1 matched " + repr(_gan_args))
@@ -164,10 +170,12 @@ def _run_check(*_gan_args):
 def _collect_files(roots):
     def _gan_fn3(r):
         p = pathlib.Path(r)
-        if _gan_truthy(p.is_dir()):
-            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(p.rglob("*.gan")), lambda f: str(f)))
-        else:
+        if not (_gan_truthy(p.is_dir())):
             return []
+        elif r == "tests":
+            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(p.glob("*.gan")), str))
+        else:
+            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(p.rglob("*.gan")), str))
     return gandora_std.enum.flat_map(roots, _gan_fn3)
 
 
@@ -279,11 +287,24 @@ def init(path: str) -> None:
     return print(f"Initialized Gandora project in {path}")
 
 
+def plugin_name(cmd: str) -> str:
+    """The executable name a plugin subcommand delegates to (GEP-0013-R003).
+
+## Parameters
+
+  - cmd: The subcommand.
+
+    >>> plugin_name("fmt")
+    'gan-fmt'
+"""
+    return "gan-" + cmd
+
+
 def _find_plugin(cmd):
     venv_bin = _root() + "/.venv/bin"
-    local = shutil.which("gan-" + cmd, path=venv_bin)
+    local = shutil.which(plugin_name(cmd), path=venv_bin)
     if (local is None):
-        return shutil.which("gan-" + cmd)
+        return shutil.which(plugin_name(cmd))
     else:
         return local
 

@@ -7,6 +7,7 @@ whole-document formatting through the GEP-0016 engine.
 """
 
 import builtins
+import collections.abc
 import gandora_core as core
 import importlib.util
 import lsprotocol.types
@@ -35,29 +36,32 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-server = pygls.lsp.server.LanguageServer("gan-lsp", "0.14.0", text_document_sync_kind=lsprotocol.types.TextDocumentSyncKind.Full)
+server = pygls.lsp.server.LanguageServer("gan-lsp", "0.14.0", text_document_sync_kind=types.TextDocumentSyncKind.Full)
 
 word_re = re.compile("[A-Za-z_][A-Za-z0-9_.!?]*")
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_DID_OPEN)
-def did_open(params):
+@server.feature(types.TEXT_DOCUMENT_DID_OPEN)
+def did_open(params: lsprotocol.types.DidOpenTextDocumentParams) -> object:
+    """Publishes diagnostics for a document on open."""
     return _publish(params.text_document.uri, params.text_document.text)
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_DID_CHANGE)
-def did_change(params):
+@server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
+def did_change(params: lsprotocol.types.DidChangeTextDocumentParams) -> object:
+    """Re-publishes diagnostics on every edit (full sync)."""
     text = gandora_std.enum.at(builtins.list(params.content_changes), -1).text
     return _publish(params.text_document.uri, text)
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_DID_CLOSE)
-def did_close(params):
+@server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
+def did_close(params: lsprotocol.types.DidCloseTextDocumentParams) -> object:
+    """Clears a document's diagnostics on close."""
     return _send_diagnostics(params.text_document.uri, [])
 
 
 def _send_diagnostics(uri, items):
-    return server.text_document_publish_diagnostics(lsprotocol.types.PublishDiagnosticsParams(uri=uri, diagnostics=items))
+    return server.text_document_publish_diagnostics(types.PublishDiagnosticsParams(uri=uri, diagnostics=items))
 
 
 def _publish(uri, text):
@@ -80,9 +84,9 @@ def _publish(uri, text):
 def _severity(*_gan_args):
     match _gan_args:
         case ("error",):
-            return lsprotocol.types.DiagnosticSeverity.Error
+            return types.DiagnosticSeverity.Error
         case (_,):
-            return lsprotocol.types.DiagnosticSeverity.Warning
+            return types.DiagnosticSeverity.Warning
     raise GanMatchError("no clause of severity/1 matched " + repr(_gan_args))
 
 
@@ -133,8 +137,9 @@ def _target_of(source: str, token: str) -> str | None:
             return f"{mod}.{token}"
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_HOVER)
-def hover(params):
+@server.feature(types.TEXT_DOCUMENT_HOVER)
+def hover(params: lsprotocol.types.HoverParams) -> object:
+    """Documentation hover for the reference under the cursor (GEP-0015-R005)."""
     _gan_val5 = _doc_and_line(params)
     match _gan_val5:
         case (doc, line) as _gan_t6 if isinstance(_gan_t6, tuple):
@@ -206,8 +211,8 @@ def _var_hover(doc, token, cursor_line):
         if (holder is None):
             return None
         else:
-            base = _py_name(gandora_std.map.get(holder, "name"))
-            py_var = _py_name(token)
+            base = py_name(gandora_std.map.get(holder, "name"))
+            py_var = py_name(token)
             t = gandora_lsp.py_intel.infer_type(compiled, [base, "_" + base], py_var)
             if (t is None) or (t == py_var) or (t == token):
                 return None
@@ -215,7 +220,16 @@ def _var_hover(doc, token, cursor_line):
                 return _markdown_hover(f"`{token}`: `{t}` *(inferred)*")
 
 
-def _py_name(name):
+def py_name(name: str) -> str:
+    """The identifier a Gandora name compiles to in generated Python.
+
+## Parameters
+
+  - name: The Gandora function or variable name.
+
+    >>> py_name("valid?")
+    'valid_p'
+"""
     return name.replace("?", "_p").replace("!", "_bang")
 
 
@@ -247,7 +261,7 @@ def _pyref_hover(token):
 
 
 def _markdown_hover(md):
-    return types.Hover(contents=types.MarkupContent(kind=lsprotocol.types.MarkupKind.Markdown, value=md))
+    return types.Hover(contents=types.MarkupContent(kind=types.MarkupKind.Markdown, value=md))
 
 
 def _doc_locale() -> str:
@@ -262,7 +276,7 @@ def _doc_locale() -> str:
         return local
 
 
-def _locale_section(info: dict, locale: str, heading: str) -> str:
+def _locale_section(info: collections.abc.Mapping[str, object], locale: str, heading: str) -> str:
     prose = gandora_std.map.get(gandora_std.map.get(info, "entries", {}), locale)
     if (prose is None) and (locale != "default"):
         _gan_tmp16 = None
@@ -318,7 +332,7 @@ def _render_hover(target, info):
             return _markdown_hover(f"{header}\n\n{body}")
 
 
-def _param_lines(info: dict, locale: str) -> list[str]:
+def _param_lines(info: collections.abc.Mapping[str, object], locale: str) -> list[str]:
     entries = gandora_std.map.get(info, "params", [])
     if _gan_truthy(gandora_std.enum.empty_p(entries)):
         return []
@@ -348,8 +362,9 @@ def _param_doc(info, label):
         return gandora_std.map.get(texts, pref, gandora_std.map.get(texts, "default"))
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_DEFINITION)
-def definition(params):
+@server.feature(types.TEXT_DOCUMENT_DEFINITION)
+def definition(params: lsprotocol.types.DefinitionParams) -> object:
+    """Go-to-definition for Gandora and Python references (GEP-0015-R006)."""
     _gan_val24 = _doc_and_line(params)
     match _gan_val24:
         case (doc, line) as _gan_t25 if isinstance(_gan_t25, tuple):
@@ -403,8 +418,9 @@ def definition(params):
                 return types.Location(uri="file://" + gandora_std.map.get(loc, "path"), range=types.Range(pos, pos))
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
-def document_symbol(params):
+@server.feature(types.TEXT_DOCUMENT_DOCUMENT_SYMBOL)
+def document_symbol(params: lsprotocol.types.DocumentSymbolParams) -> object:
+    """The document's module and definitions as an outline (GEP-0015-R008)."""
     doc = server.workspace.get_text_document(params.text_document.uri)
     mod = _module_of(doc.source)
     if (mod is None):
@@ -425,17 +441,17 @@ def document_symbol(params):
         return []
     else:
         zero = types.Position(line=0, character=0)
-        return [types.DocumentSymbol(name=mod, kind=lsprotocol.types.SymbolKind.Module, range=types.Range(zero, zero), selection_range=types.Range(zero, zero), children=children)]
+        return [types.DocumentSymbol(name=mod, kind=types.SymbolKind.Module, range=types.Range(zero, zero), selection_range=types.Range(zero, zero), children=children)]
 
 
 def _symbol_kind(*_gan_args):
     match _gan_args:
         case ("defmacro",):
-            return lsprotocol.types.SymbolKind.Constructor
+            return types.SymbolKind.Constructor
         case ("defp",):
-            return lsprotocol.types.SymbolKind.Method
+            return types.SymbolKind.Method
         case (_,):
-            return lsprotocol.types.SymbolKind.Function
+            return types.SymbolKind.Function
     raise GanMatchError("no clause of symbol_kind/1 matched " + repr(_gan_args))
 
 
@@ -494,8 +510,9 @@ def _ref_ranges(target: str) -> list[dict]:
     return gandora_std.enum.map(refs, _gan_fn5)
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_REFERENCES)
-def references(params):
+@server.feature(types.TEXT_DOCUMENT_REFERENCES)
+def references(params: lsprotocol.types.ReferenceParams) -> object:
+    """Every project reference to the function under the cursor (GEP-0015-R012)."""
     _gan_val40 = _doc_and_line(params)
     match _gan_val40:
         case (doc, line) as _gan_t41 if isinstance(_gan_t41, tuple):
@@ -507,11 +524,12 @@ def references(params):
         return None
     else:
         include_defs = params.context.include_declaration
-        return gandora_std.enum.map(gandora_std.enum.filter(_ref_ranges(target), lambda r, *, include_defs=include_defs: _gan_or(include_defs, lambda: not (_gan_truthy(gandora_std.map.get(r, "is_def"))))), lambda r: types.Location(uri="file://" + gandora_std.map.get(r, "path"), range=types.Range(types.Position(line=gandora_std.map.get(r, "line"), character=gandora_std.map.get(r, "start")), types.Position(line=gandora_std.map.get(r, "line"), character=gandora_std.map.get(r, "stop")))))
+        return [types.Location(uri="file://" + gandora_std.map.get(r, "path"), range=types.Range(types.Position(line=gandora_std.map.get(r, "line"), character=gandora_std.map.get(r, "start")), types.Position(line=gandora_std.map.get(r, "line"), character=gandora_std.map.get(r, "stop")))) for r in _ref_ranges(target) if _gan_truthy(_gan_or(include_defs, lambda: not (_gan_truthy(gandora_std.map.get(r, "is_def")))))]
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_RENAME)
-def rename(params):
+@server.feature(types.TEXT_DOCUMENT_RENAME)
+def rename(params: lsprotocol.types.RenameParams) -> object:
+    """Workspace-wide rename of a project-defined function (GEP-0015-R012)."""
     _gan_val42 = _doc_and_line(params)
     match _gan_val42:
         case (doc, line) as _gan_t43 if isinstance(_gan_t43, tuple):
@@ -537,8 +555,9 @@ def rename(params):
             return None
 
 
-@server.feature(lsprotocol.types.WORKSPACE_SYMBOL)
-def workspace_symbol(params):
+@server.feature(types.WORKSPACE_SYMBOL)
+def workspace_symbol(params: lsprotocol.types.WorkspaceSymbolParams) -> object:
+    """Project-wide symbol search (GEP-0015-R013)."""
     try:
         _gan_tmp44 = core.wsymbols(params.query, _root_path())
     except Exception as _e:
@@ -551,8 +570,9 @@ def workspace_symbol(params):
     return gandora_std.enum.map(syms, _gan_fn7)
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_CODE_ACTION, lsprotocol.types.CodeActionOptions(code_action_kinds=[lsprotocol.types.CodeActionKind.QuickFix]))
-def code_action(params):
+@server.feature(types.TEXT_DOCUMENT_CODE_ACTION, types.CodeActionOptions(code_action_kinds=[types.CodeActionKind.QuickFix]))
+def code_action(params: lsprotocol.types.CodeActionParams) -> object:
+    """Quick fixes for compiler lints (GEP-0015-R014)."""
     uri = params.text_document.uri
     doc = server.workspace.get_text_document(uri)
     def _gan_fn8(d, *, doc=doc, uri=uri):
@@ -578,7 +598,7 @@ def _allow_action(uri, doc, d, target):
     l = _gan_tmp45
     indent = gandora_std.string.slice(l, 0, gandora_std.string.length(l) - gandora_std.string.length(l.lstrip()))
     pos = types.Position(line=line0, character=0)
-    return types.CodeAction(title="Acknowledge with @allow :" + target, kind=lsprotocol.types.CodeActionKind.QuickFix, diagnostics=[d], edit=types.WorkspaceEdit(changes={uri: [types.TextEdit(range=types.Range(pos, pos), new_text=indent + ("@allow :" + (target + "\n")))]}))
+    return types.CodeAction(title="Acknowledge with @allow :" + target, kind=types.CodeActionKind.QuickFix, diagnostics=[d], edit=types.WorkspaceEdit(changes={uri: [types.TextEdit(range=types.Range(pos, pos), new_text=indent + ("@allow :" + (target + "\n")))]}))
 
 
 def _underscore_actions(uri, doc, d, msg):
@@ -604,11 +624,12 @@ def _underscore_actions(uri, doc, d, msg):
                     pass
                 case _:
                     raise GanMatchError("no match of right-hand side value: " + repr(_gan_val47))
-            return [types.CodeAction(title="Rename to _" + var, kind=lsprotocol.types.CodeActionKind.QuickFix, diagnostics=[d], edit=types.WorkspaceEdit(changes={uri: [types.TextEdit(range=types.Range(types.Position(line=line0, character=s), types.Position(line=line0, character=e)), new_text="_" + var)]}))]
+            return [types.CodeAction(title="Rename to _" + var, kind=types.CodeActionKind.QuickFix, diagnostics=[d], edit=types.WorkspaceEdit(changes={uri: [types.TextEdit(range=types.Range(types.Position(line=line0, character=s), types.Position(line=line0, character=e)), new_text="_" + var)]}))]
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_COMPLETION, lsprotocol.types.CompletionOptions(trigger_characters=["."]))
-def completion(params):
+@server.feature(types.TEXT_DOCUMENT_COMPLETION, types.CompletionOptions(trigger_characters=["."]))
+def completion(params: lsprotocol.types.CompletionParams) -> object:
+    """`Module.` member and Python attribute completion (GEP-0015-R008)."""
     _gan_val49 = _doc_and_line(params)
     match _gan_val49:
         case (doc, line) as _gan_t50 if isinstance(_gan_t50, tuple):
@@ -637,15 +658,15 @@ def completion(params):
 def _py_completion_kind(*_gan_args):
     match _gan_args:
         case ("function",):
-            return lsprotocol.types.CompletionItemKind.Function
+            return types.CompletionItemKind.Function
         case ("class",):
-            return lsprotocol.types.CompletionItemKind.Class
+            return types.CompletionItemKind.Class
         case ("module",):
-            return lsprotocol.types.CompletionItemKind.Module
+            return types.CompletionItemKind.Module
         case ("instance",):
-            return lsprotocol.types.CompletionItemKind.Value
+            return types.CompletionItemKind.Value
         case (_,):
-            return lsprotocol.types.CompletionItemKind.Field
+            return types.CompletionItemKind.Field
     raise GanMatchError("no clause of py_completion_kind/1 matched " + repr(_gan_args))
 
 
@@ -670,7 +691,7 @@ def _gandora_completion(prefix):
                 return acc
             else:
                 return acc + [s]
-        return gandora_std.enum.map(gandora_std.enum.reduce(gandora_std.enum.filter(gandora_std.enum.filter(syms, lambda s: gandora_std.map.get(s, "kind") != "defp"), lambda s, *, partial=partial: gandora_std.map.get(s, "name").startswith(partial)), [], _gan_fn9), lambda s: types.CompletionItem(label=gandora_std.map.get(s, "name"), kind=lsprotocol.types.CompletionItemKind.Function, detail=gandora_std.map.get(s, "head"), documentation=gandora_std.map.get(s, "doc")))
+        return gandora_std.enum.map(gandora_std.enum.reduce(gandora_std.enum.filter(gandora_std.enum.filter(syms, lambda s: gandora_std.map.get(s, "kind") != "defp"), lambda s, *, partial=partial: gandora_std.map.get(s, "name").startswith(partial)), [], _gan_fn9), lambda s: types.CompletionItem(label=gandora_std.map.get(s, "name"), kind=types.CompletionItemKind.Function, detail=gandora_std.map.get(s, "head"), documentation=gandora_std.map.get(s, "doc")))
 
 
 def _split_walk(*_gan_args):
@@ -696,8 +717,9 @@ def _split_walk(*_gan_args):
         raise GanMatchError("no clause of split_walk/2 matched " + repr(_gan_args))
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_FORMATTING)
-def formatting(params):
+@server.feature(types.TEXT_DOCUMENT_FORMATTING)
+def formatting(params: lsprotocol.types.DocumentFormattingParams) -> object:
+    """Whole-document formatting through the GEP-0016 engine (GEP-0015-R007)."""
     doc = server.workspace.get_text_document(params.text_document.uri)
     result = gandora_tool.fmt.format_text(doc.source)
     _gan_case58 = result
@@ -712,8 +734,9 @@ def formatting(params):
             return []
 
 
-@server.feature(lsprotocol.types.TEXT_DOCUMENT_SIGNATURE_HELP, lsprotocol.types.SignatureHelpOptions(trigger_characters=["(", ","]))
-def signature_help(params):
+@server.feature(types.TEXT_DOCUMENT_SIGNATURE_HELP, types.SignatureHelpOptions(trigger_characters=["(", ","]))
+def signature_help(params: lsprotocol.types.SignatureHelpParams) -> object:
+    """Signature help for the innermost open call (GEP-0015-R008)."""
     _gan_val60 = _doc_and_line(params)
     match _gan_val60:
         case (doc, line) as _gan_t61 if isinstance(_gan_t61, tuple):
@@ -841,7 +864,8 @@ def _split_top(inner):
     return gandora_std.enum.reject(gandora_std.enum.map(parts, lambda p: p.strip()), lambda p: p == "")
 
 
-def main():
+def main() -> None:
+    """The server entry: speaks LSP over stdio."""
     return server.start_io()
 
 

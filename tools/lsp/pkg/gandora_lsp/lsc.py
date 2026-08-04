@@ -72,7 +72,7 @@ def _dispatch(args, root):
             elif not ((card is None)):
                 return _emit({"label": target, "construct": card})
             elif _gan_truthy(gandora_std.string.match_p(target, re.compile("^[a-z_][a-z0-9_.]*$"))):
-                md = gandora_lsp.py_intel.hover_markdown(root, _import_line(target), target)
+                md = gandora_lsp.py_intel.hover_markdown(root, import_line(target), target)
                 if (md is None):
                     return _emit(None)
                 else:
@@ -94,8 +94,9 @@ def _dispatch(args, root):
             try:
                 _gan_tmp16 = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda sym: gandora_std.map.get(sym, "path")))
             except Exception as _e:
-                _gan_tmp16 = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("src/**/*.gan")), lambda p: str(p))
+                _gan_tmp16 = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("src/**/*.gan")), str)
             files = _gan_tmp16
+            test_files = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("tests/*.gan")), str)
             def _gan_fn0(path, *, diags=diags, root=root):
                 try:
                     _gan_tmp17 = _read(path)
@@ -104,7 +105,7 @@ def _dispatch(args, root):
                 text = _gan_tmp17
                 per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
                 return gandora_std.enum.map(gandora_tool.advisor.analyze(text, root) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
-            suggestions = gandora_std.enum.flat_map(files, _gan_fn0)
+            suggestions = gandora_tool.advisor.consolidate(gandora_std.enum.flat_map(gandora_std.enum.uniq(files + test_files), _gan_fn0))
             errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
             _emit({"ok": gandora_std.enum.empty_p(errors), "clean": _gan_and(_gan_and(gandora_std.enum.empty_p(errors), lambda: gandora_std.enum.empty_p(diags)), lambda: gandora_std.enum.empty_p(suggestions)), "diagnostics": diags, "suggestions": suggestions})
             if not (_gan_truthy(gandora_std.enum.empty_p(errors))):
@@ -112,19 +113,28 @@ def _dispatch(args, root):
             else:
                 return None
         case ["pydoc", chain, *_] as _gan_l18 if isinstance(_gan_l18, list):
-            return _emit(gandora_lsp.py_intel.hover_markdown(root, _import_line(chain), chain))
+            return _emit(gandora_lsp.py_intel.hover_markdown(root, import_line(chain), chain))
         case ["pycomplete", chain, *_] as _gan_l19 if isinstance(_gan_l19, list):
-            return _emit(gandora_lsp.py_intel.complete(root, _import_line(chain), chain))
+            return _emit(gandora_lsp.py_intel.complete(root, import_line(chain), chain))
         case ["pygoto", chain, *_] as _gan_l20 if isinstance(_gan_l20, list):
-            return _emit(gandora_lsp.py_intel.goto(root, _import_line(chain), chain))
+            return _emit(gandora_lsp.py_intel.goto(root, import_line(chain), chain))
         case ["pysig", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
-            return _emit(gandora_lsp.py_intel.signatures(root, _import_line(chain), chain))
+            return _emit(gandora_lsp.py_intel.signatures(root, import_line(chain), chain))
         case _:
             print(usage)
             return sys.exit(2)
 
 
-def _import_line(chain):
+def import_line(chain: str) -> str:
+    """The import statement that brings a dotted Python chain into scope.
+
+## Parameters
+
+  - chain: The dotted `$module`-style reference.
+
+    >>> import_line("os.path.join")
+    'import os'
+"""
     return "import " + gandora_std.enum.at(chain.split("."), 0)
 
 

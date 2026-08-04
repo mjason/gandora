@@ -1215,6 +1215,18 @@ impl Codegen {
                     )),
                 }
             }
+            // {:ok, t} is an Elixir-spec reflex — the shape documents as
+            // a tuple() type here
+            Term::Tuple(parts) => Err(self.err(
+                Span::default(),
+                format!(
+                    "a tuple literal is not a type — a {}-tuple is spelled \
+                     tuple({}); the {{:ok, x}} shape documents as \
+                     tuple(atom(), x) (GEP-0017-R002)",
+                    parts.len(),
+                    vec!["t"; parts.len()].join(", ")
+                ),
+            )),
             other => Err(self.err(
                 other.span(),
                 "types are built-ins like integer(), string(), list(t), \
@@ -3320,9 +3332,26 @@ impl Codegen {
         // &Mod.fun/1 and &fun/1 arrive as (& (/ target arity))
         if let Term::Call(c) = inner {
             if matches!(&c.callee, Callee::Name(n) if n == "/") && c.args.len() == 2 {
-                if let Term::Int(_) = c.args[1] {
+                if let Term::Int(arity) = c.args[1] {
+                    let arity = arity as usize;
                     return match &c.args[0] {
-                        Term::Var(n, _) => Ok(map_ident(n)),
+                        // kernel forms inline at call sites — a capture
+                        // needs the Python callable itself
+                        Term::Var(n, _) if n == "to_string" && arity == 1 => {
+                            Ok("str".to_string())
+                        }
+                        Term::Var(n, _) if n == "inspect" && arity == 1 => {
+                            Ok("repr".to_string())
+                        }
+                        // local captures resolve like call sites: a defp
+                        // compiles under its private name
+                        Term::Var(n, _) => {
+                            let mut f = map_ident(n);
+                            if self.private_funs.contains(&(n.clone(), arity)) {
+                                f.insert(0, '_');
+                            }
+                            Ok(f)
+                        }
                         t @ Term::Call(cc) if matches!(&cc.callee, Callee::Dot { .. }) => {
                             self.emit_expr(t, pre)
                         }
@@ -4259,6 +4288,17 @@ mod tests {
         let expanded = ex.expand_module(&module).unwrap();
         let mut cg = Codegen::new("<test>", vec![]);
         cg.compile(&expanded).unwrap_err().message
+    }
+
+    #[test]
+    fn captures_resolve_private_names_and_kernel_forms() {
+        let py = compile(
+            "defmodule M do\n  def run(xs), do: Enum.map(xs, &tag/1)\n  def strs(xs), do: Enum.map(xs, &to_string/1)\n  def reprs(xs), do: Enum.map(xs, &inspect/1)\n  defp tag(x), do: {:ok, x}\nend",
+        );
+        assert!(py.contains("_tag"), "defp capture must use the private name: {py}");
+        assert!(!py.contains(", tag)"), "unmangled defp capture leaked: {py}");
+        assert!(py.contains("str)") || py.contains("str,"), "&to_string/1 must become str: {py}");
+        assert!(py.contains("repr)") || py.contains("repr,"), "&inspect/1 must become repr: {py}");
     }
 
     #[test]

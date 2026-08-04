@@ -6,7 +6,7 @@ defmodule List do
   @doc_trans zh_CN: "首元素，空列表为 nil。"
   @param xs, "The list."
   @param_trans xs, zh_CN: "列表。"
-  @spec first(list(a)) :: a | nil
+  @spec first(sequence(a)) :: a | nil
   @example """
       gan> List.first([1, 2, 3])
       1
@@ -17,7 +17,7 @@ defmodule List do
   @doc_trans zh_CN: "末元素，空列表为 nil。"
   @param xs, "The list."
   @param_trans xs, zh_CN: "列表。"
-  @spec last(list(a)) :: a | nil
+  @spec last(sequence(a)) :: a | nil
   @example """
       gan> List.last([1, 2, 3])
       3
@@ -32,7 +32,7 @@ defmodule List do
   """
   @param xs, "Nested lists collapse to one level."
   @param_trans xs, zh_CN: "要完全展平的嵌套列表。"
-  @spec flatten(list()) :: list()
+  @spec flatten(sequence()) :: list()
   @allow :stack_recursion
   def flatten(xs) do
     Enum.flat_map(xs, fn x ->
@@ -82,7 +82,7 @@ defmodule List do
   @param_trans index, zh_CN: "插入位置。"
   @param value, "The value to insert."
   @param_trans value, zh_CN: "要插入的值。"
-  @spec insert_at(list(a), integer(), a) :: list(a)
+  @spec insert_at(sequence(a), integer(), a) :: list(a)
   @example """
       gan> List.insert_at([1, 3], 1, 2)
       [1, 2, 3]
@@ -96,7 +96,7 @@ defmodule List do
   @param_trans xs, zh_CN: "列表。"
   @param index, "The position to remove."
   @param_trans index, zh_CN: "要删除的位置。"
-  @spec delete_at(list(a), integer()) :: list(a)
+  @spec delete_at(sequence(a), integer()) :: list(a)
   @example """
       gan> List.delete_at([1, 2, 3], 1)
       [1, 3]
@@ -107,7 +107,7 @@ defmodule List do
   @doc_trans zh_CN: "转换为元组的列表。"
   @param xs, "The list."
   @param_trans xs, zh_CN: "列表。"
-  @spec to_tuple(list()) :: tuple()
+  @spec to_tuple(sequence()) :: tuple()
   @example """
       gan> List.to_tuple([1, 2])
       (1, 2)
@@ -120,7 +120,7 @@ defmodule List do
   @param_trans xs, zh_CN: "列表。"
   @param prefix, "The candidate prefix."
   @param_trans prefix, zh_CN: "候选前缀。"
-  @spec starts_with?(list(a), list(a)) :: boolean()
+  @spec starts_with?(sequence(a), sequence(a)) :: boolean()
   @example """
       gan> List.starts_with?([1, 2, 3], [1, 2])
       True
@@ -135,7 +135,7 @@ defmodule List do
   @param_trans index, zh_CN: "要替换的位置。"
   @param value, "The new value."
   @param_trans value, zh_CN: "新值。"
-  @spec replace_at(list(a), integer(), a) :: list(a)
+  @spec replace_at(sequence(a), integer(), a) :: list(a)
   @example """
       gan> List.replace_at([1, 2, 3], 1, 9)
       [1, 9, 3]
@@ -155,6 +155,6 @@ defmodule List do
   @param_trans index, zh_CN: "要更新的位置。"
   @param f, "Applied to the current value."
   @param_trans f, zh_CN: "作用于当前值。"
-  @spec update_at(list(a), integer(), fun()) :: list(a)
+  @spec update_at(sequence(a), integer(), fun()) :: list(a)
   def update_at(xs, index, f), do: replace_at(xs, index, f.(Enum.at(xs, index)))
 end

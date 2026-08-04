@@ -6,6 +6,8 @@ defmodule Tour.Templates do
   runtime values in every language, and compiled code in ~python.
   """
 
+  @doc "A SQL query with a runtime value spliced in — ~sql is just a tag."
+  @param min_units, "The cutoff spliced into the WHERE clause."
   @spec sales_query(number()) :: string()
   def sales_query(min_units) do
     ~sql"""
@@ -16,7 +18,10 @@ defmodule Tour.Templates do
     """
   end
 
-  @spec report(string(), list(number())) :: string()
+  @doc "A Markdown report — splices run any Gandora expression, pipes included."
+  @param name, "The report owner, upcased in the heading."
+  @param xs, "The sales figures."
+  @spec report(string(), sequence(number())) :: string()
   def report(name, xs) do
     ~markdown"""
     # Sales report for <%= name.upper() %>
@@ -29,7 +34,14 @@ defmodule Tour.Templates do
     """
   end
 
-  @spec evens_capped(list(integer()), integer()) :: list(integer())
+  @doc "The evens of `xs`, at most `limit` of them — built by a ~python splice."
+  @param xs, "The candidate numbers."
+  @param limit, "How many evens to keep."
+  @spec evens_capped(sequence(integer()), integer()) :: list(integer())
+  @example """
+      gan> evens_capped([1, 2, 3, 4, 5, 6, 7, 8], 3)
+      [2, 4, 6]
+  """
   def evens_capped(xs, limit) do
     # ~python splices are CODE: the compiled expression lands inside
     # the comprehension — Python-only syntax, Gandora bindings

@@ -8,7 +8,11 @@ import pandas as pd
 
 
 def sales() -> pandas.DataFrame:
-    """A demo frame — host types appear in specs as `$pandas.DataFrame()`."""
+    """A demo frame — host types appear in specs as `$pandas.DataFrame()`.
+
+    >>> sales().shape
+    (6, 4)
+"""
     return pd.DataFrame({"product": ["keyboard", "mouse", "monitor", "cable", "keyboard", "monitor"], "region": ["east", "east", "west", "west", "east", "west"], "units": [12, 30, 7, 45, 8, 5], "price": [100.0, 25.5, 300.0, 9.9, 100.0, 300.0]})
 
 

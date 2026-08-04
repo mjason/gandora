@@ -4,6 +4,14 @@ defmodule App.Cli do
   require App.Macros
   alias App.Mathy
 
+  @doc "Destructuring in a function head: swaps a pair."
+  @spec swap(tuple(term(), term())) :: tuple(term(), term())
+  @example """
+      gan> swap({1, 2})
+      (2, 1)
+  """
+  def swap({a, b}), do: {b, a}
+
   @doc "Runs the chapter."
   @spec main() :: nil
   def main() do
@@ -12,7 +20,7 @@ defmodule App.Cli do
     IO.puts("norm([3, 4]) = #{Mathy.norm([3, 4])}")
     picked = App.Macros.unless_nil(nil, :fallback)
     IO.puts("unless_nil(nil, :fallback) = #{picked}")
-    {a, b} = {1, 2}
+    {a, b} = swap({2, 1})
     [h | t] = [10, 20, 30]
     IO.puts("destructured: #{a} #{b} #{h} #{inspect(t)}")
     IO.puts("json: #{$json.dumps(%{lang: "gandora"}, indent: 0)}")

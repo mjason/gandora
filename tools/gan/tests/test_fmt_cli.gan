@@ -16,11 +16,11 @@ defmodule TestFmtCli do
   pyimport sys
 
   defp gan_bin() do
-    $os.path.join($os.path.dirname(sys.executable), "gan")
+    os.path.join(os.path.dirname(sys.executable), "gan")
   end
 
   defp fixtures() do
-    $os.path.join($os.getcwd(), "tests", "fmt")
+    os.path.join(os.getcwd(), "tests", "fmt")
   end
 
   defp fresh_tree() do

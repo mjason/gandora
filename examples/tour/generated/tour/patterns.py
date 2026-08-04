@@ -26,6 +26,11 @@ def describe(*_gan_args) -> str:
 ## Parameters
 
   - n: The number to describe.
+
+    >>> describe(0)
+    'zero'
+    >>> [describe(-3), describe(4), describe(7)]
+    ['negative -3', 'even 4', 'odd 7']
 """
     match _gan_args:
         case (0,):

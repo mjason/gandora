@@ -15,9 +15,17 @@ defmodule Tour.WebDsl do
   """
 
   defmacro __using__(opts) do
+    # annotations travel inside the quote: every consumer gets a
+    # documented, doctested accessor for its app
     quote do
       @app $fastapi.FastAPI(unquote(opts))
 
+      @doc "The FastAPI instance — hand it to any ASGI server."
+      @spec asgi() :: term()
+      @example """
+          gan> asgi().__class__.__name__
+          'FastAPI'
+      """
       def asgi(), do: @app
     end
   end

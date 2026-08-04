@@ -4,6 +4,7 @@ completion, definition, and signatures for `$module` references and
 """
 
 import builtins
+import collections.abc
 import jedi
 import re
 import gandora_std.enum
@@ -24,9 +25,14 @@ pyimport_re = re.compile("pyimport\\s+([A-Za-z0-9_.]+)(?:\\s*,\\s*as:\\s*([a-z_]
 
 
 def aliases(source: str) -> dict[str, str]:
-    """## Parameters
+    """The alias -> module map from the file's pyimport declarations.
+
+## Parameters
 
   - source: The Gandora source holding pyimport declarations.
+
+    >>> aliases("pyimport numpy, as: np")
+    {'np': 'numpy'}
 """
     def _gan_fn0(*_gan_args):
         match _gan_args:
@@ -42,7 +48,9 @@ def aliases(source: str) -> dict[str, str]:
 
 
 def target(source: str, token: str, pyref: bool) -> tuple[str, str] | None:
-    """## Parameters
+    """The {import_line, expr} pair for a `$mod.chain` or aliased `np.chain` token.
+
+## Parameters
 
   - source: The Gandora source, for alias resolution.
   - token: The dotted reference under the cursor.
@@ -63,7 +71,9 @@ def _script(root, import_line, expr):
 
 
 def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
-    """## Parameters
+    """Markdown hover for a Python reference, from its jedi docstring.
+
+## Parameters
 
   - root: The project root jedi resolves in.
   - import_line: The synthesized import statement.
@@ -89,7 +99,9 @@ def hover_markdown(root: str, import_line: str, expr: str) -> str | None:
 
 
 def complete(root: str, import_line: str, expr: str) -> list[dict]:
-    """## Parameters
+    """Member completions for a dotted Python prefix (at most 120).
+
+## Parameters
 
   - root: The project root jedi resolves in.
   - import_line: The synthesized import statement.
@@ -102,7 +114,9 @@ def complete(root: str, import_line: str, expr: str) -> list[dict]:
 
 
 def goto(root: str, import_line: str, expr: str) -> dict | None:
-    """## Parameters
+    """The defining source location of a Python reference, zero-based for LSP.
+
+## Parameters
 
   - root: The project root jedi resolves in.
   - import_line: The synthesized import statement.
@@ -126,7 +140,9 @@ def goto(root: str, import_line: str, expr: str) -> dict | None:
 
 
 def signatures(root: str, import_line: str, callee: str) -> list[dict]:
-    """## Parameters
+    """Call signatures for a Python callable, with first-line docs.
+
+## Parameters
 
   - root: The project root jedi resolves in.
   - import_line: The synthesized import statement.
@@ -141,7 +157,16 @@ def signatures(root: str, import_line: str, callee: str) -> list[dict]:
         return []
 
 
-def infer_type(source_py: str, fn_names: list[str], var: str) -> str | None:
+def infer_type(source_py: str, fn_names: collections.abc.Sequence[str], var: str) -> str | None:
+    """The inferred type of `var` inside compiled function `fn_names` (first
+match wins) of the generated Python source (GEP-0015-R011).
+
+## Parameters
+
+  - source_py: The generated Python source.
+  - fn_names: Candidate compiled function names; the first match wins.
+  - var: The variable to infer.
+"""
     try:
         lines = source_py.split("\n")
         start = gandora_std.enum.find_index(lines, lambda l, *, fn_names=fn_names: gandora_std.enum.any_p(fn_names, lambda n: l.startswith("def " + (n + "("))))

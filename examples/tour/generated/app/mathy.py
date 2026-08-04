@@ -1,5 +1,6 @@
 """Math helpers showing patterns, interop, and documented examples."""
 
+import collections.abc
 import functools
 import math
 
@@ -46,7 +47,7 @@ def classify(x: int | float) -> str:
         return "positive"
 
 
-def old_norm(xs: list[int | float]) -> float:
+def old_norm(xs: collections.abc.Sequence[int | float]) -> float:
     """Same as norm/1; kept for early adopters.
 
 Deprecated: Use norm/1 instead.
@@ -56,7 +57,7 @@ Since: 0.1.0
     return norm(xs)
 
 
-def norm(xs: list[int | float]) -> float:
+def norm(xs: collections.abc.Sequence[int | float]) -> float:
     """Euclidean norm through a pipeline.
 
     >>> norm([3, 4])

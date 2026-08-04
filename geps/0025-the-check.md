@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-04
 updated: 2026-08-04
-revision: 1
+revision: 2
 requires: [12, 13, 22]
 replaces: [23]
 superseded-by: null
@@ -68,7 +68,44 @@ variables, and the keyword list for construct typos.
 **GEP-0025-R003 (the build gate):** `gan build` runs the R001 verdict
 first. Any error aborts with `build aborted: check failed` and exit
 1; otherwise the build proceeds with warnings and suggestions already
-printed. `ganc build` (plumbing) remains ungated.
+printed. `ganc build` (plumbing) remains ungated. `gan run` gates on
+the same verdict with suggestions suppressed — errors stop a run, the
+teaching pass belongs to `check`/`build`.
+
+**GEP-0025-R004 (the traffic light):** the `lsc check` verdict leads
+with two booleans: `"ok"` (no errors — the program compiles) and
+`"clean"` (ok, and no warnings, and no suggestions). An agent's
+loop is: red (`ok: false`) → fix errors; yellow (`ok` but not
+`clean`) → read the suggestions; green (`clean: true`) → submit.
+
+**GEP-0025-R005 (the trust line):** an idiomatic project MUST verdict
+zero suggestions — noise teaches agents to ignore the Advisor. The
+reference bar: the language's own std, toolchain, tour, and playground
+stay suggestion-free under their own check. Rules earn their place by
+surviving that bar: `$builtins` is exempt from the pyimport-repetition
+hint (it is the ambient namespace), `rescue _e ->` is a deliberate
+swallow and not a bare-rescue offence, `Mod.t()` in `@spec`/`@type`
+lines is a type spelling and never a member typo, `$mod.Type()` on
+`@spec` lines is the host-type spelling the spec grammar itself
+mandates (GEP-0017-R002) and never counts toward pyimport repetition, single-call `fn`
+wraps are only flagged when the callee is capturable (`&f/1` — never
+for `g.(x)` dot-calls), and test modules (`use Test` or `TestX`
+naming) are consumers, not library surface — annotation-coverage and
+doctest nags do not apply to them.
+
+**GEP-0025-R006 (the project surface):** the verdict covers the
+configured source roots plus top-level `tests/*.gan` — exactly what
+`gan test` runs; deeper directories under `tests/` are fixtures and
+are not advised. Test files receive the Advisor pass only; their
+compile diagnostics belong to `gan test`.
+
+**GEP-0025-R007 (consolidation and anchors):** identical suggestion
+messages from many files collapse to one entry annotated with the
+spread (`(also in N other file(s))`), and every suggestion carries the
+1-based line of its first evidence, so an agent can jump straight to
+it. Literal masking preserves delimiters and balances nested
+parentheses in sigil bodies — `~python(next((...), None))` never
+leaks its `None` into a migration hint.
 
 ## Rationale
 
@@ -112,7 +149,16 @@ A BDD suite over `gan lsc check` MUST cover: the clean-module silence
 guarantee; error/warning exit-code contract; every suggestion kind;
 lint pass-through with taught corrections; the hostile-input gauntlet
 (never a crash, always JSON); and the build gate's abort-on-error.
+For revision 2 it MUST also cover: the `ok`/`clean` traffic light;
+each R005 exemption (a test module, a `rescue _e`, a `Mod.t()` spec,
+a dot-call `fn` wrap, and `$builtins` repetition each verdict clean);
+nested-paren sigil masking; and cross-file consolidation with line
+anchors.
 
 ## Change History
 
 - Revision 1, 2026-08-04: Initial version — supersedes GEP-0023.
+- Revision 2, 2026-08-04: R004 traffic light (`ok`/`clean`); R005
+  zero-noise trust line with the surviving-rule refinements; R006
+  project surface includes top-level tests; R007 cross-file
+  consolidation, line anchors, balanced sigil masking.

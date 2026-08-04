@@ -16,12 +16,23 @@ defmodule Tour.Webapi do
   end
 
   get :slug, "/slug/{text}", [text] do
-    %{input: text, slug: text.lower().replace(" ", "-")}
+    %{input: text, slug: slugify(text)}
   end
 
   get :fact_route, "/fact/{n}", [n] do
     %{n: n, fact: fact($builtins.int(n))}
   end
+
+  # the pure core of a route stays a plain function: doctested,
+  # reusable, and independent of FastAPI
+  @doc "URL slug of a title — the pure core of the /slug route."
+  @param text, "The raw text."
+  @spec slugify(string()) :: string()
+  @example """
+      gan> slugify("Hello Gandora World")
+      'hello-gandora-world'
+  """
+  def slugify(text), do: text.lower().replace(" ", "-")
 
   @allow :stack_recursion
   defp fact(0), do: 1

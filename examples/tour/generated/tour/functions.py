@@ -1,6 +1,7 @@
 """Anonymous functions, captures, and data-first pipelines."""
 
 import builtins
+import collections.abc
 import math
 
 
@@ -18,7 +19,17 @@ class GanMatchError(Exception):
     pass
 
 
-def _map_list(xs, f):
+def map_list(xs: collections.abc.Iterable[object], f: collections.abc.Callable) -> list[object]:
+    """Data-first map: puts the collection first so Python's `map` can pipe.
+
+## Parameters
+
+  - xs: The collection.
+  - f: Applied to each element.
+
+    >>> map_list([1, 2, 3], lambda _gan_cap1: _gan_cap1 * 2)
+    [2, 4, 6]
+"""
     return builtins.list(builtins.map(f, xs))
 
 
@@ -45,5 +56,5 @@ def demo() -> None:
     print(f"classify     = {repr([classify(0), classify(5), classify(-5)])}")
     print(f"add.(40, 2)  = {add(40, 2)}")
     print(f"sqrt.(81.0)  = {sqrt(81.0)}")
-    result = builtins.sum(_keep(_map_list(builtins.list(range(1, (10) + 1)), lambda x: x * x), lambda x: _gan_rem(x, 2) == 0))
+    result = builtins.sum(_keep(map_list(builtins.list(range(1, (10) + 1)), lambda x: x * x), lambda x: _gan_rem(x, 2) == 0))
     return print(f"1..10 squared, evens only, summed = {result}")

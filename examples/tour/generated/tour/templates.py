@@ -5,17 +5,41 @@ runtime values in every language, and compiled code in ~python.
 """
 
 import builtins
+import collections.abc
 
 
 def sales_query(min_units: int | float) -> str:
+    """A SQL query with a runtime value spliced in — ~sql is just a tag.
+
+## Parameters
+
+  - min_units: The cutoff spliced into the WHERE clause.
+"""
     return f"SELECT product, SUM(units) AS total\nFROM sales\nWHERE units >= {min_units}\nGROUP BY product\n"
 
 
-def report(name: str, xs: list[int | float]) -> str:
+def report(name: str, xs: collections.abc.Sequence[int | float]) -> str:
+    """A Markdown report — splices run any Gandora expression, pipes included.
+
+## Parameters
+
+  - name: The report owner, upcased in the heading.
+  - xs: The sales figures.
+"""
     return f"# Sales report for {name.upper()}\n\n| metric | value |\n| --- | --- |\n| count | {builtins.len(xs)} |\n| total | {builtins.sum(xs)} |\n| best  | {builtins.max(xs)} |\n"
 
 
-def evens_capped(xs: list[int], limit: int) -> list[int]:
+def evens_capped(xs: collections.abc.Sequence[int], limit: int) -> list[int]:
+    """The evens of `xs`, at most `limit` of them — built by a ~python splice.
+
+## Parameters
+
+  - xs: The candidate numbers.
+  - limit: How many evens to keep.
+
+    >>> evens_capped([1, 2, 3, 4, 5, 6, 7, 8], 3)
+    [2, 4, 6]
+"""
     return ([x for x in (xs) if x % 2 == 0][:(limit)])
 
 

@@ -6,6 +6,7 @@ original (R006).
 """
 
 import builtins
+import collections.abc
 import difflib
 import gandora_core as core
 import pathlib
@@ -34,8 +35,10 @@ hang_starters = ["++", "<>", "and", "or", "when", "in", "==", "!=", "<=", ">=", 
 space_around = ["=", "|>", "->", "<-", "=>", "\\\\"]
 
 
-def run(args: list[str]) -> None:
-    """## Parameters
+def run(args: collections.abc.Sequence[str]) -> None:
+    """The `gan fmt` entry: formats the given paths, or stdin with `-`.
+
+## Parameters
 
   - args: CLI arguments after `fmt`: paths, `-` for stdin, --check, --diff.
 """
@@ -125,7 +128,7 @@ def _collect_files(paths):
     def _gan_fn4(p):
         path = pathlib.Path(p)
         if _gan_truthy(path.is_dir()):
-            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(path.rglob("*.gan")), lambda f: str(f)))
+            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(path.rglob("*.gan")), str))
         elif _gan_truthy(gandora_std.string.ends_with_p(p, ".gan")):
             return [p]
         else:
@@ -162,10 +165,17 @@ def _format_file(file, check):
 
 
 def verify(old_text: str, new_text: str) -> str | tuple[str, str]:
-    """## Parameters
+    """Confirms a rewrite preserves comments and parsed terms (R006).
+
+## Parameters
 
   - old_text: The original source.
   - new_text: The candidate rewrite that must preserve comments and parse.
+
+    >>> verify("x = 1", "x = 1")
+    'ok'
+    >>> verify("x = 1", "x = 2")
+    ('error', 'parsed terms changed')
 """
     if _comments_of(old_text) != _comments_of(new_text):
         return ("error", "comment sequence changed")
@@ -176,22 +186,24 @@ def verify(old_text: str, new_text: str) -> str | tuple[str, str]:
 
 
 def _comments_of(text):
-    return gandora_std.enum.map(gandora_std.enum.filter(core.tokens(text), lambda t: gandora_std.map.get(t, "kind") == "comment"), lambda t: gandora_std.map.get(t, "value").rstrip())
+    return [gandora_std.map.get(t, "value").rstrip() for t in core.tokens(text) if gandora_std.map.get(t, "kind") == "comment"]
 
 
 def _strip_meta(t):
     if _gan_truthy(_gan_and(builtins.isinstance(t, builtins.tuple), lambda: builtins.len(t) == 3)):
         return (_strip_meta(t[0]), _strip_meta(t[2]))
     elif _gan_truthy(builtins.isinstance(t, builtins.tuple)):
-        return builtins.tuple(gandora_std.enum.map(builtins.list(t), lambda x: _strip_meta(x)))
+        return builtins.tuple(gandora_std.enum.map(builtins.list(t), _strip_meta))
     elif _gan_truthy(builtins.isinstance(t, builtins.list)):
-        return gandora_std.enum.map(t, lambda x: _strip_meta(x))
+        return gandora_std.enum.map(t, _strip_meta)
     else:
         return t
 
 
 def format_text(text: str) -> tuple[str, str]:
-    """## Parameters
+    """Formats one source text: `{:ok, new}` or `{:skip, why}`.
+
+## Parameters
 
   - text: The source to normalize.
 """
@@ -245,7 +257,7 @@ def _reflow_walk(*_gan_args):
                             case _:
                                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val16))
                         indent = gandora_std.string.duplicate("  ", level)
-                        multi = gandora_std.enum.find(lt, lambda t: _multiline_p(t))
+                        multi = gandora_std.enum.find(lt, _multiline_p)
                         if (multi is None):
                             _gan_tmp18 = indent + _render_tokens(_capture_parens(lt), lines)
                         else:

@@ -71,7 +71,7 @@ defmodule Test do
       f.()
       :no_raise
     rescue
-      e -> {:raised, to_string(e)}
+      e in $builtins.Exception -> {:raised, to_string(e)}
     end
     case outcome do
       :no_raise -> raise "expected a raise, got none"
