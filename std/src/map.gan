@@ -30,7 +30,7 @@ defmodule Map do
   @param value, "The value to store."
   @param_trans value, zh_CN: "要存储的值。"
   @spec put(mapping(k, v), k, v) :: map(k, v)
-  def put(m, key, value), do: ~python({**<%= m %>, <%= key %>: <%= value %>})
+  def put(m, key, value), do: $python({**<%= m %>, <%= key %>: <%= value %>})
 
   @doc "A new map without `key`."
   @doc_trans zh_CN: "移除 `key` 后的新映射。"
@@ -43,7 +43,7 @@ defmodule Map do
       gan> Map.delete(%{"a" => 1, "b" => 2}, "a")
       {'b': 2}
   """
-  def delete(m, key), do: ~python({k: v for k, v in <%= m %>.items() if k != <%= key %>})
+  def delete(m, key), do: $python({k: v for k, v in <%= m %>.items() if k != <%= key %>})
 
   @doc "The keys as a list."
   @doc_trans zh_CN: "键的列表。"
@@ -78,7 +78,7 @@ defmodule Map do
       gan> Map.merge(%{"a" => 1}, %{"b" => 2})
       {'a': 1, 'b': 2}
   """
-  def merge(m1, m2), do: ~python({**<%= m1 %>, **<%= m2 %>})
+  def merge(m1, m2), do: $python({**<%= m1 %>, **<%= m2 %>})
 
   @doc "Whether `key` is present."
   @doc_trans zh_CN: "是否存在键 `key`。"
@@ -91,7 +91,7 @@ defmodule Map do
       gan> Map.has_key?(%{"a" => 1}, "a")
       True
   """
-  def has_key?(m, key), do: ~python(<%= key %> in <%= m %>)
+  def has_key?(m, key), do: $python(<%= key %> in <%= m %>)
 
   @doc "The entries as a list of `{key, value}` tuples."
   @doc_trans zh_CN: "以 `{键, 值}` 元组列表表示的条目。"
@@ -147,7 +147,7 @@ defmodule Map do
       gan> Map.fetch!(%{"a" => 1}, "a")
       1
   """
-  def fetch!(m, key), do: ~python(<%= m %>[<%= key %>])
+  def fetch!(m, key), do: $python(<%= m %>[<%= key %>])
 
   @doc "Sets `key` only when absent."
   @doc_trans zh_CN: "仅当 `key` 不存在时设置。"
@@ -181,7 +181,7 @@ defmodule Map do
       gan> Map.take(%{"a" => 1, "b" => 2}, ["a"])
       {'a': 1}
   """
-  def take(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k in <%= keys %>})
+  def take(m, keys), do: $python({k: v for k, v in <%= m %>.items() if k in <%= keys %>})
 
   @doc "The map without `keys`."
   @doc_trans zh_CN: "移除 `keys` 后的映射。"
@@ -194,7 +194,7 @@ defmodule Map do
       gan> Map.drop(%{"a" => 1, "b" => 2}, ["a"])
       {'b': 2}
   """
-  def drop(m, keys), do: ~python({k: v for k, v in <%= m %>.items() if k not in <%= keys %>})
+  def drop(m, keys), do: $python({k: v for k, v in <%= m %>.items() if k not in <%= keys %>})
 
   @doc "Keeps entries for which `f` (receiving a `{key, value}` tuple) is truthy."
   @doc_trans zh_CN: "保留使 `f`（接收 `{键, 值}` 元组）为真值的条目。"
@@ -207,5 +207,5 @@ defmodule Map do
   @param f, "Receives {key, value}; keeps entries it returns truthy for."
   @param_trans f, zh_CN: "接收 {键, 值}；保留使其为真的条目。"
   @spec filter(mapping(k, v), fun()) :: map(k, v)
-  def filter(m, f), do: ~python({k: v for k, v in <%= m %>.items() if <%= f %>((k, v))})
+  def filter(m, f), do: $python({k: v for k, v in <%= m %>.items() if <%= f %>((k, v))})
 end

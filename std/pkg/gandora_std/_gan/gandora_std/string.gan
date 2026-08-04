@@ -1,6 +1,12 @@
 defmodule String do
-  @moduledoc "Data-first string functions over Python str (GEP-0010)."
-  @moduledoc_trans zh_CN: "基于 Python str 的数据优先字符串函数（GEP-0010）。"
+  @moduledoc """
+  Data-first string functions over Python str (GEP-0010).
+
+  Number formatting is Python's own format mini-language, called as a
+  method on a string literal: `"{:.2f}".format(3.14159)` gives '3.14',
+  `"{:>8}".format(x)` pads — no wrapper needed.
+  """
+  @moduledoc_trans zh_CN: "基于 Python str 的数据优先字符串函数(GEP-0010)。数字格式化直接用 Python 的 format 迷你语言:\"{:.2f}\".format(3.14159) 得 '3.14'。"
 
   @doc "Uppercases the string."
   @doc_trans zh_CN: "转为大写。"
@@ -96,7 +102,7 @@ defmodule String do
       gan> String.contains?("hello", "ell")
       True
   """
-  def contains?(s, part), do: ~python(<%= part %> in <%= s %>)
+  def contains?(s, part), do: $python(<%= part %> in <%= s %>)
 
   @doc "Whether the string starts with `prefix`."
   @doc_trans zh_CN: "是否以 `prefix` 开头。"
@@ -148,7 +154,7 @@ defmodule String do
   @param len, "Maximum number of characters."
   @param_trans len, zh_CN: "最多取出的字符数。"
   @spec slice(string(), integer(), integer()) :: string()
-  def slice(s, start, len), do: ~python(<%= s %>[<%= start %>:] [:<%= len %>])
+  def slice(s, start, len), do: $python(<%= s %>[<%= start %>:] [:<%= len %>])
 
   @doc "Pads on the left with spaces to `width`."
   @doc_trans zh_CN: "左侧以空格填充至 `width`。"
@@ -210,11 +216,34 @@ defmodule String do
   """
   def at(s, index) do
     if index < $builtins.len(s) and index >= -$builtins.len(s) do
-      ~python(<%= s %>[<%= index %>])
+      $python(<%= s %>[<%= index %>])
     else
       nil
     end
   end
+
+  @doc "The first character, or nil for the empty string."
+  @doc_trans zh_CN: "第一个字符;空串为 nil。"
+  @param s, "The string."
+  @param_trans s, zh_CN: "字符串。"
+  @spec first(string()) :: string() | nil
+  @example """
+      gan> String.first("ant")
+      'a'
+      gan> String.first("")
+  """
+  def first(s), do: at(s, 0)
+
+  @doc "The last character, or nil for the empty string."
+  @doc_trans zh_CN: "最后一个字符;空串为 nil。"
+  @param s, "The string."
+  @param_trans s, zh_CN: "字符串。"
+  @spec last(string()) :: string() | nil
+  @example """
+      gan> String.last("ant")
+      't'
+  """
+  def last(s), do: at(s, -1)
 
   @doc "The string reversed."
   @doc_trans zh_CN: "反转后的字符串。"
@@ -225,7 +254,7 @@ defmodule String do
       gan> String.reverse("abc")
       'cba'
   """
-  def reverse(s), do: ~python(<%= s %>[::-1])
+  def reverse(s), do: $python(<%= s %>[::-1])
 
   @doc "The string repeated `n` times."
   @doc_trans zh_CN: "重复 `n` 次的字符串。"
@@ -238,7 +267,7 @@ defmodule String do
       gan> String.duplicate("ab", 2)
       'abab'
   """
-  def duplicate(s, n), do: ~python(<%= s %> * <%= n %>)
+  def duplicate(s, n), do: $python(<%= s %> * <%= n %>)
 
   @doc "Removes leading whitespace."
   @doc_trans zh_CN: "去除首部空白。"

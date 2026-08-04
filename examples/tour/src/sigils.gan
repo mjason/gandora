@@ -26,9 +26,9 @@ defmodule Sigils do
     IO.puts(inspect(~w(gandora elixir python)))
     IO.puts(~s(no need to escape "quotes" here))
     IO.puts(inspect(words("hello, 世界 world!")))
-    total = ~python(sum(i * i for i in range(10)))
+    total = $python(sum(i * i for i in range(10)))
     IO.puts("sum of squares: #{total}")
-    evens = [1, 2, 3, 4, 5, 6] |> ~python(lambda xs: [x for x in xs if x % 2 == 0]).()
+    evens = [1, 2, 3, 4, 5, 6] |> $python(lambda xs: [x for x in xs if x % 2 == 0]).()
     IO.puts(inspect(evens))
   end
 end

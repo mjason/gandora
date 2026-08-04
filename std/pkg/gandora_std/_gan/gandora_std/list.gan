@@ -72,7 +72,7 @@ defmodule List do
       gan> List.duplicate("x", 3)
       ['x', 'x', 'x']
   """
-  def duplicate(value, n), do: ~python([<%= value %>] * <%= n %>)
+  def duplicate(value, n), do: $python([<%= value %>] * <%= n %>)
 
   @doc "Inserts `value` at `index` (negative counts from the end, as in Elixir)."
   @doc_trans zh_CN: "在 `index` 处插入 `value`（负数从尾部数起，同 Elixir）。"
@@ -88,7 +88,7 @@ defmodule List do
       [1, 2, 3]
   """
   def insert_at(xs, index, value),
-    do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:])
+    do: $python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:])
 
   @doc "Removes the element at `index`; out-of-range leaves the list unchanged."
   @doc_trans zh_CN: "删除 `index` 处的元素；越界时列表原样返回。"
@@ -102,7 +102,7 @@ defmodule List do
       [1, 3]
   """
   def delete_at(xs, index),
-    do: ~python(<%= xs %>[:<%= index %>] + <%= xs %>[<%= index %>:][1:])
+    do: $python(<%= xs %>[:<%= index %>] + <%= xs %>[<%= index %>:][1:])
   @doc "The list as a tuple."
   @doc_trans zh_CN: "转换为元组的列表。"
   @param xs, "The list."
@@ -125,7 +125,7 @@ defmodule List do
       gan> List.starts_with?([1, 2, 3], [1, 2])
       True
   """
-  def starts_with?(xs, prefix), do: ~python(<%= xs %>[:len(<%= prefix %>)] == <%= prefix %>)
+  def starts_with?(xs, prefix), do: $python(<%= xs %>[:len(<%= prefix %>)] == <%= prefix %>)
 
   @doc "Replaces the element at `index` (negative counts from the end)."
   @doc_trans zh_CN: "替换 `index` 处的元素（负数从尾部数起）。"
@@ -141,7 +141,7 @@ defmodule List do
       [1, 9, 3]
   """
   def replace_at(xs, index, value),
-    do: ~python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:][1:])
+    do: $python(<%= xs %>[:<%= index %>] + [<%= value %>] + <%= xs %>[<%= index %>:][1:])
 
   @doc "Updates the element at `index` by `f`."
   @doc_trans zh_CN: "以 `f` 更新 `index` 处的元素。"

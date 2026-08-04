@@ -179,9 +179,16 @@ fn print_term(term: &Term, level: usize, out: &mut String) {
 fn print_call(call: &Call, level: usize, out: &mut String) {
     match &call.callee {
         Callee::Name(name) => {
-            if let Some(sigil) = name.strip_prefix('~') {
-                out.push('~');
-                out.push_str(sigil);
+            let sigil_form = name.strip_prefix('~').map(|s| format!("~{s}"))
+                .or_else(|| (name == "$python").then(|| name.clone()))
+                .or_else(|| {
+                    (name.starts_with('%')
+                        && name.len() > 1
+                        && name[1..].chars().all(|c| c.is_ascii_lowercase()))
+                    .then(|| name.clone())
+                });
+            if let Some(spelled) = sigil_form {
+                out.push_str(&spelled);
                 out.push('(');
                 if let Some(Term::Str(parts)) = call.args.first() {
                     for p in parts {

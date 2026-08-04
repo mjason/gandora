@@ -1,7 +1,7 @@
 ---
 gep: 9
 title: Embedded Languages and Templates
-description: The ~<lang> sigil family generalized beyond ~python, with EEx-style <%= %> splicing for values and code.
+description: Three embedded tiers by symbol — ~text templates, $python code splices, %json data literals — with EEx-style <%= %> value splicing for text.
 author: MJ
 status: Accepted
 type: Standards Track
@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 3
+revision: 5
 requires: [5]
 replaces: []
 superseded-by: null
@@ -23,14 +23,14 @@ translations:
 
 ## Abstract
 
-`~python` is one instance of a paradigm, not a special case: any
-`~<lang>` sigil (`~markdown`, `~sql`, `~html`, ...) embeds a raw body
-tagged with its language. Every embedded body supports EEx-style
-splicing: `<%= expr %>` inserts a Gandora expression. For `~python`
-the splice is code (compiled expression text, as before, now
-parameterizable); for every other language the sigil evaluates to a
-string with spliced runtime values. One mechanism covers the embedded-language family and EEx's template
-marker.
+Embedded content splits into three tiers, each with its own symbol
+matching what the body *is*: `~<lang>` sigils (`~markdown`, `~sql`,
+`~prompt`, ...) are **text** — raw bodies tagged with a language,
+evaluating to strings with `<%= expr %>` value splices; `$python(...)`
+is **code** — one Python expression entering the program verbatim,
+with code splices; `%json` is **data** — compile-time-parsed JSON
+emitted as a plain literal. One splice mechanism covers the family;
+the symbol tells the reader (and the AI) the semantics at a glance.
 
 ## Motivation
 
@@ -69,11 +69,15 @@ the sigil. Whitespace inside the marker is ignored; `<%%=` escapes a
 literal `<%=`. Splices MUST be single expressions; a failing parse is
 a compile error naming the sigil.
 
-**GEP-0009-R003:** `~python` keeps its GEP-0005-R007 semantics — the
-body is spliced verbatim into the generated code as one expression —
-with each `<%= expr %>` replaced by the compiled expression text
-(parenthesized). It remains the only sigil whose body enters the
-program as code.
+**GEP-0009-R003:** the code splice is spelled **`$python(expr)`** —
+`$` is the Python world (GEP-0003), and this form is a whole Python
+expression rather than a module member. The body is spliced verbatim
+into the generated code as one expression, with each `<%= expr %>`
+replaced by the compiled expression text (parenthesized). It is the
+only embedded body that enters the program as code. `~python(...)`
+remains valid as an ordinary R004 *text* sigil (a body tagged
+python); the Advisor flags it with the `$python` recipe in case the
+author meant code.
 
 **GEP-0009-R004:** Every other embedded sigil evaluates to a string:
 the body text with each splice replaced by the runtime value of its
@@ -86,6 +90,16 @@ prose destined for an AI model: `~prompt(...)` for one-liners,
 backslashes, and JSON need no escaping — while `<%= expr %>` still
 splices values. Tooling (docs cards, the manual) teaches this name;
 any other R004 sigil name behaves identically.
+
+**GEP-0009-R007:** data literals are spelled with **`%`** — the
+data-literal family (`%{}` maps, `%Mod{}` structs, `%json` JSON).
+`%json(...)` / `%json"""..."""` bodies are parsed at
+compile time with the GEP-0001-R018 JSONC reader (comments and
+trailing commas welcome, duplicate keys rejected) and emitted as the
+equivalent plain data literal — zero runtime, and malformed JSON is a
+compile error at the sigil. Splices are rejected; dynamic structures
+are built with ordinary maps. This makes tool schemas and API
+payloads paste-able exactly as their JSON documentation spells them.
 
 **GEP-0009-R005:** Multi-line embedded bodies use the GEP-0005
 delimiters including `"""`; splicing works identically. A `"""` body
@@ -149,6 +163,15 @@ escape; multi-line `"""` bodies; the single-expression diagnostic; and
 byte preservation outside splices.
 
 ## Change History
+
+- Revision 5, 2026-08-04: the tier/symbol split — `~` is uniformly
+  text (any name, including python/json, is just a language tag),
+  `$python(...)` is the code splice (was `~python`), `%json` is the
+  data literal (was `~json`, never released); the Advisor carries the
+  migration recipes; unknown `%name` data literals error.
+
+- Revision 4, 2026-08-04: R007 — `~json` compile-time data literal
+  (JSONC-tolerant, splice-free, zero runtime).
 
 - Revision 3, 2026-08-04: R006 — `~prompt` blessed as the prose
   sigil for AI prompts (raw body, no escaping, `<%= %>` splices).

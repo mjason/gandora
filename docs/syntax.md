@@ -486,7 +486,7 @@ macros in with `require Mod` (or `import`/`use`). Inspect results with
 ~w(one two three)            # ["one", "two", "three"]
 ~s(no "escaping" needed)     # string, free delimiter choice
 ~r/\\d+/                     # re.compile("\\d+") — string escapes apply
-~python(sum(i*i for i in range(n)))   # one verbatim Python expression
+$python(sum(i*i for i in range(n)))   # one verbatim Python expression
 ```
 
 Uppercase-free embedded-language sigils carry whole documents with
@@ -513,7 +513,20 @@ The user's name is <%= name %>.
 """
 ```
 
-`~python` is the escape hatch for Python-only spellings; splices are
+**`%json` is a compile-time data literal** (GEP-0009-R007): the body
+is JSON(C) — comments and trailing commas allowed — parsed by the
+compiler and emitted as plain data, so an OpenAI tool schema pastes
+verbatim and a typo is a compile error, not a runtime surprise:
+
+```elixir
+@tools %json"""
+[{"type": "function",
+  "function": {"name": "ping", "description": "Health check.",
+               "parameters": {"type": "object", "properties": {}}}}]
+"""
+```
+
+`$python` is the escape hatch for Python-only spellings; splices are
 compiled Gandora expressions, everything else passes through verbatim.
 
 ## Compiler lints — warnings are provable facts

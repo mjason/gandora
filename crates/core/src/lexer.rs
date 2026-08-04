@@ -261,9 +261,26 @@ impl<'a> Lexer<'a> {
             if matches!(self.peek_at(1), Some(c2) if is_ident_start(c2) || c2.is_uppercase()) {
                 self.bump();
                 let name = self.lex_ident_chars();
+                // the code splice: `$python(expr)` — one raw Python
+                // expression (GEP-0009-R003, spelled in the $ world)
+                if name == "python" && self.peek() == Some('(') {
+                    return Ok((self.lex_sigil_body("$python".into(), true)?, span));
+                }
                 return Ok((Tok::PyRef(name, false), span));
             }
             return Err(self.err("expected a module name after '$' (GEP-0003-R001)"));
+        }
+        // data literals: `%json(...)` / `%json"""..."""` (GEP-0009-R007);
+        // `%{` maps and `%Mod{` structs are untouched (uppercase / brace)
+        if c == '%' && matches!(self.peek_at(1), Some(a) if a.is_ascii_lowercase()) {
+            self.bump();
+            let name = self.lex_ident_chars();
+            if matches!(self.peek(), Some('(') | Some('"')) {
+                return Ok((self.lex_sigil_body(format!("%{name}"), true)?, span));
+            }
+            return Err(self.err(format!(
+                "expected a data-literal body after %{name} (GEP-0009-R007)"
+            )));
         }
         if is_ident_start(c) {
             let upper = c.is_uppercase();
@@ -507,6 +524,12 @@ impl<'a> Lexer<'a> {
         // built-ins (~w ~s ~r) interpolate with #{}; every other name is an
         // embedded-language sigil with a raw body (GEP-0009-R001)
         let raw = !matches!(name.as_str(), "w" | "s" | "r");
+        self.lex_sigil_body(name, raw)
+    }
+
+    /// The delimiter + body of a sigil-shaped form; shared by `~name`,
+    /// the `$python` code splice, and `%json`-style data literals.
+    fn lex_sigil_body(&mut self, name: String, raw: bool) -> Result<Tok> {
         let open = self
             .peek()
             .ok_or_else(|| self.err("expected a sigil delimiter"))?;
@@ -782,9 +805,9 @@ mod sigil_tests {
 
     #[test]
     fn raw_sigil_ignores_interpolation() {
-        match &toks("~python(sum(i for i in #{x}))")[0] {
+        match &toks("$python(sum(i for i in #{x}))")[0] {
             Tok::Sigil(name, parts) => {
-                assert_eq!(name, "python");
+                assert_eq!(name, "$python");
                 assert_eq!(
                     parts,
                     &vec![LexStrPart::Text("sum(i for i in #{x})".into())]

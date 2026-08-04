@@ -224,7 +224,14 @@ fn tokens(py: Python, source: &str, path: &str) -> PyResult<PyObject> {
             Tok::Int(n) => ("int", n.to_string()),
             Tok::Float(f) => ("float", f.to_string()),
             Tok::Str(parts) => ("str", format!("{parts:?}")),
-            Tok::Sigil(name, parts) => ("sigil", format!("~{name}{parts:?}")),
+            Tok::Sigil(name, parts) => (
+                "sigil",
+                if name.starts_with('$') || name.starts_with('%') {
+                    format!("{name}{parts:?}")
+                } else {
+                    format!("~{name}{parts:?}")
+                },
+            ),
             Tok::Atom(a) => ("atom", a.clone()),
             Tok::PyRef(m, _) => ("pyref", m.clone()),
             Tok::Ident(i) => ("ident", i.clone()),

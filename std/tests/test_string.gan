@@ -3,6 +3,10 @@ defmodule TestString do
   String, exhaustively: regular paths, Unicode, empty strings,
   boundaries.
   """
+
+  def test_first(), do: Test.assert_eq(String.first("ant"), "a")
+  def test_first_empty_is_nil(), do: Test.assert_nil(String.first(""))
+  def test_last(), do: Test.assert_eq(String.last("ant"), "t")
   @moduledoc_trans zh_CN: "String 全函数测试:常规、Unicode、空串、边界。"
 
   import Test

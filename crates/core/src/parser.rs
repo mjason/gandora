@@ -279,7 +279,14 @@ impl Parser {
             Tok::Str(parts) => Ok(Term::Str(self.convert_str_parts(parts)?)),
             Tok::Sigil(name, parts) => {
                 let body = Term::Str(self.convert_str_parts(parts)?);
-                Ok(Term::call(&format!("~{name}"), vec![body], span))
+                // `$python` / `%json` carry their symbol already; the
+                // text family gets the `~` prefix (GEP-0009)
+                let callee = if name.starts_with('$') || name.starts_with('%') {
+                    name.clone()
+                } else {
+                    format!("~{name}")
+                };
+                Ok(Term::call(&callee, vec![body], span))
             }
             Tok::Atom(a) => Ok(Term::Atom(a)),
             Tok::KwKey(k) => {

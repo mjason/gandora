@@ -45,7 +45,7 @@ defmodule Tour.Templates do
   def evens_capped(xs, limit) do
     # ~python splices are CODE: the compiled expression lands inside
     # the comprehension — Python-only syntax, Gandora bindings
-    ~python([x for x in <%= xs %> if x % 2 == 0][:<%= limit %>])
+    $python([x for x in <%= xs %> if x % 2 == 0][:<%= limit %>])
   end
 
   @doc "`<%%=` escapes the splice marker, so templates can document templates."

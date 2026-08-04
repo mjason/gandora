@@ -3019,11 +3019,11 @@ impl Codegen {
                 let s = self.emit_string(&parts.clone(), pre)?;
                 Ok(format!("re.compile({s})"))
             }
-            ("~python", 1) => {
+            ("$python", 1) => {
                 // embedded Python: verbatim code with <%= %> code splices
                 // (GEP-0005-R007, GEP-0009-R003)
                 let body = args[0].as_plain_str().ok_or_else(|| {
-                    self.err(call.span, "~python bodies are raw and cannot interpolate")
+                    self.err(call.span, "$python bodies are raw and cannot interpolate")
                 })?;
                 let mut out = String::new();
                 for part in split_splices(&body) {
@@ -3034,7 +3034,7 @@ impl Codegen {
                                 .map_err(|mut d| {
                                     d.span = call.span;
                                     d.message =
-                                        format!("in ~python splice: {}", d.message);
+                                        format!("in $python splice: {}", d.message);
                                     d
                                 })?;
                             let mut pre = Vec::new();
@@ -3052,10 +3052,39 @@ impl Codegen {
                 }
                 let body = out.trim().to_string();
                 if body.is_empty() {
-                    return Err(self.err(call.span, "~python requires a Python expression"));
+                    return Err(self.err(call.span, "$python requires a Python expression"));
                 }
                 Ok(format!("({body})"))
             }
+            ("%json", 1) => {
+                // a compile-time JSON(C) data literal (GEP-0009-R007):
+                // parsed here, emitted as plain Python data — zero
+                // runtime, malformed JSON is a compile error
+                let body = args[0]
+                    .as_plain_str()
+                    .ok_or_else(|| self.err(call.span, "%json bodies are raw"))?;
+                if body.contains("<%=") {
+                    return Err(self.err(
+                        call.span,
+                        "%json is a pure data literal — no <%= %> splices; \
+                         build a map for dynamic parts (GEP-0009-R007)",
+                    ));
+                }
+                let value = crate::jsonc::parse_jsonc(&self.file, &body)
+                    .map_err(|mut d| {
+                        d.span = call.span;
+                        d.message = format!("in %json body: {}", d.message);
+                        d
+                    })?;
+                Ok(json_to_py(&value))
+            }
+            (other, 1) if other.starts_with('%') => Err(self.err(
+                call.span,
+                format!(
+                    "unknown data literal {other} — only %json exists \
+                     (GEP-0009-R007)"
+                ),
+            )),
             (sigil, 1) if sigil.starts_with('~') => {
                 // embedded-language sigil: a string with value splices
                 // (GEP-0009-R001/R004)
@@ -3930,6 +3959,36 @@ fn split_splices(body: &str) -> Vec<SplicePart> {
     parts
 }
 
+/// A JSON(C) value as the Python literal a reviewer would write
+/// (GEP-0009-R007).
+fn json_to_py(v: &crate::jsonc::JsonValue) -> String {
+    use crate::jsonc::JsonValue as J;
+    match v {
+        J::Null => "None".to_string(),
+        J::Bool(true) => "True".to_string(),
+        J::Bool(false) => "False".to_string(),
+        J::Number(n) => {
+            if n.fract() == 0.0 && n.abs() < 1e15 {
+                format!("{}", *n as i64)
+            } else {
+                format!("{n}")
+            }
+        }
+        J::String(s) => py_str_lit(s),
+        J::Array(xs) => {
+            let items: Vec<String> = xs.iter().map(json_to_py).collect();
+            format!("[{}]", items.join(", "))
+        }
+        J::Object(kvs) => {
+            let items: Vec<String> = kvs
+                .iter()
+                .map(|(k, v)| format!("{}: {}", py_str_lit(k), json_to_py(v)))
+                .collect();
+            format!("{{{}}}", items.join(", "))
+        }
+    }
+}
+
 fn py_str_lit(s: &str) -> String {
     format!("\"{}\"", escape_py_str(s, false))
 }
@@ -4153,8 +4212,8 @@ fn scope_reads(term: &Term, out: &mut BTreeSet<String>) {
                     return;
                 }
                 // sigil templates read through `<%= expr %>` splices
-                // (GEP-0009-R002)
-                Callee::Name(n) if n.starts_with('~') => {
+                // (GEP-0009-R002); $python code splices read too
+                Callee::Name(n) if n.starts_with('~') || n == "$python" => {
                     for a in &c.args {
                         match a.as_plain_str() {
                             Some(body) => {
@@ -4381,6 +4440,46 @@ mod tests {
     }
 
     #[test]
+    fn tilde_names_are_uniformly_text_now() {
+        // `~` has one semantic: text — even python/json as names are
+        // just language tags for a string body (GEP-0009 rev 5)
+        let py = compile("defmodule M do\n  def f(x), do: ~python(x + 1)\nend");
+        assert!(py.contains("\"x + 1\""), "{py}");
+        let py2 = compile("defmodule M do\n  def f(), do: ~json([1])\nend");
+        assert!(py2.contains("\"[1]\""), "{py2}");
+        let msg3 = compile_err("defmodule M do\n  def f(), do: %toml(a = 1)\nend");
+        assert!(msg3.contains("only %json"), "{msg3}");
+    }
+
+    #[test]
+    fn json_sigil_is_a_compile_time_data_literal() {
+        let py = compile(
+            "defmodule M do\n  def tools() do\n    %json\"\"\"\n    [{\"type\": \"function\", \"function\": {\"name\": \"ping\", \"strict\": true, \"retries\": 3, \"timeout\": 1.5, \"extra\": null}}]\n    \"\"\"\n  end\nend",
+        );
+        assert!(
+            py.contains("[{\"type\": \"function\", \"function\": {\"name\": \"ping\", \"strict\": True, \"retries\": 3, \"timeout\": 1.5, \"extra\": None}}]"),
+            "{py}"
+        );
+        assert!(!py.contains("json.loads"), "{py}");
+    }
+
+    #[test]
+    fn json_sigil_rejects_malformed_bodies() {
+        let msg = compile_err(
+            "defmodule M do\n  def f(), do: %json({\"a\": )\nend",
+        );
+        assert!(msg.contains("%json body"), "{msg}");
+    }
+
+    #[test]
+    fn json_sigil_rejects_splices() {
+        let msg = compile_err(
+            "defmodule M do\n  def f(x), do: %json({\"a\": <%= x %>})\nend",
+        );
+        assert!(msg.contains("pure data literal"), "{msg}");
+    }
+
+    #[test]
     fn soft_keyword_attributes_and_bindings_stay_unmangled() {
         // `match` is a Python soft keyword: legal as a method name and
         // as a binding — never rename it (the old `__kw` suffix broke
@@ -4599,7 +4698,7 @@ mod tests {
         assert!(!ws2.iter().any(|w| w.contains("R002")), "{ws2:?}");
         // sigil splices are reads
         let ws3 = warnings_of(
-            "defmodule M do\n  def f(xs), do: ~python([x for x in <%= xs %>])\nend",
+            "defmodule M do\n  def f(xs), do: $python([x for x in <%= xs %>])\nend",
         );
         assert!(!ws3.iter().any(|w| w.contains("R002")), "{ws3:?}");
         // a var read only in a later clause of the group still counts
@@ -5205,7 +5304,7 @@ mod gep0005_tests {
     #[test]
     fn compiles_py_sigil_expression() {
         let py = compile(
-            "defmodule M do\n  def squares(n) do\n    ~python(sum(i * i for i in range(n)))\n  end\nend",
+            "defmodule M do\n  def squares(n) do\n    $python(sum(i * i for i in range(n)))\n  end\nend",
         );
         assert!(py.contains("return (sum(i * i for i in range(n)))"), "{py}");
     }
@@ -5213,7 +5312,7 @@ mod gep0005_tests {
     #[test]
     fn py_sigil_composes_with_pipes() {
         let py = compile(
-            "defmodule M do\n  def f(xs) do\n    xs |> $builtins.sorted() |> ~python(list)()\n  end\nend",
+            "defmodule M do\n  def f(xs) do\n    xs |> $builtins.sorted() |> $python(list)()\n  end\nend",
         );
         assert!(py.contains("return (list)(builtins.sorted(xs))"), "{py}");
     }
@@ -5441,7 +5540,7 @@ mod gep0009_tests {
     #[test]
     fn python_sigil_code_splices() {
         let py = compile(
-            "defmodule M do\n  def evens(xs, limit) do\n    ~python([x for x in <%= xs %> if x % 2 == 0][:<%= limit + 1 %>])\n  end\nend",
+            "defmodule M do\n  def evens(xs, limit) do\n    $python([x for x in <%= xs %> if x % 2 == 0][:<%= limit + 1 %>])\n  end\nend",
         );
         assert!(py.contains("return ([x for x in (xs) if x % 2 == 0][:(limit + 1)])"), "{py}");
     }

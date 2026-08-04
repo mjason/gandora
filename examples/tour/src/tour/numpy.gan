@@ -32,7 +32,7 @@ defmodule Tour.Numpy do
     IO.puts("norm([3,4])  = #{norm([3.0, 4.0])}")
 
     # boolean indexing has no Gandora spelling; ~python says it directly
-    evens = ~python(lambda arr: arr[arr % 2 == 0]).(m)
+    evens = $python(lambda arr: arr[arr % 2 == 0]).(m)
     IO.puts("evens        = #{evens}")
 
     stats =

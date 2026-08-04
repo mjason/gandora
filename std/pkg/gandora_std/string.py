@@ -1,4 +1,9 @@
-"""Data-first string functions over Python str (GEP-0010)."""
+"""Data-first string functions over Python str (GEP-0010).
+
+Number formatting is Python's own format mini-language, called as a
+method on a string literal: `"{:.2f}".format(3.14159)` gives '3.14',
+`"{:>8}".format(x)` pads — no wrapper needed.
+"""
 
 import builtins
 import re
@@ -238,6 +243,33 @@ def at(s: str, index: int) -> str | None:
         return ((s)[(index)])
     else:
         return None
+
+
+def first(s: str) -> str | None:
+    """The first character, or nil for the empty string.
+
+## Parameters
+
+  - s: The string.
+
+    >>> first("ant")
+    'a'
+    >>> first("")
+"""
+    return at(s, 0)
+
+
+def last(s: str) -> str | None:
+    """The last character, or nil for the empty string.
+
+## Parameters
+
+  - s: The string.
+
+    >>> last("ant")
+    't'
+"""
+    return at(s, -1)
 
 
 def reverse(s: str) -> str:

@@ -35,7 +35,7 @@ defmodule Tour.Dataframe do
   # pandas .assign takes keyword arguments whose values are callables;
   # the column expression is pure Python, so ~python says it directly
   defp with_revenue(df) do
-    df |> .assign(revenue: ~python(lambda d: d["units"] * d["price"]))
+    df |> .assign(revenue: $python(lambda d: d["units"] * d["price"]))
   end
 
   # `|> .method(args)` pipes into a method call on the piped value,

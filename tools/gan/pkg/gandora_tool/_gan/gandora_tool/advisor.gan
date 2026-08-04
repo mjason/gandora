@@ -32,7 +32,11 @@ defmodule Advisor do
     {~r/\bPython\b/,
       "There is no `Python` object — interop is `$math.sqrt(x)` inline, or `pyimport math` at module top, then `math.sqrt(x)` (GEP-0003)."},
     {~r/\|>\s*then\(/,
-      "Elixir's `then/2` does not exist — pipe into an anonymous fn `x |> (fn v -> f(v, 1) end).()`, or just bind a variable."}
+      "Elixir's `then/2` does not exist — pipe into an anonymous fn `x |> (fn v -> f(v, 1) end).()`, or just bind a variable."},
+    {~r/~python\(/,
+      "`~python(...)` is plain TEXT tagged python (GEP-0009 rev 5) — executable Python is `$python(expr)`; if you truly meant a text template, ignore this."},
+    {~r/~json[("]/,
+      "`~json` is plain TEXT tagged json (GEP-0009 rev 5) — a compile-time data literal is `%json(...)`; if you truly meant a text template, ignore this."}
   ]
 
   # Elixir standard-library reflexes that do not exist here — each one
@@ -99,11 +103,11 @@ defmodule Advisor do
     re.sub("#(?!\\{)([^\\n]*)", fn m -> "#" <> spaces.(m.group(1)) end, masked)
   end
 
-  # paren sigil bodies (~python(...)) nest parens — mask with a
+  # paren sigil bodies ($python(...)) nest parens — mask with a
   # balanced scan, not a regex, so trailing args never leak
   defp mask_paren_sigils(source) do
-    starts = Enum.map($builtins.list(re.finditer("~[a-zA-Z]+\\(", source)),
-      fn m -> ~python(<%= m %>.end()) end)
+    starts = Enum.map($builtins.list(re.finditer("(?:~[a-zA-Z]+|\\$python|%[a-z]+)\\(", source)),
+      fn m -> $python(<%= m %>.end()) end)
     Enum.reduce(starts, source, fn start, acc ->
       stop = balance_from(acc, start, 1)
       cut(acc, 0, start) <> re.sub("\\S", " ", cut(acc, start, stop)) <>
@@ -111,9 +115,9 @@ defmodule Advisor do
     end)
   end
 
-  defp cut(s, a, b), do: ~python(<%= s %>[<%= a %>:<%= b %>])
+  defp cut(s, a, b), do: $python(<%= s %>[<%= a %>:<%= b %>])
 
-  defp char_at(s, i), do: ~python(<%= s %>[<%= i %>])
+  defp char_at(s, i), do: $python(<%= s %>[<%= i %>])
 
   # index of the closing paren that balances depth, scanning from i
   defp balance_from(source, i, depth) do
@@ -280,7 +284,7 @@ defmodule Advisor do
     refs = ~r/\$([a-z_][a-z0-9_]*)/.findall(value_source)
     counts = Enum.reduce(refs, %{}, fn m, acc -> Map.put(acc, m, Map.get(acc, m, 0) + 1) end)
     # $builtins is the ambient namespace — repeating it is the idiom
-    for {m, n} <- counts.items(), n >= 3 and m != "builtins",
+    for {m, n} <- counts.items(), n >= 3 and not Enum.member?(["builtins", "python"], m),
       do: %{"kind" => "practice", "line" => line_of(source, re.compile("\\$" <> m)),
         "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name; a dotted chain imports as `pyimport #{m}.sub, as: s` (GEP-0003 rev 6)."}
   end
