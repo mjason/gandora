@@ -95,7 +95,7 @@ defmodule Verifier do
 
   # concise format: path:line:col: severity[rule] message
   defp parse_line(line) do
-    m = ~r/^(.*?):(\d+):(\d+): (error|warning)\[([a-z-]+)\] (.*)$/.search(line)
+    m = ~r/^(.*?):(\d+):(\d+): (error|warning)\[([a-z-]+)\] (.*)$/.match(line)
     if is_nil(m) do
       nil
     else

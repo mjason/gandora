@@ -6,8 +6,15 @@ use std::fmt::Write as _;
 use crate::ast::{Call, Callee, StrPart, Term};
 use crate::diag::{Diagnostic, Result, Span};
 
-/// Map a Gandora identifier to a Python identifier (GEP-0001-R015).
-pub fn map_ident(name: &str) -> String {
+const PY_KEYWORDS: &[&str] = &[
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+    "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if",
+    "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+    "while", "with", "yield",
+];
+
+/// Gandora characters to Python spelling, shared by both positions.
+fn map_ident_chars(name: &str) -> String {
     let mut out = String::new();
     for c in name.chars() {
         match c {
@@ -22,16 +29,33 @@ pub fn map_ident(name: &str) -> String {
     if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         out.insert(0, '_');
     }
-    const PY_KEYWORDS: &[&str] = &[
-        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
-        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
-        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
-        "try", "while", "with", "yield", "match",
-    ];
+    out
+}
+
+/// Map a Gandora identifier to a Python identifier (GEP-0001-R015).
+/// Binding position: a Python keyword collision must be renamed
+/// (`class` -> `class__kw`) or the generated code will not parse.
+/// `match` is only a soft keyword — legal everywhere — so it is not
+/// renamed anywhere.
+pub fn map_ident(name: &str) -> String {
+    let mut out = map_ident_chars(name);
     if PY_KEYWORDS.contains(&out.as_str()) {
         out.push_str("__kw");
     }
     out
+}
+
+/// Attribute position (`obj.name`): keywords are never renamed here —
+/// `pattern.match(...)` must stay `match`. A hard keyword cannot be a
+/// Python attribute spelling at all; None tells the caller to error
+/// with a getattr recipe.
+fn map_attr(name: &str) -> Option<String> {
+    let out = map_ident_chars(name);
+    if PY_KEYWORDS.contains(&out.as_str()) {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 /// `App.HelloWeb` -> `app.hello_web` (GEP-0001-R013/R014).
@@ -360,6 +384,21 @@ impl Codegen {
 
     fn err(&self, span: Span, msg: impl Into<String>) -> Diagnostic {
         Diagnostic::new(&self.file, span, msg)
+    }
+
+    /// A Python attribute name, or the getattr recipe for the rare
+    /// hard-keyword collision (GEP-0001-R015 attribute position).
+    fn attr_name(&self, name: &str, span: Span) -> Result<String> {
+        map_attr(name).ok_or_else(|| {
+            self.err(
+                span,
+                format!(
+                    "`.{name}` collides with a Python keyword and cannot be \
+                     an attribute — use $builtins.getattr(x, \"{name}\") \
+                     (GEP-0003)"
+                ),
+            )
+        })
     }
 
     fn fresh_tmp(&mut self, prefix: &str) -> usize {
@@ -2729,7 +2768,7 @@ impl Codegen {
                         segs.push(name.clone());
                         self.py_imports.insert(pyref_import_path(&segs, bounded));
                         let mut path: Vec<String> = segs[..segs.len() - 1].to_vec();
-                        path.push(map_ident(name));
+                        path.push(self.attr_name(name, span)?);
                         let path = path.join(".");
                         if *is_call {
                             let args = self.emit_args(&call.args, pre)?;
@@ -2741,7 +2780,7 @@ impl Codegen {
                     // $module.fun(...) — remote reference (GEP-0003-R001/R002)
                     Term::PyRef(module, _) => {
                         self.py_imports.insert(module.clone());
-                        let f = map_ident(name);
+                        let f = self.attr_name(name, span)?;
                         if *is_call {
                             let args = self.emit_args(&call.args, pre)?;
                             Ok(format!("{module}.{f}({args})"))
@@ -2803,7 +2842,7 @@ impl Codegen {
                             _ => false,
                         };
                         let b = if needs_paren { format!("({b})") } else { b };
-                        let f = map_ident(name);
+                        let f = self.attr_name(name, span)?;
                         if *is_call {
                             let args = self.emit_args(&call.args, pre)?;
                             Ok(format!("{b}.{f}({args})"))
@@ -4339,6 +4378,30 @@ mod tests {
         let expanded = ex.expand_module(&module).unwrap();
         let mut cg = Codegen::new("<test>", vec![]);
         cg.compile(&expanded).unwrap_err().message
+    }
+
+    #[test]
+    fn soft_keyword_attributes_and_bindings_stay_unmangled() {
+        // `match` is a Python soft keyword: legal as a method name and
+        // as a binding — never rename it (the old `__kw` suffix broke
+        // `pattern.match(line)` at runtime)
+        let py = compile(
+            "defmodule M do\n  def f(line) do\n    match = ~r/a/.match(line)\n    match\n  end\nend",
+        );
+        assert!(py.contains(".match(line)"), "{py}");
+        assert!(!py.contains("match__kw"), "{py}");
+    }
+
+    #[test]
+    fn hard_keyword_attributes_error_with_a_getattr_recipe() {
+        let msg = compile_err("defmodule M do\n  def f(x), do: x.import()\nend");
+        assert!(msg.contains("getattr"), "{msg}");
+    }
+
+    #[test]
+    fn hard_keyword_bindings_still_mangle() {
+        let py = compile("defmodule M do\n  def f() do\n    class = 1\n    class\n  end\nend");
+        assert!(py.contains("class__kw"), "{py}");
     }
 
     #[test]

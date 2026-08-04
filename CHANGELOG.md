@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.15.1 — 2026-08-04
+
+**Soft keywords stop being mangled where Python allows them.**
+
+- Codegen fix (GEP-0001-R015): identifier keyword-mangling is now
+  position-aware. `match` is a Python *soft* keyword — legal as a
+  method name and a binding — so `pattern.match(line)` compiles as
+  written (previously `match__kw`, an AttributeError at runtime), and
+  `match = ...` stays bare. Hard-keyword bindings still rename
+  (`class` → `class__kw`); a hard keyword in attribute position is a
+  compile error teaching the `$builtins.getattr(x, "name")` spelling.
+  With three regression tests; the Verifier's own ty-output parser now
+  uses `.match()` as living proof.
+
 ## v0.15.0 — 2026-08-04
 
 **Build is the verdict (GEP-0025 rev 3): artifact verification with ty,

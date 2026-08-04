@@ -79,7 +79,7 @@ def _python_env(root):
 
 
 def _parse_line(line):
-    m = re.compile("^(.*?):(\\d+):(\\d+): (error|warning)\\[([a-z-]+)\\] (.*)$").search(line)
+    m = re.compile("^(.*?):(\\d+):(\\d+): (error|warning)\\[([a-z-]+)\\] (.*)$").match(line)
     if (m is None):
         return None
     else:

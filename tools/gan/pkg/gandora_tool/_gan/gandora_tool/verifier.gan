@@ -95,7 +95,7 @@ defmodule Verifier do
 
   # concise format: path:line:col: severity[rule] message
   defp parse_line(line) do
-    m = ~r/^(.*?):(\d+):(\d+): (error|warning)\[([a-z-]+)\] (.*)$/.search(line)
+    m = ~r/^(.*?):(\d+):(\d+): (error|warning)\[([a-z-]+)\] (.*)$/.match(line)
     if is_nil(m) do
       nil
     else
@@ -144,8 +144,8 @@ defmodule Verifier do
     # import named like a Python builtin gets the interop spelling
     hint = cond do
       Map.get(d, "rule") == "unresolved-import" and
-          $builtins.hasattr($builtins, gan_name) ->
-        " — `#{gan_name}` is a Python builtin, not a module: write `$builtins.#{gan_name}(...)`"
+        $builtins.hasattr($builtins, gan_name) ->
+          " — `#{gan_name}` is a Python builtin, not a module: write `$builtins.#{gan_name}(...)`"
       Map.get(d, "rule") == "unresolved-import" ->
         " — `$x`/`pyimport x` needs an importable module; see `gan lsc doc python`"
       true -> suggestion(source, gan_name)
