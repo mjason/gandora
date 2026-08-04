@@ -281,7 +281,7 @@ impl Parser {
                 let body = Term::Str(self.convert_str_parts(parts)?);
                 // `$python` / `%json` carry their symbol already; the
                 // text family gets the `~` prefix (GEP-0009)
-                let callee = if name.starts_with('$') || name.starts_with('%') {
+                let callee = if name.starts_with('$') {
                     name.clone()
                 } else {
                     format!("~{name}")

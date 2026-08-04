@@ -3056,35 +3056,6 @@ impl Codegen {
                 }
                 Ok(format!("({body})"))
             }
-            ("%json", 1) => {
-                // a compile-time JSON(C) data literal (GEP-0009-R007):
-                // parsed here, emitted as plain Python data — zero
-                // runtime, malformed JSON is a compile error
-                let body = args[0]
-                    .as_plain_str()
-                    .ok_or_else(|| self.err(call.span, "%json bodies are raw"))?;
-                if body.contains("<%=") {
-                    return Err(self.err(
-                        call.span,
-                        "%json is a pure data literal — no <%= %> splices; \
-                         build a map for dynamic parts (GEP-0009-R007)",
-                    ));
-                }
-                let value = crate::jsonc::parse_jsonc(&self.file, &body)
-                    .map_err(|mut d| {
-                        d.span = call.span;
-                        d.message = format!("in %json body: {}", d.message);
-                        d
-                    })?;
-                Ok(json_to_py(&value))
-            }
-            (other, 1) if other.starts_with('%') => Err(self.err(
-                call.span,
-                format!(
-                    "unknown data literal {other} — only %json exists \
-                     (GEP-0009-R007)"
-                ),
-            )),
             (sigil, 1) if sigil.starts_with('~') => {
                 // embedded-language sigil: a string with value splices
                 // (GEP-0009-R001/R004)
@@ -3959,36 +3930,6 @@ fn split_splices(body: &str) -> Vec<SplicePart> {
     parts
 }
 
-/// A JSON(C) value as the Python literal a reviewer would write
-/// (GEP-0009-R007).
-fn json_to_py(v: &crate::jsonc::JsonValue) -> String {
-    use crate::jsonc::JsonValue as J;
-    match v {
-        J::Null => "None".to_string(),
-        J::Bool(true) => "True".to_string(),
-        J::Bool(false) => "False".to_string(),
-        J::Number(n) => {
-            if n.fract() == 0.0 && n.abs() < 1e15 {
-                format!("{}", *n as i64)
-            } else {
-                format!("{n}")
-            }
-        }
-        J::String(s) => py_str_lit(s),
-        J::Array(xs) => {
-            let items: Vec<String> = xs.iter().map(json_to_py).collect();
-            format!("[{}]", items.join(", "))
-        }
-        J::Object(kvs) => {
-            let items: Vec<String> = kvs
-                .iter()
-                .map(|(k, v)| format!("{}: {}", py_str_lit(k), json_to_py(v)))
-                .collect();
-            format!("{{{}}}", items.join(", "))
-        }
-    }
-}
-
 fn py_str_lit(s: &str) -> String {
     format!("\"{}\"", escape_py_str(s, false))
 }
@@ -4447,36 +4388,6 @@ mod tests {
         assert!(py.contains("\"x + 1\""), "{py}");
         let py2 = compile("defmodule M do\n  def f(), do: ~json([1])\nend");
         assert!(py2.contains("\"[1]\""), "{py2}");
-        let msg3 = compile_err("defmodule M do\n  def f(), do: %toml(a = 1)\nend");
-        assert!(msg3.contains("only %json"), "{msg3}");
-    }
-
-    #[test]
-    fn json_sigil_is_a_compile_time_data_literal() {
-        let py = compile(
-            "defmodule M do\n  def tools() do\n    %json\"\"\"\n    [{\"type\": \"function\", \"function\": {\"name\": \"ping\", \"strict\": true, \"retries\": 3, \"timeout\": 1.5, \"extra\": null}}]\n    \"\"\"\n  end\nend",
-        );
-        assert!(
-            py.contains("[{\"type\": \"function\", \"function\": {\"name\": \"ping\", \"strict\": True, \"retries\": 3, \"timeout\": 1.5, \"extra\": None}}]"),
-            "{py}"
-        );
-        assert!(!py.contains("json.loads"), "{py}");
-    }
-
-    #[test]
-    fn json_sigil_rejects_malformed_bodies() {
-        let msg = compile_err(
-            "defmodule M do\n  def f(), do: %json({\"a\": )\nend",
-        );
-        assert!(msg.contains("%json body"), "{msg}");
-    }
-
-    #[test]
-    fn json_sigil_rejects_splices() {
-        let msg = compile_err(
-            "defmodule M do\n  def f(x), do: %json({\"a\": <%= x %>})\nend",
-        );
-        assert!(msg.contains("pure data literal"), "{msg}");
     }
 
     #[test]

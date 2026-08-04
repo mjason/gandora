@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.16.1 — 2026-08-04
+
+**One data spelling: `%json` withdrawn (GEP-0009 rev 6).**
+
+- `%json` shipped in v0.16.0 and is repealed the same day: Gandora
+  maps (`%{}`) are the one way to write data — richer than JSON (atom
+  keys, arbitrary expressions) and already fluent for AI writers. A
+  pasted JSON document becomes a map by swapping `:` for `=>`; the
+  Advisor now teaches exactly that on sight of a JSON object line, and
+  runtime JSON text is `$json.loads(s)`. `~json` stays what every `~`
+  name is — a text template tag.
+- The embedded family is two tiers now: `~` text, `$python(expr)`
+  code. Mechanism exists only where the compiler truly understands
+  the body; everything else is convention.
+
 ## v0.16.0 — 2026-08-04
 
 **Three embedded tiers by symbol, prompts without escaping, JSON as a

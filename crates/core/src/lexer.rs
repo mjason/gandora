@@ -270,18 +270,6 @@ impl<'a> Lexer<'a> {
             }
             return Err(self.err("expected a module name after '$' (GEP-0003-R001)"));
         }
-        // data literals: `%json(...)` / `%json"""..."""` (GEP-0009-R007);
-        // `%{` maps and `%Mod{` structs are untouched (uppercase / brace)
-        if c == '%' && matches!(self.peek_at(1), Some(a) if a.is_ascii_lowercase()) {
-            self.bump();
-            let name = self.lex_ident_chars();
-            if matches!(self.peek(), Some('(') | Some('"')) {
-                return Ok((self.lex_sigil_body(format!("%{name}"), true)?, span));
-            }
-            return Err(self.err(format!(
-                "expected a data-literal body after %{name} (GEP-0009-R007)"
-            )));
-        }
         if is_ident_start(c) {
             let upper = c.is_uppercase();
             let name = self.lex_ident_chars();

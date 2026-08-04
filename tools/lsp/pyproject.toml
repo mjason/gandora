@@ -1,6 +1,6 @@
 [project]
 name = "gandora-lsp"
-version = "0.16.0"
+version = "0.16.1"
 description = "gan-lsp — the Gandora language server, written in Gandora (GEP-0015)"
 license = "MIT"
 requires-python = ">=3.11"

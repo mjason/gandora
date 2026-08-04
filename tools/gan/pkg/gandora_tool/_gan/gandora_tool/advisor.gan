@@ -36,7 +36,9 @@ defmodule Advisor do
     {~r/~python\(/,
       "`~python(...)` is plain TEXT tagged python (GEP-0009 rev 5) — executable Python is `$python(expr)`; if you truly meant a text template, ignore this."},
     {~r/~json[("]/,
-      "`~json` is plain TEXT tagged json (GEP-0009 rev 5) — a compile-time data literal is `%json(...)`; if you truly meant a text template, ignore this."}
+      "`~json` is plain TEXT tagged json — data lives in Gandora maps: %{\"k\" => v} (atom keys: %{k: v}); parse runtime JSON with $json.loads(s)."},
+    {~r/^\s*"[A-Za-z_]+":\s/,
+      "That looks like a JSON object line — a Gandora map spells it %{\"key\" => value} (atom keys: %{key: value}); lists keep [ ]."}
   ]
 
   # Elixir standard-library reflexes that do not exist here — each one
@@ -106,7 +108,7 @@ defmodule Advisor do
   # paren sigil bodies ($python(...)) nest parens — mask with a
   # balanced scan, not a regex, so trailing args never leak
   defp mask_paren_sigils(source) do
-    starts = Enum.map($builtins.list(re.finditer("(?:~[a-zA-Z]+|\\$python|%[a-z]+)\\(", source)),
+    starts = Enum.map($builtins.list(re.finditer("(?:~[a-zA-Z]+|\\$python)\\(", source)),
       fn m -> $python(<%= m %>.end()) end)
     Enum.reduce(starts, source, fn start, acc ->
       stop = balance_from(acc, start, 1)

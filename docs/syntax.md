@@ -513,17 +513,15 @@ The user's name is <%= name %>.
 """
 ```
 
-**`%json` is a compile-time data literal** (GEP-0009-R007): the body
-is JSON(C) — comments and trailing commas allowed — parsed by the
-compiler and emitted as plain data, so an OpenAI tool schema pastes
-verbatim and a typo is a compile error, not a runtime surprise:
+**Data is maps — including pasted JSON** : Gandora's `%{}` literals are
+the one data spelling; a JSON document from API docs becomes a map by
+swapping `:` for `=>` (the Advisor teaches this on sight), and runtime
+JSON text is `$json.loads(s)`:
 
 ```elixir
-@tools %json"""
-[{"type": "function",
-  "function": {"name": "ping", "description": "Health check.",
-               "parameters": {"type": "object", "properties": {}}}}]
-"""
+@tool %{"type" => "function",
+        "function" => %{"name" => "ping", "description" => "Health check.",
+                        "parameters" => %{"type" => "object", "properties" => %{}}}}
 ```
 
 `$python` is the escape hatch for Python-only spellings; splices are

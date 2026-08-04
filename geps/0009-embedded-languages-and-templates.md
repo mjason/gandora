@@ -1,7 +1,7 @@
 ---
 gep: 9
 title: Embedded Languages and Templates
-description: Three embedded tiers by symbol — ~text templates, $python code splices, %json data literals — with EEx-style <%= %> value splicing for text.
+description: Two embedded tiers by symbol — ~text templates and the $python code splice — with EEx-style <%= %> value splicing for text; data is ordinary Gandora maps.
 author: MJ
 status: Accepted
 type: Standards Track
@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 5
+revision: 6
 requires: [5]
 replaces: []
 superseded-by: null
@@ -23,14 +23,14 @@ translations:
 
 ## Abstract
 
-Embedded content splits into three tiers, each with its own symbol
+Embedded content splits into two tiers, each with its own symbol
 matching what the body *is*: `~<lang>` sigils (`~markdown`, `~sql`,
 `~prompt`, ...) are **text** — raw bodies tagged with a language,
 evaluating to strings with `<%= expr %>` value splices; `$python(...)`
 is **code** — one Python expression entering the program verbatim,
-with code splices; `%json` is **data** — compile-time-parsed JSON
-emitted as a plain literal. One splice mechanism covers the family;
-the symbol tells the reader (and the AI) the semantics at a glance.
+with code splices. Data needs no embedding: Gandora maps are the data
+literal. One splice mechanism covers the family; the symbol tells the
+reader (and the AI) the semantics at a glance.
 
 ## Motivation
 
@@ -91,15 +91,13 @@ backslashes, and JSON need no escaping — while `<%= expr %>` still
 splices values. Tooling (docs cards, the manual) teaches this name;
 any other R004 sigil name behaves identically.
 
-**GEP-0009-R007:** data literals are spelled with **`%`** — the
-data-literal family (`%{}` maps, `%Mod{}` structs, `%json` JSON).
-`%json(...)` / `%json"""..."""` bodies are parsed at
-compile time with the GEP-0001-R018 JSONC reader (comments and
-trailing commas welcome, duplicate keys rejected) and emitted as the
-equivalent plain data literal — zero runtime, and malformed JSON is a
-compile error at the sigil. Splices are rejected; dynamic structures
-are built with ordinary maps. This makes tool schemas and API
-payloads paste-able exactly as their JSON documentation spells them.
+**GEP-0009-R007 (repealed in revision 6):** the `%json` data literal
+was withdrawn the day it shipped: Gandora maps (`%{}`) are the one
+data spelling — richer (atom keys, arbitrary expressions) and already
+native to the language and its AI writers. A pasted JSON document
+becomes a map by swapping `:` for `=>`; the Advisor teaches that
+rewrite on sight, and runtime JSON text is `$json.loads(s)`. One way
+to write data beats a second, weaker way.
 
 **GEP-0009-R005:** Multi-line embedded bodies use the GEP-0005
 delimiters including `"""`; splicing works identically. A `"""` body
@@ -163,6 +161,9 @@ escape; multi-line `"""` bodies; the single-expression diagnostic; and
 byte preservation outside splices.
 
 ## Change History
+
+- Revision 6, 2026-08-04: R007 repealed — `%json` withdrawn; maps are
+  the one data spelling, the Advisor teaches the JSON→map rewrite.
 
 - Revision 5, 2026-08-04: the tier/symbol split — `~` is uniformly
   text (any name, including python/json, is just a language tag),

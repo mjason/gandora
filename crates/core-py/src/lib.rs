@@ -226,7 +226,7 @@ fn tokens(py: Python, source: &str, path: &str) -> PyResult<PyObject> {
             Tok::Str(parts) => ("str", format!("{parts:?}")),
             Tok::Sigil(name, parts) => (
                 "sigil",
-                if name.starts_with('$') || name.starts_with('%') {
+                if name.starts_with('$') {
                     format!("{name}{parts:?}")
                 } else {
                     format!("~{name}{parts:?}")
