@@ -18,7 +18,7 @@ m2 = %{m | count: 2}                    # plain-MAP update: {**m, ...}
 
 `%{x | ...}` is for plain maps; a struct value updates with the struct
 spelling `%Mod{x | ...}` — the build reminds you if the two get
-crossed. Struct types appear in specs as `App.User.t()`.
+crossed. Struct types appear in specs as `App.User()`.
 
 ## Documentation annotations
 

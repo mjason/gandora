@@ -194,7 +194,7 @@ prints it, and `gan lsc doc` returns `"tco": "loop" | "stack"`.
 ## The type system (`@spec`)
 
 One spelling rule: **a type is a call** — `integer()`, `list(t)`,
-`Mod.t()`, `$mod.Type()` all take parentheses; the only bare spellings
+`Mod()`, `$mod.Type()` all take parentheses; the only bare spellings
 are type variables (1–2 lowercase letters) and the literal `nil`.
 Anything else is a compile error carrying the fix.
 
@@ -293,10 +293,10 @@ Any Python type can appear via `$module`; parentheses parametrize:
 
 ### Struct types
 
-`Mod.t()` is the struct class defined by `defstruct` in that module:
+`Mod()` is the struct class defined by `defstruct` in that module:
 
 ```elixir
-@spec sale(App.Shop.t()) :: App.Shop.t()   # -> def sale(item: Shop) -> Shop
+@spec sale(App.Shop()) :: App.Shop()   # -> def sale(item: Shop) -> Shop
 ```
 
 ### Interplay with defaults and multi-arity
@@ -461,7 +461,7 @@ older = %App.User{u | age: u.age + 1}   # dataclasses.replace
 m2 = %{m | count: 2}                    # plain-map update: {**m, ...}
 ```
 
-Struct types appear in specs as `App.User.t()`.
+Struct types appear in specs as `App.User()`.
 
 ## Macros
 
@@ -628,7 +628,7 @@ generates, `gan lsc compile file`; when unsure of syntax,
    them honest.
 2. Specs: abstract containers for inputs (`sequence`, `mapping`),
    concrete for outputs; type variables for genuinely generic flow;
-   `Mod.t()` for structs; `$mod.Type()` at Python boundaries.
+   `Mod()` for structs; `$mod.Type()` at Python boundaries.
 3. Iteration: `for`/`Enum` for mapping-shape work; accumulator tail
    recursion for unbounded loops (`recur` when constant stack is a
    requirement); `@allow :stack_recursion` only for structure-bounded

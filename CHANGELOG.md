@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.17.1 — 2026-08-05
+
+**The module IS the type (GEP-0017 rev 5): `t` leaves the language.**
+
+- A struct type is spelled by calling its module — `App.Shop()` — the
+  exact mirror of `$pandas.DataFrame()` for host classes: **uppercase
+  call = class**, one shape for both worlds. The former `Mod.t()`
+  spelling is retired and errors with the `Mod()` recipe; bare `Mod`
+  and parameterized `Mod(...)` teach their fixes too. No `t` appears
+  anywhere in the type language — one less convention to memorize,
+  for humans and models alike.
+- Swept everywhere: tour, playground, docs site, manual, construct
+  cards, BDD sources; all five repos hold `clean: true`.
+
 ## v0.17.0 — 2026-08-05
 
 **The agent surface (GEP-0026): discovery in one call — plus two

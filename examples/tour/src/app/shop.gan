@@ -17,7 +17,7 @@ defmodule App.Shop do
 
   @doc "Half price, tagged — struct update syntax under a decorator."
   @param item, "The item on sale."
-  @spec sale(App.Shop.t()) :: App.Shop.t()
+  @spec sale(App.Shop()) :: App.Shop()
   @example """
       gan> sale(%App.Shop{name: "kb", price: 100}).price
       50

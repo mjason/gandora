@@ -1192,8 +1192,8 @@ impl Codegen {
                     name,
                     is_call,
                 } => {
-                    // one rule (GEP-0017 rev 4): a type is a call —
-                    // `Mod.t()`, `$mod.Type()`; bare dotted spellings error
+                    // one rule (GEP-0017 rev 5): a type is a call —
+                    // `Mod()`, `$mod.Type()`; bare dotted spellings error
                     if !is_call {
                         return Err(self.err(
                             c.span,
@@ -1236,29 +1236,40 @@ impl Codegen {
                                 Ok(format!("{m}.{name}[{}]", parts.join(", ")))
                             }
                         }
-                        // Mod.t() — the struct class generated for Mod
-                        // (GEP-0004); it names one class, so no parameters
-                        Term::Alias(segs) if name == "t" => {
-                            if !c.args.is_empty() {
-                                return Err(self.err(
-                                    c.span,
-                                    "Mod.t() names the struct class and takes \
-                                     no parameters (GEP-0017-R002)",
-                                ));
-                            }
-                            let segs = segs.clone();
-                            Ok(self.struct_ref(&segs))
-                        }
+                        // the retired `.t()` spelling: the module itself is
+                        // the type now (GEP-0017 rev 5)
+                        Term::Alias(segs) if name == "t" => Err(self.err(
+                            c.span,
+                            format!(
+                                "the struct type is the module itself — write \
+                                 {}() instead of {}.t() (GEP-0017 rev 5)",
+                                segs.join("."),
+                                segs.join(".")
+                            ),
+                        )),
                         _ => Err(self.err(
                             c.span,
-                            "types are built-ins, $mod.Type(), or Mod.t() (GEP-0017-R002)",
+                            "types are built-ins, $mod.Type(), or Mod() (GEP-0017-R002)",
                         )),
                     }
                 }
-                _ => Err(self.err(
-                    c.span,
-                    "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
-                )),
+                // `App.Shop()` — the module IS the type: its struct class
+                // (GEP-0017 rev 5; uppercase call = class, like $mod.Type())
+                Callee::Apply(inner) => match inner.as_ref() {
+                    Term::Alias(segs) if c.args.is_empty() => {
+                        let segs = segs.clone();
+                        Ok(self.struct_ref(&segs))
+                    }
+                    Term::Alias(_) => Err(self.err(
+                        c.span,
+                        "Mod() names the struct class and takes no parameters \
+                         (GEP-0017-R002)",
+                    )),
+                    _ => Err(self.err(
+                        c.span,
+                        "types are built-ins, $mod.Type(), or Mod() (GEP-0017-R002)",
+                    )),
+                },
             },
             Term::Atom(a) => Err(self.err(
                 Span::default(),
@@ -1281,13 +1292,21 @@ impl Codegen {
                     None => Err(self.err(
                         Span::default(),
                         format!(
-                            "'{}' is not a type; a struct type is spelled \
-                             {}.t() (GEP-0017-R002)",
+                            "'{}' is not a type; a struct type is the \
+                             module called — {}() (GEP-0017-R002)",
                             segs[0], segs[0]
                         ),
                     )),
                 }
             }
+            // a bare dotted module (App.Shop) — a type is a call
+            Term::Alias(segs) => Err(self.err(
+                Span::default(),
+                format!(
+                    "a type is a call — write {}() (GEP-0017-R002)",
+                    segs.join(".")
+                ),
+            )),
             // {:ok, t} is an Elixir-spec reflex — the shape documents as
             // a tuple() type here
             Term::Tuple(parts) => Err(self.err(
@@ -1303,7 +1322,7 @@ impl Codegen {
             other => Err(self.err(
                 other.span(),
                 "types are built-ins like integer(), string(), list(t), \
-                 sequence(t), $mod.Type(), or Mod.t() (GEP-0017-R002)",
+                 sequence(t), $mod.Type(), or Mod() (GEP-0017-R002)",
             )),
         }
     }
@@ -4431,19 +4450,28 @@ mod tests {
 
     #[test]
     fn spec_types_are_calls() {
-        // GEP-0017 rev 4: bare dotted spellings error with the fix
-        let m1 = compile_err(
-            "defmodule M do\n  @spec f(App.Shop.t) :: term()\n  def f(_x), do: nil\nend",
+        // GEP-0017 rev 5: the module IS the type; every misspelling
+        // teaches the call form
+        let py = compile(
+            "defmodule M do\n  @spec f(App.Shop()) :: App.Shop()\n  def f(x), do: x\nend",
         );
-        assert!(m1.contains("App.Shop.t()"), "{m1}");
+        assert!(py.contains("app.shop.Shop"), "{py}");
+        let m1 = compile_err(
+            "defmodule M do\n  @spec f(App.Shop.t()) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m1.contains("write App.Shop()"), "{m1}");
         let m2 = compile_err(
             "defmodule M do\n  @spec f($math.Pi) :: term()\n  def f(_x), do: nil\nend",
         );
         assert!(m2.contains("$math.Pi()"), "{m2}");
         let m3 = compile_err(
-            "defmodule M do\n  @spec f(App.Shop.t(a)) :: term()\n  def f(_x), do: nil\nend",
+            "defmodule M do\n  @spec f(App.Shop(a)) :: term()\n  def f(_x), do: nil\nend",
         );
         assert!(m3.contains("no parameters"), "{m3}");
+        let m4 = compile_err(
+            "defmodule M do\n  @spec f(App.Shop) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m4.contains("write App.Shop()"), "{m4}");
     }
 
     #[test]

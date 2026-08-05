@@ -1,7 +1,7 @@
 # The Type System
 
 One spelling rule: **a type is a call** — `integer()`, `list(t)`,
-`Mod.t()`, `$mod.Type()` all take parentheses; the only bare spellings
+`Mod()`, `$mod.Type()` all take parentheses; the only bare spellings
 are type variables (1–2 lowercase letters) and the literal `nil`.
 Anything else is a compile error carrying the fix.
 
@@ -74,7 +74,7 @@ typo cannot silently become a generic.
 ```elixir
 @spec sales() :: $pandas.DataFrame()
 @spec run(list(string())) :: $subprocess.CompletedProcess(string())
-@spec sale(App.Shop.t()) :: App.Shop.t()   # struct class from defstruct
+@spec sale(App.Shop()) :: App.Shop()   # struct class from defstruct
 ```
 
 The imports are emitted with the annotation.

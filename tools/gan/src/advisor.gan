@@ -363,7 +363,7 @@ defmodule Advisor do
   end
 
   defp member_suggestions(raw, root) do
-    # @spec/@type lines spell types (App.Shop.t()), not calls
+    # @spec/@type lines spell types (App.Shop()), not calls
     source = re.sub("(?m)^\\s*@(spec|type|opaque)[^\\n]*", "", mask_literals(raw))
     calls = ~r/\b([A-Z][A-Za-z0-9_.]*)\.([a-z_][A-Za-z0-9_]*[?!]?)\(/.findall(source)
     Enum.uniq(calls)

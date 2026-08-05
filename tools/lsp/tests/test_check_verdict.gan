@@ -298,7 +298,7 @@ defmodule TestCheckVerdict do
     end
 
     test "struct type refs in specs are never member typos" do
-      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @spec f(App.Shop.t()) :: App.Shop.t()\n  def f(s), do: s\nend"
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @spec f(App.Shop()) :: App.Shop()\n  def f(s), do: s\nend"
       {v, _rc} = check(src)
       assert kind_messages(v, "did_you_mean") == []
     end
