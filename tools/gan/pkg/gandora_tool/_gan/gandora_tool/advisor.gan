@@ -162,6 +162,7 @@ defmodule Advisor do
     in_module = String.match?(source, ~r/defmodule/)
     coverage_hints(raw, source, in_module) ++
       spec_container_hints(source) ++
+      lone_typevar_hints(source) ++
       idiom_hints(source) ++
       pyimport_hints(source)
   end
@@ -226,6 +227,22 @@ defmodule Advisor do
 
   defp count_attr_blocks(source, attr) do
     Enum.count(~r/(?m)^\s*#{attr} /.findall(source))
+  end
+
+  # a bare type variable as the WHOLE return that appears nowhere else
+  # constrains nothing (GEP-0027 guidance)
+  defp lone_typevar_hints(source) do
+    specs = ~r/(?m)^\s*@spec\s+([a-z_][A-Za-z0-9_]*[?!]?)\((.*?)::\s*([a-z]{1,2})\s*$/.findall(source)
+    Enum.flat_map(specs, fn {name, params, ret} ->
+      seen = ~r/(?<![A-Za-z0-9_$.])#{ret}(?![A-Za-z0-9_(])/.findall(params)
+      if Enum.empty?(seen) do
+        [%{"kind" => "practice",
+          "line" => line_of(source, re.compile("(?m)^\\s*@spec\\s+" <> re.escape(name))),
+          "message" => "the return of @spec #{name} is the lone type variable `#{ret}` — it constrains nothing; write term(), or use the variable in a parameter too (GEP-0027)."}]
+      else
+        []
+      end
+    end)
   end
 
   # parameter positions want abstract containers (GEP-0017 guidance)

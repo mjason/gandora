@@ -86,6 +86,28 @@ defmodule TestAgentSurface do
     end
   end
 
+  describe "named types (GEP-0027)" do
+    test "a generic alias expands in the verdict pipeline" do
+      dir = scratch()
+      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+      |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @type result(t) :: tuple(atom(), t)\n  @doc \"d\"\n  @spec parse(string()) :: result(integer())\n  @example \"\"\"\n      gan> Prog.parse(\"1\")\n      ('ok', 1)\n  \"\"\"\n  def parse(s), do: {:ok, $builtins.int(s)}\nend") end).()
+      v = lsc(["check"], dir)
+      assert Map.get(v, "ok") == true
+      assert Map.get(v, "clean") == true
+    end
+
+    test "an unknown named type errors with a did-you-mean" do
+      dir = scratch()
+      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+      |> (fn p -> p.write_text("defmodule Prog do\n  @type resul(t) :: list(t)\n  @spec f(result(integer())) :: term()\n  def f(_x), do: nil\nend") end).()
+      v = lsc(["check"], dir)
+      hit = Enum.find(Map.get(v, "diagnostics", []), fn d ->
+        String.contains?(Map.get(d, "message"), "did you mean resul()")
+      end)
+      assert not is_nil(hit)
+    end
+  end
+
   describe "spelling enforcement" do
     test "short sigil names outside the whitelist error" do
       dir = scratch()

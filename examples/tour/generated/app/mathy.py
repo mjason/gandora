@@ -1,5 +1,6 @@
 """Math helpers showing patterns, interop, and documented examples."""
 
+import builtins
 import collections.abc
 import functools
 import math
@@ -45,6 +46,22 @@ def classify(x: int | float) -> str:
         return "zero"
     else:
         return "positive"
+
+
+def safe_norm(xs: collections.abc.Sequence[int | float]) -> tuple[str, float]:
+    """The norm as an ok/error tuple — a named generic in action.
+
+## Parameters
+
+  - xs: The vector; empty is an error.
+
+    >>> safe_norm([3, 4])
+    ('ok', 5.0)
+"""
+    if builtins.len(xs) == 0:
+        return ("error", 0.0)
+    else:
+        return ("ok", norm(xs))
 
 
 def old_norm(xs: collections.abc.Sequence[int | float]) -> float:

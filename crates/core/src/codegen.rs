@@ -336,6 +336,13 @@ pub struct Codegen {
     pub py_prefix: Option<String>,
     /// sibling module names of the same build
     pub project_modules: BTreeSet<String>,
+    /// named types of the whole project: (dotted module, name) ->
+    /// (params, body) (GEP-0027)
+    pub project_types: BTreeMap<(String, String), (Vec<String>, Term)>,
+    /// this module's own named types
+    local_types: BTreeMap<String, (Vec<String>, Term)>,
+    /// expansion stack for cycle detection in named types
+    type_stack: Vec<String>,
     /// installed marker names -> dotted python paths (GEP-0006-R005A)
     pub installed_modules: BTreeMap<String, String>,
     struct_fields: Option<Vec<(String, Term)>>,
@@ -369,6 +376,9 @@ impl Codegen {
             attr_names: BTreeSet::new(),
             py_prefix: None,
             project_modules: BTreeSet::new(),
+            project_types: BTreeMap::new(),
+            local_types: BTreeMap::new(),
+            type_stack: Vec::new(),
             installed_modules: BTreeMap::new(),
             struct_fields: None,
             warnings: Vec::new(),
@@ -384,6 +394,113 @@ impl Codegen {
 
     fn err(&self, span: Span, msg: impl Into<String>) -> Diagnostic {
         Diagnostic::new(&self.file, span, msg)
+    }
+
+    /// Parse `name(params) :: body` of a `@type` declaration
+    /// (GEP-0027-R001): lowercase name, 1–2 letter parameters, and a
+    /// body that uses only declared parameters as bare variables.
+    fn parse_type_decl(
+        &mut self,
+        value: &Term,
+        span: Span,
+    ) -> Result<(String, Vec<String>, Term)> {
+        let Term::Call(cc) = value else {
+            return Err(self.err(span, "@type requires `name(params) :: type` (GEP-0027-R001)"));
+        };
+        if !matches!(&cc.callee, Callee::Name(n) if n == "::") {
+            return Err(self.err(span, "@type requires `name(params) :: type` (GEP-0027-R001)"));
+        }
+        let head = &cc.args[0];
+        let body = cc.args[1].clone();
+        let Term::Call(h) = head else {
+            return Err(self.err(
+                span,
+                "a type is a call — write @type name() :: ... (GEP-0027-R001)",
+            ));
+        };
+        let Callee::Name(tname) = &h.callee else {
+            return Err(self.err(span, "@type names are plain lowercase words (GEP-0027-R001)"));
+        };
+        let tname = tname.clone();
+        if tname == "t" {
+            return Err(self.err(
+                span,
+                "`t` was retired — the module itself is its struct type \
+                 (Mod()); give this type a meaningful name (GEP-0017 rev 5)",
+            ));
+        }
+        if !tname.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
+            return Err(self.err(span, "@type names are plain lowercase words (GEP-0027-R001)"));
+        }
+        if spec_builtin_type(&tname) {
+            return Err(self.err(
+                span,
+                format!("@type {tname} shadows the built-in type {tname}() (GEP-0027-R001)"),
+            ));
+        }
+        let mut params = Vec::new();
+        for p in &h.args {
+            match p {
+                Term::Var(v, _) if v.chars().count() <= 2 => params.push(v.clone()),
+                _ => {
+                    return Err(self.err(
+                        span,
+                        "@type parameters are type variables: 1-2 lowercase \
+                         letters (GEP-0027-R002)",
+                    ))
+                }
+            }
+        }
+        // every bare variable in the body must be a declared parameter
+        let mut free = BTreeSet::new();
+        type_body_vars(&body, &mut free);
+        for v in &free {
+            if !params.contains(v) {
+                return Err(self.err(
+                    span,
+                    format!(
+                        "type variable `{v}` is not declared by @type {tname}({}) \
+                         (GEP-0027-R002)",
+                        params.join(", ")
+                    ),
+                ));
+            }
+        }
+        Ok((tname, params, body))
+    }
+
+    /// Expand a named-type reference to its Python annotation
+    /// (GEP-0027-R003): arity-checked, parameters substituted, cycles
+    /// rejected.
+    fn expand_named_type(
+        &mut self,
+        label: &str,
+        params: &[String],
+        body: &Term,
+        args: &[Term],
+        span: Span,
+    ) -> Result<String> {
+        if args.len() != params.len() {
+            return Err(self.err(
+                span,
+                format!(
+                    "{label} takes {} type parameter(s), got {} (GEP-0027-R003)",
+                    params.len(),
+                    args.len()
+                ),
+            ));
+        }
+        if self.type_stack.iter().any(|l| l == label) || self.type_stack.len() > 32 {
+            return Err(self.err(
+                span,
+                format!("recursive named types are not supported: {label} (GEP-0027-R003)"),
+            ));
+        }
+        let substituted = substitute_type_vars(body, params, args);
+        self.type_stack.push(label.to_string());
+        let out = self.spec_hint(&substituted);
+        self.type_stack.pop();
+        out
     }
 
     /// A Python attribute name, or the getattr recipe for the rare
@@ -596,6 +713,32 @@ impl Codegen {
                         ));
                     }
                     pending_spec = Some(value.clone());
+                }
+                "@type" => {
+                    // a named type: `@type name(params) :: type` — the
+                    // declaration site of generics (GEP-0027)
+                    let value = call.args.first().ok_or_else(|| {
+                        self.err(call.span, "@type requires `name(params) :: type` (GEP-0027-R001)")
+                    })?;
+                    let (tname, params, body) = self.parse_type_decl(value, call.span)?;
+                    // a pending @doc belongs to the type, not the next def
+                    let _ = pending_doc.take();
+                    if !pending_params.is_empty() || pending_spec.is_some() {
+                        return Err(self.err(
+                            call.span,
+                            "@param/@spec do not apply to @type (GEP-0027-R001)",
+                        ));
+                    }
+                    if self
+                        .local_types
+                        .insert(tname.clone(), (params, body))
+                        .is_some()
+                    {
+                        return Err(self.err(
+                            call.span,
+                            format!("@type {tname} is declared twice (GEP-0027-R001)"),
+                        ));
+                    }
                 }
                 "@decorate" => {
                     if let Some(e) = call.args.first() {
@@ -1169,23 +1312,47 @@ impl Codegen {
                             self.spec_hint(&c.args[1])?
                         ))
                     }
-                    _ => match spec_type_suggestion(n) {
-                        Some(fix) => Err(self.err(
-                            c.span,
-                            format!(
-                                "'{n}' is not a type — write {fix} \
-                                 (GEP-0017-R002)"
-                            ),
-                        )),
-                        None => Err(self.err(
-                            c.span,
-                            format!(
-                                "'{n}' is not a type; built-ins look like \
-                                 integer(), string(), list(t), sequence(t) \
-                                 (GEP-0017-R002)"
-                            ),
-                        )),
-                    },
+                    _ => {
+                        // a named type of this module (GEP-0027)
+                        if let Some((params, body)) = self.local_types.get(n).cloned() {
+                            return self.expand_named_type(
+                                &format!("{}.{n}", self.module_segs.join(".")),
+                                &params,
+                                &body,
+                                &c.args,
+                                c.span,
+                            );
+                        }
+                        match spec_type_suggestion(n) {
+                            Some(fix) => Err(self.err(
+                                c.span,
+                                format!(
+                                    "'{n}' is not a type — write {fix} \
+                                     (GEP-0017-R002)"
+                                ),
+                            )),
+                            None => {
+                                let mut hint = String::new();
+                                let known: Vec<&String> =
+                                    self.local_types.keys().collect();
+                                if let Some(near) = known
+                                    .iter()
+                                    .find(|k| strsim_close(k, n))
+                                {
+                                    hint = format!(" — did you mean {near}()?");
+                                }
+                                Err(self.err(
+                                    c.span,
+                                    format!(
+                                        "'{n}' is not a type; built-ins look \
+                                         like integer(), string(), list(t), \
+                                         and @type declares named ones \
+                                         (GEP-0017-R002){hint}"
+                                    ),
+                                ))
+                            }
+                        }
+                    }
                 },
                 Callee::Dot {
                     base,
@@ -1247,6 +1414,45 @@ impl Codegen {
                                 segs.join(".")
                             ),
                         )),
+                        // `Mod.name(...)` — a named type of another module
+                        // (GEP-0027)
+                        Term::Alias(segs) => {
+                            let resolved = self.resolve_alias(segs);
+                            let joined = resolved.join(".");
+                            if resolved == self.module_segs {
+                                if let Some((params, body)) =
+                                    self.local_types.get(name).cloned()
+                                {
+                                    return self.expand_named_type(
+                                        &format!("{joined}.{name}"),
+                                        &params,
+                                        &body,
+                                        &c.args,
+                                        c.span,
+                                    );
+                                }
+                            }
+                            if let Some((params, body)) = self
+                                .project_types
+                                .get(&(joined.clone(), name.clone()))
+                                .cloned()
+                            {
+                                return self.expand_named_type(
+                                    &format!("{joined}.{name}"),
+                                    &params,
+                                    &body,
+                                    &c.args,
+                                    c.span,
+                                );
+                            }
+                            Err(self.err(
+                                c.span,
+                                format!(
+                                    "{joined} declares no @type {name}() \
+                                     (GEP-0027-R003)"
+                                ),
+                            ))
+                        }
                         _ => Err(self.err(
                             c.span,
                             "types are built-ins, $mod.Type(), or Mod() (GEP-0017-R002)",
@@ -4343,6 +4549,82 @@ fn pyref_chain(term: &Term) -> Option<(Vec<String>, bool)> {
 
 /// A directed correction for a misspelled spec type — the errors an
 /// agent guessing from other languages actually makes (GEP-0017-R002).
+/// Small edit-distance closeness for did-you-mean hints (≤2 edits).
+fn strsim_close(a: &str, b: &str) -> bool {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    if a.len().abs_diff(b.len()) > 2 {
+        return false;
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut cur = vec![i + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            cur.push((prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1));
+        }
+        prev = cur;
+    }
+    prev[b.len()] <= 2
+}
+
+/// Whether `name` is one of the built-in spec types (GEP-0017).
+fn spec_builtin_type(name: &str) -> bool {
+    matches!(
+        name,
+        "integer"
+            | "float"
+            | "number"
+            | "boolean"
+            | "string"
+            | "atom"
+            | "any"
+            | "term"
+            | "list"
+            | "map"
+            | "tuple"
+            | "fun"
+            | "keyword"
+            | "iterable"
+            | "sequence"
+            | "mapping"
+    )
+}
+
+/// Bare 1–2 letter variables of a type body (GEP-0027-R002).
+fn type_body_vars(t: &Term, out: &mut BTreeSet<String>) {
+    match t {
+        Term::Var(v, _) if v.chars().count() <= 2 => {
+            out.insert(v.clone());
+        }
+        Term::Call(c) => {
+            for a in &c.args {
+                type_body_vars(a, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Substitute declared type parameters with argument terms.
+fn substitute_type_vars(t: &Term, params: &[String], args: &[Term]) -> Term {
+    match t {
+        Term::Var(v, _) => match params.iter().position(|p| p == v) {
+            Some(i) => args[i].clone(),
+            None => t.clone(),
+        },
+        Term::Call(c) => {
+            let mut cc = (**c).clone();
+            cc.args = cc
+                .args
+                .iter()
+                .map(|a| substitute_type_vars(a, params, args))
+                .collect();
+            Term::Call(Box::new(cc))
+        }
+        other => other.clone(),
+    }
+}
+
 /// The dotted-base text for a spec-type error message (`App.Shop`,
 /// `$math`), best-effort.
 fn spec_dot_base_text(base: &Term) -> String {
@@ -4446,6 +4728,44 @@ mod tests {
         let expanded = ex.expand_module(&module).unwrap();
         let mut cg = Codegen::new("<test>", vec![]);
         cg.compile(&expanded).unwrap_err().message
+    }
+
+    #[test]
+    fn named_types_declare_and_expand() {
+        // GEP-0027: @type is the declaration site of generics
+        let py = compile(
+            "defmodule M do\n  @type result(t) :: tuple(atom(), t)\n  @type age() :: integer()\n  @type scores() :: map(string(), age())\n  @spec f(string()) :: result(integer())\n  def f(_s), do: {:ok, 1}\n  @spec g() :: scores()\n  def g(), do: %{}\nend",
+        );
+        assert!(py.contains("-> tuple[str, int]:"), "{py}");
+        assert!(py.contains("-> dict[str, int]:"), "{py}");
+    }
+
+    #[test]
+    fn named_type_errors_teach() {
+        let m1 = compile_err(
+            "defmodule M do\n  @type opt(t) :: t | u\n  def f(), do: nil\nend",
+        );
+        assert!(m1.contains("`u` is not declared"), "{m1}");
+        let m2 = compile_err(
+            "defmodule M do\n  @type a1(t) :: list(t)\n  @spec f(a1(integer(), string())) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m2.contains("takes 1 type parameter"), "{m2}");
+        let m3 = compile_err(
+            "defmodule M do\n  @type loop() :: loop()\n  @spec f(loop()) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m3.contains("recursive named types"), "{m3}");
+        let m4 = compile_err(
+            "defmodule M do\n  @type t() :: integer()\n  def f(), do: nil\nend",
+        );
+        assert!(m4.contains("retired"), "{m4}");
+        let m5 = compile_err(
+            "defmodule M do\n  @type list() :: integer()\n  def f(), do: nil\nend",
+        );
+        assert!(m5.contains("shadows the built-in"), "{m5}");
+        let m6 = compile_err(
+            "defmodule M do\n  @type resul(t) :: list(t)\n  @spec f(result(integer())) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m6.contains("did you mean resul()"), "{m6}");
     }
 
     #[test]

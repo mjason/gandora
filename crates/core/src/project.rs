@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::ast::Term;
+use crate::ast::{Callee, Term};
 use crate::codegen::{camel_to_snake, module_py_path, Codegen};
 use crate::diag::{Diagnostic, Result, Span};
 use crate::expander::{collect_macros, Expander, MacroTable};
@@ -51,6 +51,46 @@ pub fn local_pref(root: &Path, key: &str) -> Option<String> {
         JsonValue::String(s) if k == key => Some(s),
         _ => None,
     })
+}
+
+/// `@type name(params) :: body` declarations of a parsed module, for
+/// the project-wide named-type registry (GEP-0027). Validation happens
+/// in the owning module's codegen; this pass only records shapes.
+fn collect_type_decls(module: &Term) -> Vec<(String, Vec<String>, Term)> {
+    let mut out = Vec::new();
+    let stmts = module.as_block();
+    for stmt in &stmts {
+        let Term::Call(c) = stmt else { continue };
+        if !matches!(&c.callee, Callee::Name(n) if n == "defmodule") {
+            continue;
+        }
+        let Some(Term::Pair(k, block)) = c.args.get(1) else { continue };
+        if k != "do" {
+            continue;
+        }
+        for inner in block.as_block() {
+            let Term::Call(a) = &inner else { continue };
+            if !matches!(&a.callee, Callee::Name(n) if n == "@type") {
+                continue;
+            }
+            let Some(Term::Call(spec)) = a.args.first() else { continue };
+            if !matches!(&spec.callee, Callee::Name(n) if n == "::") {
+                continue;
+            }
+            let Term::Call(head) = &spec.args[0] else { continue };
+            let Callee::Name(tname) = &head.callee else { continue };
+            let params: Vec<String> = head
+                .args
+                .iter()
+                .filter_map(|p| match p {
+                    Term::Var(v, _) => Some(v.clone()),
+                    _ => None,
+                })
+                .collect();
+            out.push((tname.clone(), params, spec.args[1].clone()));
+        }
+    }
+    out
 }
 
 /// Find the nearest ancestor `gandora.jsonc` (GEP-0001-R018).
@@ -382,6 +422,14 @@ pub fn compile_files(
 
     let project_modules: BTreeSet<String> =
         parsed.iter().map(|p| p.module.join(".")).collect();
+    // named types across the whole project, so `Mod.name()` in a spec
+    // expands from any module (GEP-0027-R003)
+    let mut project_types = BTreeMap::new();
+    for p in &parsed {
+        for (name, params, body) in collect_type_decls(&p.term) {
+            project_types.insert((p.module.join("."), name), (params, body));
+        }
+    }
     let installed = match config {
         Some(cfg) => installed_module_map(cfg),
         None => BTreeMap::new(),
@@ -409,6 +457,7 @@ pub fn compile_files(
         let mut cg = Codegen::new(&file, p.module.clone());
         cg.py_prefix = py_prefix.clone();
         cg.project_modules = project_modules.clone();
+        cg.project_types = project_types.clone();
         cg.installed_modules = installed.clone();
         let python = cg.compile(&expanded)?;
         out.push(CompiledModule {

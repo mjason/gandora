@@ -3,6 +3,6 @@ resolver = "2"
 members = ["crates/core", "crates/gan", "crates/core-py"]
 
 [workspace.package]
-version = "0.17.1"
+version = "0.18.0"
 edition = "2021"
 license = "MIT"

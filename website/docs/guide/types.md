@@ -56,6 +56,29 @@ keyword()                  # a keyword list: list[tuple[str, object]]
 Rule of thumb: **accept `sequence(t)`, return `list(t)`.** The build's
 practice pass reminds you when a parameter is concrete.
 
+
+## Named types (`@type`)
+
+`@type` names a type — and is the **declaration site of generics**:
+parameters are declared in the head, references are arity-checked, and
+everything expands at compile time (zero runtime):
+
+```elixir
+@type age() :: integer()
+@type result(t) :: tuple(atom(), t)
+@type scores() :: map(string(), age())
+
+@spec parse(string()) :: result(integer())    # -> tuple[str, int]
+@spec load(string()) :: Mod.result(string())  # cross-module reference
+```
+
+An undeclared variable in a `@type` body, a wrong arity at a
+reference, duplicates, shadowing a builtin, and recursion are all
+compile errors with the fix; `@doc` above a `@type` documents it.
+Inside `@spec`, short type variables stay implicitly scoped — but a
+spec whose whole return is a variable used nowhere else gets a
+practice hint (it constrains nothing).
+
 ## Unions, type variables, named parameters
 
 ```elixir

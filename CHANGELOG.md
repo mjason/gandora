@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.18.0 — 2026-08-05
+
+**Named types (GEP-0027): generics get a declaration site.**
+
+- **`@type name(params) :: type`** — named and generic aliases:
+  `@type result(t) :: tuple(atom(), t)` declares, `result(integer())`
+  / `Mod.result(string())` reference (project-wide), everything
+  expands structurally at compile time into PEP 484 annotations —
+  zero runtime, nested aliases welcome.
+- **Every misuse teaches**: undeclared variable in a body, wrong arity
+  at a reference, duplicate declarations, shadowing a builtin, naming
+  a type `t` (retired), and recursion are compile errors with the fix;
+  unknown lowercase types now get a did-you-mean over builtins *and*
+  the module's own @type names.
+- **Advice**: a @spec whose entire return is a type variable used
+  nowhere else gets a practice hint — it constrains nothing.
+- Tour demonstrates (`vec()`, `outcome(t)` in App.Mathy); `type`
+  construct card; spec card and manual updated; deferred explicitly:
+  constrained generics, generic structs, @opaque, cross-package types.
+- Conformance: +2 cargo (+8 assertions), +2 BDD; lsp 57, cargo 183,
+  five repos `clean: true`.
+
 ## v0.17.1 — 2026-08-05
 
 **The module IS the type (GEP-0017 rev 5): `t` leaves the language.**

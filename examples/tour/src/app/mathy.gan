@@ -42,10 +42,27 @@ defmodule App.Mathy do
     end
   end
 
+  # a named generic type (GEP-0027): declared once, used in specs below
+  @type vec() :: sequence(number())
+  @type outcome(t) :: tuple(atom(), t)
+
+  @doc "The norm as an ok/error tuple — a named generic in action."
+  @doc_trans zh_CN: "以 ok/error 元组返回范数——具名泛型的用法示例。"
+  @param xs, "The vector; empty is an error."
+  @param_trans xs, zh_CN: "向量;空向量返回 error。"
+  @spec safe_norm(vec()) :: outcome(float())
+  @example """
+      gan> safe_norm([3, 4])
+      ('ok', 5.0)
+  """
+  def safe_norm(xs) do
+    if $builtins.len(xs) == 0, do: {:error, 0.0}, else: {:ok, norm(xs)}
+  end
+
   @doc deprecated: "Use norm/1 instead.", since: "0.1.0"
   @doc "Same as norm/1; kept for early adopters."
   @doc_trans zh_CN: "与 norm/1 相同；为早期用户保留。"
-  @spec old_norm(sequence(number())) :: float()
+  @spec old_norm(vec()) :: float()
   def old_norm(xs), do: norm(xs)
 
   @doc since: "0.1.0"
@@ -54,7 +71,7 @@ defmodule App.Mathy do
       gan> norm([3, 4])
       5.0
   """
-  @spec norm(sequence(number())) :: float()
+  @spec norm(vec()) :: float()
   def norm(xs) do
     xs
     |> sum_squares()
