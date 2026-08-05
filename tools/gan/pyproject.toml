@@ -1,11 +1,11 @@
 [project]
 name = "gandora-tool"
-version = "0.18.1"
+version = "0.18.2"
 description = "gan — the Gandora task runner (mix/cargo role), written in Gandora"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0", "ty>=0.0.60"]
+dependencies = ["gandora-core>=0.2.0", "gandora-std>=0.2.0", "gandora-lang>=0.18.0", "ty>=0.0.60"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "gandora-lsp>=0.4.1"]

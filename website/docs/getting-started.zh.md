@@ -1,15 +1,14 @@
-# 入门
+# 入门指南
 
-## Install
+## 安装
 
-Gandora 以五个 PyPI 包的形式发布；两个 `uv` 工具安装即可提供完整的工具链：
+Gandora 以五个 PyPI 包的形式发布；一个 `uv` 工具安装命令即可提供整个工具链（`gan` 以及其委托的 `ganc` 编译器）：
 
 ```console
-uv tool install gandora-tool     # gan — 任务运行器
-uv tool install gandora-lang     # ganc — 其委托的阶段 0 编译器
+uv tool install gandora-tool     # gan — 任务运行器（附带 ganc）
 ```
 
-为了获得编辑器支持，请安装语言服务器和 VS Code 扩展（从 [GitHub releases](https://github.com/mjason/gandora/releases) 获取 `gandora-<version>.vsix`）：
+为获得编辑器支持，请安装语言服务器和 VS Code 扩展（`gandora-<version>.vsix` 来自 [GitHub releases](https://github.com/mjason/gandora/releases)）：
 
 ```console
 uv tool install gandora-lsp      # gan-lsp + gan-lsc
@@ -23,18 +22,18 @@ cd my-app
 gan run src/main.gan
 ```
 
-`gan init` 创建一个与 `uv` 兼容的项目：`pyproject.toml` 管理依赖和 `.venv`（预置了 `gandora-std`），`gandora.jsonc` 管理编译器配置，源文件位于 `src/` 目录，测试文件位于 `tests/` 目录。
+`gan init` 创建一个与 `uv` 兼容的项目：`pyproject.toml` 管理依赖项，`.venv`（已预添加 `gandora-std`），`gandora.jsonc` 管理编译器配置，源代码位于 `src/` 目录，测试代码位于 `tests/` 目录。
 
 ```text
 my-app/
 ├── gandora.jsonc        # {"source": ["src"], "outDir": "dist", ...}
-├── pyproject.toml       # uv-managed dependencies
+├── pyproject.toml       # uv 管理的依赖项
 ├── src/
 │   └── main.gan
 └── tests/
 ```
 
-## 循环
+## The loop
 
 ```console
 gan build            # THE verdict: errors, warnings, advice, artifact
@@ -45,7 +44,7 @@ gan fmt src          # canonical formatting (--check for CI)
 gan repl             # interactive, state carries across lines
 ```
 
-`gan build` 拒绝在存在错误时写入工件，这是重型编译器的方式——它打印的所有内容都会教你如何修复：
+`gan build` 在有错误存在时拒绝写入制品，采用的是重型编译器的方式——并且它打印的所有内容都在教导如何修复：
 
 ```console
 $ gan build
@@ -91,12 +90,10 @@ $ gan test
 doctests: 1 module(s) checked, 0 failed
 ```
 
-发布是普通的 Python 打包流程：`gan build && uv build &&
-uv publish` 产生一个编译后的 Python wheel（加上你的 `.gan`
-源文件，以便下游宏能够工作）——消费者 `uv add` 它，无需涉及 Gandora 运行时。
+发布就是普通的 Python 打包流程：`gan build && uv build && uv publish` 会生成一个包含编译后 Python 的 wheel（同时包含你的 `.gan` 源码，以便下游宏可以正常工作）——消费者使用 `uv add` 安装它，无需涉及 Gandora 运行时。
 
-## 下一步
+## 后续步骤
 
-- [指南](guide/modules.md) 逐步介绍语言。
-- [构建状态](tooling/build.md) 解释你的代理应该遵循的交通灯。
-- [标准库](reference/enum.md) 参考由相同的文档字符串生成，`gan doc` 和悬停显示。
+- [指南](guide/modules.md) 逐步介绍语言各章节。
+- [构建结果](tooling/build.md) 解释你的代理应遵循的交通灯。
+- [标准库](reference/enum.md) 参考文档由相同的文档字符串生成，`gan doc` 和悬停显示。

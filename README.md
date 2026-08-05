@@ -97,8 +97,7 @@ configured by `.env`) and human-reviewed per GEP-0000-R030.
 ## Quick start
 
 ```console
-uv tool install gandora-tool     # gan — the task runner (written in Gandora)
-uv tool install gandora-lang     # ganc — the stage-0 compiler it delegates to
+uv tool install gandora-tool     # gan — the task runner (brings ganc along)
 
 gan init my-app                  # adds gandora-std to dependencies
 cd my-app
@@ -135,9 +134,9 @@ GEP-0004 data declarations: `defstruct` (a frozen `@dataclass` with
 attributes (`@app $flask.Flask("__main__")` compiles to a module-level
 binding, so `@decorate @app.route("/")` works like hand-written Python).
 GEP-0005 adds sigils: `~w(a b c)` word lists, `~s(...)` strings,
-`~r/\d+/` compiled Python regexes, and `~python(sum(i*i for i in range(n)))`
-— a raw sigil that splices one verbatim Python expression into the
-output, Gandora's rendering of Osiris's embedded-language sigils.
+`~r/\d+/` compiled Python regexes, and `~p(...)` raw prompt prose;
+`$python(sum(i*i for i in range(n)))` splices one verbatim Python
+expression into the output (GEP-0009).
 
 Anything outside the surface produces a diagnostic naming the construct
 (GEP-0001-R007) rather than a silent mistranslation. See

@@ -287,18 +287,36 @@ defmodule Main do
   @spec init(string()) :: nil
   def init(path) do
     p = pathlib.Path(path)
-    if p.exists() do
-      IO.puts("gan: #{path} already exists")
-      sys.exit(1)
+    cond do
+      p.exists() and not p.is_dir() ->
+        IO.puts("gan: #{path} is a file")
+        sys.exit(1)
+      (p / "gandora.jsonc").exists() ->
+        IO.puts("gan: #{path} is already a Gandora project")
+        sys.exit(1)
+      true -> nil
     end
-    (p / "src").mkdir(parents: true)
+    # an existing directory is fine (gan init .): create what is
+    # missing, never overwrite what is there
+    (p / "src").mkdir(parents: true, exist_ok: true)
     name = to_string(p.resolve().name)
     (p / "gandora.jsonc").write_text(@gandora_jsonc)
-    (p / "pyproject.toml").write_text(pyproject_toml(name))
-    (p / ".gitignore").write_text(@gitignore)
-    (p / ".python-version").write_text("3.11\n")
-    (p / "src" / "main.gan").write_text(@hello_gan)
+    pyproject = p / "pyproject.toml"
+    if pyproject.exists() do
+      IO.puts("kept existing pyproject.toml — add \"gandora-std\" to its dependencies")
+    else
+      pyproject.write_text(pyproject_toml(name))
+    end
+    write_if_absent(p / ".gitignore", @gitignore)
+    write_if_absent(p / ".python-version", "3.11\n")
+    write_if_absent(p / "src" / "main.gan", @hello_gan)
     IO.puts("Initialized Gandora project in #{path}")
+  end
+
+  defp write_if_absent(file, content) do
+    if not file.exists() do
+      file.write_text(content)
+    end
   end
 
   @doc "The executable name a plugin subcommand delegates to (GEP-0013-R003)."

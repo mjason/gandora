@@ -23,6 +23,9 @@ import gandora_tool.verifier
 def _gan_truthy(value):
     return value is not None and value is not False
 
+def _gan_and(value, then):
+    return then() if _gan_truthy(value) else value
+
 class GanMatchError(Exception):
     pass
 
@@ -285,17 +288,33 @@ def init(path: str) -> None:
   - path: Where to create the project.
 """
     p = pathlib.Path(path)
-    if _gan_truthy(p.exists()):
-        print(f"gan: {path} already exists")
+    if _gan_truthy(_gan_and(p.exists(), lambda: not (_gan_truthy(p.is_dir())))):
+        print(f"gan: {path} is a file")
         sys.exit(1)
-    (p / "src").mkdir(parents=True)
+    elif _gan_truthy((p / "gandora.jsonc").exists()):
+        print(f"gan: {path} is already a Gandora project")
+        sys.exit(1)
+    else:
+        pass
+    (p / "src").mkdir(parents=True, exist_ok=True)
     name = str(p.resolve().name)
     (p / "gandora.jsonc").write_text(gandora_jsonc)
-    (p / "pyproject.toml").write_text(_pyproject_toml(name))
-    (p / ".gitignore").write_text(gitignore)
-    (p / ".python-version").write_text("3.11\n")
-    ((p / "src") / "main.gan").write_text(hello_gan)
+    pyproject = p / "pyproject.toml"
+    if _gan_truthy(pyproject.exists()):
+        print("kept existing pyproject.toml — add \"gandora-std\" to its dependencies")
+    else:
+        pyproject.write_text(_pyproject_toml(name))
+    _write_if_absent(p / ".gitignore", gitignore)
+    _write_if_absent(p / ".python-version", "3.11\n")
+    _write_if_absent((p / "src") / "main.gan", hello_gan)
     return print(f"Initialized Gandora project in {path}")
+
+
+def _write_if_absent(file, content):
+    if not (_gan_truthy(file.exists())):
+        return file.write_text(content)
+    else:
+        return None
 
 
 def plugin_name(cmd: str) -> str:

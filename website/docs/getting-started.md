@@ -2,12 +2,11 @@
 
 ## Install
 
-Gandora ships as five PyPI packages; two `uv` tool installs give you
-the whole toolchain:
+Gandora ships as five PyPI packages; one `uv` tool install gives you
+the whole toolchain (`gan` plus the `ganc` compiler it delegates to):
 
 ```console
-uv tool install gandora-tool     # gan — the task runner
-uv tool install gandora-lang     # ganc — the stage-0 compiler it delegates to
+uv tool install gandora-tool     # gan — the task runner (brings ganc along)
 ```
 
 For editor support, add the language server and the VS Code extension

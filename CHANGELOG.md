@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.18.2 — 2026-08-05
+
+**One install, and `gan init .` works.**
+
+- **gandora-tool now depends on gandora-lang**: `uv tool install
+  gandora-tool` brings `ganc` along — one command installs the whole
+  runner+compiler pair (`gan test` delegates to ganc). Docs collapsed
+  to the one-liner.
+- **`gan init .`** initializes an existing directory: creates what is
+  missing, never overwrites what is there (an existing
+  `pyproject.toml` is kept with a hint to add `gandora-std`);
+  re-initializing a Gandora project refuses clearly; a file path
+  errors.
+- README refreshed (retired spellings; stray reference cleaned).
+
 ## v0.18.1 — 2026-08-05
 
 **Decorators: the doctrine, taught.**
