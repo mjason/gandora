@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.18.3 — 2026-08-05
+
+**The delegated ganc is found beside gan's own interpreter.**
+
+- v0.18.2 shipped ganc as a dependency of gandora-tool, but `uv tool`
+  exposes only the primary package's scripts — `gan test` (and every
+  delegated subcommand) could miss ganc on a fresh machine. `gan` now
+  looks for ganc beside its own interpreter first, then PATH. The
+  one-command install (`uv tool install gandora-tool`) is now truly
+  self-contained.
+
 ## v0.18.2 — 2026-08-05
 
 **One install, and `gan init .` works.**

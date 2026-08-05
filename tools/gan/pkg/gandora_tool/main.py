@@ -281,7 +281,7 @@ def _pyproject_toml(name):
 
 
 def init(path: str) -> None:
-    """Delegates project scaffolding to the ganc binary.
+    """Creates a new project (or fills an existing directory) in place.
 
 ## Parameters
 
@@ -341,13 +341,21 @@ def _find_plugin(cmd):
 
 def _delegate(cmd, rest):
     plugin = _find_plugin(cmd)
-    ganc = shutil.which("ganc")
+    ganc = _ganc_bin()
     if not ((plugin is None)):
         return sys.exit(subprocess.call([plugin] + rest))
     elif not ((ganc is None)):
         return sys.exit(subprocess.call([ganc, cmd] + rest))
     else:
         return _die_usage(f"unknown command '{cmd}' (no gan-{cmd} plugin, no ganc)")
+
+
+def _ganc_bin():
+    local = os.path.join(os.path.dirname(sys.executable), "ganc")
+    if _gan_truthy(os.path.exists(local)):
+        return local
+    else:
+        return shutil.which("ganc")
 
 
 def _compile_error(e):

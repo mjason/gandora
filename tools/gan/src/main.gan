@@ -282,7 +282,7 @@ defmodule Main do
     """
   end
 
-  @doc "Delegates project scaffolding to the ganc binary."
+  @doc "Creates a new project (or fills an existing directory) in place."
   @param path, "Where to create the project."
   @spec init(string()) :: nil
   def init(path) do
@@ -342,11 +342,23 @@ defmodule Main do
 
   defp delegate(cmd, rest) do
     plugin = find_plugin(cmd)
-    ganc = shutil.which("ganc")
+    ganc = ganc_bin()
     cond do
       not is_nil(plugin) -> sys.exit(subprocess.call([plugin] ++ rest))
       not is_nil(ganc) -> sys.exit(subprocess.call([ganc, cmd] ++ rest))
       true -> die_usage("unknown command '#{cmd}' (no gan-#{cmd} plugin, no ganc)")
+    end
+  end
+
+  # ganc ships as a dependency into gan's own venv (uv tool exposes
+  # only the primary package's scripts) — look beside the interpreter
+  # first, then PATH
+  defp ganc_bin() do
+    local = os.path.join(os.path.dirname(sys.executable), "ganc")
+    if os.path.exists(local) do
+      local
+    else
+      shutil.which("ganc")
     end
   end
 
