@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.18.4 — 2026-08-05
+
+**The scaffold passes its own verdict, and the verdict looks good.**
+
+- `gan init`'s `main.gan` template is now exemplary — @moduledoc,
+  @doc, @spec — so a fresh project's very first `gan build` is one
+  green line, not a lecture.
+- **Verdict presentation redesigned**: each finding is a colored
+  label (error/warning/practice/migration/did-you-mean) with a dim
+  relative `path:line`, the message indented beneath, blank-line
+  separated; a summary closes (`✗ 1 error(s), 2 suggestion(s)` /
+  `◦ almost…`); success is `✓ compiled N module(s)`. Colors only on a
+  TTY and `NO_COLOR` is respected — piped output stays plain for
+  agents and CI.
+
 ## v0.18.3 — 2026-08-05
 
 **The delegated ganc is found beside gan's own interpreter.**

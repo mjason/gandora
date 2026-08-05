@@ -92,12 +92,12 @@ defmodule Main do
   @spec build(boolean()) :: nil
   def build(strict \\ false) do
     if not run_check(true, strict) do
-      IO.puts("build aborted: errors in the verdict")
+      IO.puts(paint("build aborted: errors in the verdict", "1;31"))
       sys.exit(1)
     end
     try do
       modules = core.build(root())
-      IO.puts("compiled #{Enum.count(modules)} module(s)")
+      IO.puts(paint("✓", "1;32") <> " compiled #{Enum.count(modules)} module(s)")
     rescue
       e in core.CompileError -> compile_error(e)
     end
@@ -124,7 +124,8 @@ defmodule Main do
       diags
     end
     Enum.each(diags, fn d ->
-      IO.puts("#{Map.get(d, "severity")}: #{Map.get(d, "path")}:#{Map.get(d, "line")}: #{Map.get(d, "message")}")
+      print_finding(Map.get(d, "severity"), Map.get(d, "path"),
+        Map.get(d, "line", 0), Map.get(d, "message"))
     end)
     sources = if with_suggestions do
       collect_files(["src", "tests"])
@@ -141,13 +142,64 @@ defmodule Main do
       (Advisor.analyze(text, root()) ++ Advisor.lint_hints(text, per_file))
       |> Enum.map(fn h -> Map.put(h, "path", path) end)
     end)
-    Enum.each(Advisor.consolidate(hints), fn h ->
-      line = Map.get(h, "line", 0)
-      at = if line > 0, do: ":#{line}", else: ""
-      IO.puts("#{Map.get(h, "kind")}: #{Map.get(h, "path")}#{at}: #{Map.get(h, "message")}")
+    consolidated = Advisor.consolidate(hints)
+    Enum.each(consolidated, fn h ->
+      print_finding(Map.get(h, "kind"), Map.get(h, "path"),
+        Map.get(h, "line", 0), Map.get(h, "message"))
     end)
     errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+    print_summary(Enum.count(errors), Enum.count(diags) - Enum.count(errors),
+      Enum.count(consolidated), with_suggestions)
     Enum.empty?(errors)
+  end
+
+  # ---- verdict presentation ------------------------------------------------
+
+  @doc false
+  defp color?(), do: sys.stdout.isatty() and is_nil(os.environ.get("NO_COLOR"))
+
+  defp paint(text, code) do
+    if color?() do
+      esc = $builtins.chr(27)
+      esc <> "[" <> code <> "m" <> text <> esc <> "[0m"
+    else
+      text
+    end
+  end
+
+  @labels %{
+    "error" => {"error", "1;31"},
+    "warning" => {"warning", "1;33"},
+    "practice" => {"practice", "1;36"},
+    "migration" => {"migration", "1;35"},
+    "did_you_mean" => {"did you mean", "1;34"},
+    "type" => {"type", "2;37"}
+  }
+
+  # one finding: colored label + dim location, message indented under it
+  defp print_finding(kind, path, line, message) do
+    {label, code} = Map.get(@labels, kind, {kind, "1"})
+    at = if line > 0, do: ":#{line}", else: ""
+    rel = String.replace(to_string(path), root() <> "/", "")
+    IO.puts("")
+    IO.puts("#{paint(label, code)} #{paint(rel <> at, "2")}")
+    Enum.each(message.split("\n"), fn l -> IO.puts("  " <> l) end)
+  end
+
+  defp print_summary(errors, warnings, suggestions, with_suggestions) do
+    cond do
+      errors > 0 ->
+        IO.puts("")
+        IO.puts(paint("✗ #{errors} error(s)", "1;31") <> plural(warnings, "warning") <> plural(suggestions, "suggestion"))
+      warnings + suggestions > 0 and with_suggestions ->
+        IO.puts("")
+        IO.puts(paint("◦ almost", "1;33") <> plural(warnings, "warning") <> plural(suggestions, "suggestion") <> " — apply them for a clean verdict")
+      true -> nil
+    end
+  end
+
+  defp plural(n, word) do
+    if n > 0, do: ", #{n} #{word}(s)", else: ""
   end
 
   # .gan files under the given roots (shared with fmt's discovery idea)
@@ -265,7 +317,13 @@ defmodule Main do
 
   @hello_gan ~gan"""
   defmodule Main do
-    def main(), do: IO.puts("Hello from Gandora!")
+    @moduledoc "Your project's entry point — `gan run src/main.gan`."
+
+    @doc "Prints a greeting."
+    @spec main() :: nil
+    def main() do
+      IO.puts("Hello from Gandora!")
+    end
   end
   """
 
