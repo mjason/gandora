@@ -193,6 +193,11 @@ prints it, and `gan lsc doc` returns `"tco": "loop" | "stack"`.
 
 ## The type system (`@spec`)
 
+One spelling rule: **a type is a call** — `integer()`, `list(t)`,
+`Mod.t()`, `$mod.Type()` all take parentheses; the only bare spellings
+are type variables (1–2 lowercase letters) and the literal `nil`.
+Anything else is a compile error carrying the fix.
+
 `@spec` declares a function's type; the compiler validates it against
 the clauses and emits **PEP 484 annotations** in the generated Python,
 so `pyright`/`mypy` check callers and hover shows real types. One
@@ -500,14 +505,14 @@ SELECT * FROM sales WHERE units >= <%= min_units %>
 ~markdown(A report for <%= name %>)
 ```
 
-**`~prompt` is the blessed name for AI prose** (GEP-0009-R006): the
+**`~p` is the blessed name for AI prose** (GEP-0009-R006): the
 body is raw, so quotes, braces, backslashes, and inline JSON need no
 escaping — never fight `\\\"` again:
 
 ```elixir
-@task ~prompt(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
+@task ~p(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
 
-@system ~prompt"""
+@system ~p"""
 You are a coding agent. Reply with {"status": "ok"} when done.
 The user's name is <%= name %>.
 """

@@ -1,0 +1,112 @@
+defmodule TestAgentSurface do
+  @moduledoc """
+  GEP-0026 conformance: batch/brief doc queries, the context pack's
+  shape and determinism, and the enforcement newcomers (short-sigil
+  whitelist, types-are-calls) — run by `gan test`.
+  """
+  @moduledoc_trans zh_CN: "GEP-0026 conformance:批量/brief 查询、pack 形状与确定性,及新强制(短 sigil 白名单、类型皆调用)——gan test 运行。"
+
+  use Test
+
+  pyimport json
+  pyimport subprocess
+  pyimport tempfile
+  pyimport os
+  pyimport pathlib
+  pyimport sys
+
+  defp lsc_bin() do
+    os.path.join(os.path.dirname(sys.executable), "gan-lsc")
+  end
+
+  defp scratch() do
+    dir = tempfile.mkdtemp(prefix: "gan-agent-surface-")
+    os.makedirs(os.path.join(dir, "src"), exist_ok: true)
+    pathlib.Path(os.path.join(dir, "gandora.jsonc"))
+    |> (fn p -> p.write_text("{\"source\": [\"src\"], \"outDir\": \"dist\"}") end).()
+    pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+    |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec double(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.double(2)\n      4\n  \"\"\"\n  def double(x), do: x * 2\nend") end).()
+    venv = os.path.dirname(os.path.dirname(sys.executable))
+    if os.path.basename(venv) == ".venv" do
+      os.symlink(venv, os.path.join(dir, ".venv"))
+    end
+    dir
+  end
+
+  defp lsc(args, dir) do
+    r = subprocess.run([lsc_bin()] ++ args ++ ["--root", dir],
+      capture_output: true, text: true, timeout: 120, cwd: dir)
+    json.loads(r.stdout)
+  end
+
+  describe "the context pack (GEP-0026-R003)" do
+    test "one call carries std, project, language, and verdict" do
+      dir = scratch()
+      pack = lsc(["pack"], dir)
+      Enum.each(["language", "std", "project", "verdict", "next"], fn key ->
+        assert Map.get(pack, key, :missing) != :missing
+      end)
+      assert "map" in Map.get(Map.get(pack, "std"), "Enum")
+      assert Map.get(Map.get(pack, "verdict"), "ok") == true
+      assert "for" in Map.get(Map.get(pack, "language"), "constructs")
+    end
+
+    test "the pack is deterministic for an unchanged project" do
+      dir = scratch()
+      assert lsc(["pack"], dir) == lsc(["pack"], dir)
+    end
+
+    test "naming a module adds its full docs under deep" do
+      dir = scratch()
+      pack = lsc(["pack", "Enum"], dir)
+      docs = Map.get(Map.get(pack, "deep"), "Enum")
+      assert Enum.count(docs) > 30
+    end
+  end
+
+  describe "batch and brief (GEP-0026-R001/R002)" do
+    test "many doc targets return one array" do
+      dir = scratch()
+      out = lsc(["doc", "Enum.map", "Enum.filter", "String.split"], dir)
+      assert Enum.count(out) == 3
+    end
+
+    test "brief entries are label, head, summary" do
+      dir = scratch()
+      out = lsc(["doc", "Enum.map", "Enum.take", "--brief"], dir)
+      first = Enum.at(out, 0)
+      assert String.contains?(Map.get(first, "head"), "@spec")
+      assert Map.get(first, "summary") != ""
+    end
+
+    test "many symbols targets return a name-keyed object" do
+      dir = scratch()
+      out = lsc(["symbols", "Enum", "String"], dir)
+      assert Enum.count(Map.get(out, "Enum")) > 30
+    end
+  end
+
+  describe "spelling enforcement" do
+    test "short sigil names outside the whitelist error" do
+      dir = scratch()
+      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+      |> (fn p -> p.write_text("defmodule Prog do\n  def f(), do: ~q(x)\nend") end).()
+      v = lsc(["check"], dir)
+      hit = Enum.find(Map.get(v, "diagnostics", []), fn d ->
+        String.contains?(Map.get(d, "message"), "~w ~s ~r ~p")
+      end)
+      assert not is_nil(hit)
+    end
+
+    test "a bare dotted type errors with the parenthesized fix" do
+      dir = scratch()
+      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+      |> (fn p -> p.write_text("defmodule Prog do\n  @spec f($math.Pi) :: term()\n  def f(_x), do: nil\nend") end).()
+      v = lsc(["check"], dir)
+      hit = Enum.find(Map.get(v, "diagnostics", []), fn d ->
+        String.contains?(Map.get(d, "message"), "$math.Pi()")
+      end)
+      assert not is_nil(hit)
+    end
+  end
+end

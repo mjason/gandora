@@ -1,5 +1,10 @@
 # The Type System
 
+One spelling rule: **a type is a call** — `integer()`, `list(t)`,
+`Mod.t()`, `$mod.Type()` all take parentheses; the only bare spellings
+are type variables (1–2 lowercase letters) and the literal `nil`.
+Anything else is a compile error carrying the fix.
+
 `@spec` declares a function's type; the compiler validates it against
 the clauses and emits **PEP 484 annotations** in the generated Python,
 so `pyright`/`mypy`/ty check callers and hover shows real types. One

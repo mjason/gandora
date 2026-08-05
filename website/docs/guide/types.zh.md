@@ -1,6 +1,8 @@
 # 类型系统
 
-`@spec` 声明函数的类型；编译器会将其与函数子句进行验证，并在生成的 Python 代码中发出 **PEP 484 注解**，从而让 `pyright`/`mypy`/ty 能够检查调用方，悬停时也能显示真实类型。每个定义组最多一个 `@spec`，与其他注解一同置于第一个子句之前。
+一条拼写规则：**类型是一种调用**——`integer()`、`list(t)`、`Mod.t()`、`$mod.Type()` 都带括号；唯一的裸拼写是类型变量（1–2 个小写字母）和字面量 `nil`。其他任何东西都是编译错误，并附带修复提示。
+
+`@spec` 声明函数的类型；编译器会根据子句对其进行验证，并在生成的 Python 中发出 **PEP 484 注解**，以便 `pyright`/`mypy`/ty 检查调用者，悬停时显示真实类型。每个定义组一个 `@spec`，与其他注解一起放在第一个子句之前。
 
 ```elixir
 @spec mean(xs :: sequence(number()), precision :: integer()) :: float()
@@ -17,14 +19,14 @@ def mean(xs, precision \\ 2) do ... end
 | `number()` | `int \| float` |
 | `string()` | `str` |
 | `boolean()` | `bool` |
-| `atom()` | `str`（原子是驻留字符串） |
+| `atom()` | `str`（原子是内部化的字符串） |
 | `nil` | `None` |
 | `term()` | `object` |
-| `fun()` | `Callable`（无参数化） |
+| `fun()` | `Callable`（未参数化） |
 
-## 容器——抽象入、具体出
+## 容器 — 入参抽象，出参具体
 
-具体容器明确指定“就是这个 Python 类型”：
+具体容器表示“就是这个 Python 类型”：
 
 ```elixir
 list(integer())            # list[int]
@@ -32,13 +34,13 @@ tuple(atom(), string())    # tuple[str, str]
 map(string(), integer())   # dict[str, int]
 ```
 
-抽象容器则表示“任何表现出类似行为的类型”——在**参数**中优先使用它们，以便调用者可以传入元组、区间或生成器（在 Python 的类型系统中，`list` 是不变的，而 `Sequence` 是协变的）：
+抽象容器表示“任何行为像它的东西” — 在**参数**中优先使用它们，以便调用者可以传入元组、区间或生成器（`list` 在 Python 类型系统中是不变的；`Sequence` 是协变的）：
 
 ```elixir
-iterable(t)                # collections.abc.Iterable[t]  — 仅遍历一次
-sequence(t)                # collections.abc.Sequence[t]  — 可索引/可重复遍历
-mapping(k, v)              # collections.abc.Mapping[k, v] — 只读类字典
-keyword()                  # 关键词列表：list[tuple[str, object]]
+iterable(t)                # collections.abc.Iterable[t]  — 只遍历一次
+sequence(t)                # collections.abc.Sequence[t]  — 可索引 / 可重复遍历
+mapping(k, v)              # collections.abc.Mapping[k, v] — 只读的类字典
+keyword()                  # 关键字列表：list[tuple[str, object]]
 ```
 
 经验法则：**接受 `sequence(t)`，返回 `list(t)`。** 构建的实践检查会在参数为具体类型时提醒你。
@@ -51,7 +53,7 @@ keyword()                  # 关键词列表：list[tuple[str, object]]
 @spec slice(xs :: sequence(a), start :: integer(), count :: integer()) :: list(a)
 ```
 
-在同一个 spec 中，相同的字母表示“相同的类型”。较长的裸名称会引发错误，并附带针对性的提示（`Int` → "write `integer()`"；`{:ok, x}` 元组字面量 → "documents as `tuple(atom(), x)`"）——键入错误不会悄无声息地变成泛型。
+同一个字母在一个 spec 中表示“相同的类型”。更长的裸名会触发错误，并附带针对性的提示（`Int` → "写成 `integer()`"；`{:ok, x}` 元组字面量 → "应写为 `tuple(atom(), x)`"）——一个拼写错误不会悄然变成一个泛型。
 
 ## 宿主（Python）与结构体类型
 
@@ -61,8 +63,8 @@ keyword()                  # 关键词列表：list[tuple[str, object]]
 @spec sale(App.Shop.t()) :: App.Shop.t()   # struct class from defstruct
 ```
 
-导入会随注解一起发出。
+导入语句随注解一同发出。
 
-## 规范不会腐烂
+## 规范不可腐化
 
-引用一个不存在的函数或元数的 `@spec` 会产生编译错误；一个规范覆盖整个默认参数组，生成的签名携带注解——因此 `gan build --strict`（full ty type-flow）始终有可靠的内容可供检查。
+将 `@spec` 命名一个不存在的函数或元数视为编译错误；一个 spec 覆盖整个默认参数组，生成的签名携带注释——因此 `gan build --strict`（完全类型流）总是有诚实的东西可检查。

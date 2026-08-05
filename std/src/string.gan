@@ -312,6 +312,6 @@ defmodule String do
   @param_trans s, zh_CN: "被检验的字符串。"
   @param regex, "A compiled pattern, e.g. from ~r//."
   @param_trans regex, zh_CN: "编译后的正则，如 ~r// 的结果。"
-  @spec match?(string(), $re.Pattern) :: boolean()
+  @spec match?(string(), $re.Pattern()) :: boolean()
   def match?(s, regex), do: not is_nil(regex.search(s))
 end

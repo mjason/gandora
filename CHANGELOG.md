@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.17.0 — 2026-08-05
+
+**The agent surface (GEP-0026): discovery in one call — plus two
+spelling disciplines the audit demanded.**
+
+- **`gan lsc pack [Mod ...]`**: the one-call context — std function
+  lists, every project signature, the construct index, the spec cheat
+  sheet, and a verdict summary, prompt-sized (~1.5k tokens) and
+  deterministic (cache-friendly). Named modules ride along with full
+  docs. **`gan agent [--json]`** is the session entry point: the
+  working loop + the rendered pack in one output, writing no files
+  into the project. Measured on the 24-task DeepSeek gauntlet with the
+  pack injected: 24/24 green, mean steps 8.0 → 6.75, discovery
+  `list_symbols` calls 14 → 4.
+- **Batch + brief queries**: `gan lsc doc A B C [--brief]` returns one
+  array (brief = `{label, head, summary}`, ~40 tokens each);
+  `gan lsc symbols Mod1 Mod2` returns a name-keyed object.
+- **Types are calls (GEP-0017)**: one spelling rule — `integer()`,
+  `list(t)`, `Mod.t()`, `$mod.Type()` all take parentheses; only type
+  variables (1–2 lowercase letters) and `nil` are bare. Bare `Mod.t` /
+  `$mod.Type` now error with the parenthesized fix; `Mod.t(...)` with
+  parameters errors. The rule caught std's own bare `$re.Pattern` on
+  its first run.
+- **Sigil name discipline (GEP-0005-R010)**: one-or-two-character
+  sigil names are the functional whitelist `~w ~s ~r ~p` — anything
+  else short is a compile error naming the list; 3+ characters are
+  language-tagged text sigils. **`~p` is the prompt sigil now**
+  (GEP-0009 rev 7), joining the functional family; `~prompt` remains
+  an equivalent text tag.
+- Advisor: Elixir-reflex hints stand down when the project really
+  defines a module by that name (an `Agent` module of your own is
+  yours).
+- Conformance: +8 BDD (pack shape/determinism/deep, batch, brief,
+  both spelling enforcements); lsp 55, gan 16, std 151, cargo 181.
+
 ## v0.16.1 — 2026-08-04
 
 **One data spelling: `%json` withdrawn (GEP-0009 rev 6).**

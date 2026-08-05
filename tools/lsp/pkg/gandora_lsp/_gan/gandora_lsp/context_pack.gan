@@ -1,0 +1,122 @@
+defmodule ContextPack do
+  @moduledoc """
+  The one-call agent context (GEP-0026): everything a model needs to
+  start writing in a project — std function lists, project signatures,
+  the construct index, the spec cheat sheet, and a verdict summary —
+  sized for a prompt instead of a query loop.
+  """
+  @moduledoc_trans zh_CN: "一次调用的 agent 上下文(GEP-0026):std 函数清单、项目签名、构造索引、spec 速查与裁决摘要——按 prompt 尺寸打包,替代逐条查询。"
+
+  pyimport gandora_core, as: core
+
+  @std_modules ["Enum", "List", "Map", "Keyword", "String", "Test"]
+
+  @doc "The standard-library modules the pack enumerates."
+  @doc_trans zh_CN: "pack 枚举的标准库模块清单。"
+  @spec known_std() :: list(string())
+  @example """
+      gan> ContextPack.known_std()
+      ['Enum', 'List', 'Map', 'Keyword', 'String', 'Test']
+  """
+  def known_std(), do: @std_modules
+
+  @doc """
+  The overview pack for `root`; `deep` names modules whose full docs
+  ride along.
+  """
+  @param root, "The project root."
+  @param deep, "Module names to include with full member docs."
+  @spec build(string(), sequence(string())) :: map()
+  def build(root, deep \\ []) do
+    %{
+      "language" => language(),
+      "std" => std_lists(root),
+      "project" => project(root),
+      "verdict" => verdict(root),
+      "deep" => deep_docs(root, deep),
+      "next" => "details: `gan lsc pack <Mod>` for full module docs, `gan lsc doc <Mod.fun|construct>` for one item; then write -> `gan build` -> fix every finding -> `gan test`."
+    }
+  end
+
+  defp language() do
+    %{
+      "constructs" => ConstructDocs.names(),
+      "spec" => ConstructDocs.card("spec"),
+      "notes" => [
+        "No return/while; last expression is the value; only false and nil are falsy.",
+        "Interop: $math.sqrt(x) one-off; pyimport json for repeated use; $python(expr) for a raw Python expression.",
+        "Prompts: ~p(raw text, no escaping); data is maps %{\"k\" => v}; runtime JSON via $json.loads(s).",
+        "Doctest expected output is the Python repr: {:ok, 21} prints ('ok', 21)."
+      ]
+    }
+  end
+
+  defp std_lists(root) do
+    pairs = for mod <- @std_modules, do: {mod, member_names(mod, root)}
+    Map.new(pairs)
+  end
+
+  defp member_names(mod, root) do
+    syms = try do
+      core.symbols(mod, root)
+    rescue
+      _e -> []
+    end
+    for s <- syms, Map.get(s, "kind") == "def", do: Map.get(s, "name")
+  end
+
+  # every project module with its public heads, one line each
+  defp project(root) do
+    syms = try do
+      core.wsymbols("", root)
+    rescue
+      _e -> []
+    end
+    Enum.reduce(syms, %{}, fn s, acc ->
+      if Map.get(s, "kind") == "def" do
+        mod = Map.get(s, "module", "?")
+        heads = Map.get(acc, mod, [])
+        Map.put(acc, mod, heads ++ [Map.get(s, "head", Map.get(s, "name"))])
+      else
+        acc
+      end
+    end)
+  end
+
+  defp verdict(root) do
+    diags = try do
+      core.check(root)
+    rescue
+      _e -> []
+    end
+    errors = Enum.count(Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end))
+    %{
+      "ok" => errors == 0,
+      "errors" => errors,
+      "warnings" => Enum.count(diags) - errors
+    }
+  end
+
+  defp deep_docs(root, deep) do
+    pairs = for mod <- deep, do: {mod, module_docs(mod, root)}
+    Map.new(pairs)
+  end
+
+  defp module_docs(mod, root) do
+    for name <- member_names(mod, root),
+      do: doc_or_stub("#{mod}.#{name}", root)
+  end
+
+  defp doc_or_stub(target, root) do
+    info = try do
+      core.doc(target, root)
+    rescue
+      _e -> nil
+    end
+    if is_nil(info) do
+      %{"label" => target}
+    else
+      info
+    end
+  end
+end

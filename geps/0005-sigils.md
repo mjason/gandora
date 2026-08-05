@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-01
-revision: 2
+revision: 3
 requires: [1, 3]
 replaces: []
 superseded-by: null
@@ -99,6 +99,11 @@ expansion in v0.
 **GEP-0005-R009:** *Repealed by GEP-0009-R001*: every non-built-in name
 is now an embedded-language sigil.
 
+**GEP-0005-R010:** a sigil name of one or two characters MUST be one
+of the functional whitelist `~w ~s ~r ~p`; any other short name is a
+compile error that names the list. Names of three or more characters
+are language-tagged text sigils (GEP-0009-R001) and are always valid.
+
 ## Rationale
 
 The raw/interpolating case split follows Elixir exactly, so knowledge
@@ -167,6 +172,11 @@ inside pipes and calls; the modifier diagnostic (R003); and the unknown
 sigil diagnostic (R009).
 
 ## Change History
+
+- Revision 3, 2026-08-05: R010 — sigil names of one or two
+  characters are the functional whitelist (`~w ~s ~r ~p`); any other
+  short name is a compile error naming the list. Language-tagged text
+  sigils (GEP-0009) use names of three or more characters.
 
 - Revision 2, 2026-08-01: R009 repealed by GEP-0009; ~python splices
   amended by GEP-0009-R003.

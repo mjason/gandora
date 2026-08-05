@@ -1,0 +1,101 @@
+defmodule Agent do
+  @moduledoc """
+  `gan agent` — the entry point for an AI session (GEP-0026-R004):
+  prints one Markdown briefing holding the working loop and the
+  project's context pack, so a harness starts with everything and the
+  model queries almost nothing. Nothing is written into the project.
+  """
+  @moduledoc_trans zh_CN: "`gan agent`——AI 会话入口(GEP-0026-R004):一次输出 Markdown 简报(工作回路 + 项目上下文包),harness 开局即全知,几乎无需逐条查询;不向项目写任何文件。"
+
+  pyimport json
+  pyimport subprocess
+  pyimport os
+  pyimport sys
+
+  @loop_text """
+  # Working in Gandora (agent briefing)
+
+  Gandora is an Elixir-flavored language compiling to readable Python.
+  The loop: **write -> `gan build` (fix EVERY finding) -> `gan test` -> done.**
+
+  - `gan lsc check --root .` returns the verdict as JSON — a traffic light:
+    `ok: false` = red (fix errors), `clean: false` = yellow (apply every
+    suggestion), `clean: true` = green (ship).
+  - Every diagnostic contains the correct spelling; apply it verbatim.
+  - Details on demand: `gan lsc doc <Mod.fun|construct> [--brief]`,
+    `gan lsc pack <Mod>` for one module's full docs.
+  - Rules of thumb: no return/while (last expression is the value; use
+    for/Enum or tail recursion); only false/nil are falsy; prompts are
+    `~p(raw text)`; data is maps `%{"k" => v}`; interop is `$math.sqrt(x)`
+    or `pyimport json`; doctest expected output is the Python repr.
+  """
+
+  @doc "Prints the briefing; `--json` emits the raw context pack instead."
+  @param args, "CLI arguments after `agent`."
+  @spec run(sequence(string())) :: nil
+  def run(args) do
+    pack = fetch_pack(args)
+    cond do
+      is_nil(pack) ->
+        IO.puts(@loop_text)
+        IO.puts("(context pack unavailable — install gandora-lsp for `gan lsc pack`)")
+      Enum.member?(args, "--json") ->
+        IO.puts(json.dumps(pack))
+      true ->
+        IO.puts(@loop_text)
+        IO.puts(render(pack))
+    end
+  end
+
+  defp fetch_pack(args) do
+    lsc = os.path.join(os.path.dirname(sys.executable), "gan-lsc")
+    if not os.path.exists(lsc) do
+      nil
+    else
+      deep = Enum.filter(args, fn a -> not String.starts_with?(a, "--") end)
+      r = subprocess.run([lsc, "pack"] ++ deep ++ ["--root", os.getcwd()],
+        capture_output: true, text: true, timeout: 120)
+      try do
+        json.loads(r.stdout)
+      rescue
+        _e -> nil
+      end
+    end
+  end
+
+  @doc "One std-cheat Markdown line: the module and its function names."
+  @doc_trans zh_CN: "std 速查的一行 Markdown:模块名与其函数名清单。"
+  @param mod, "The module name."
+  @param names, "Its public function names."
+  @spec std_line(string(), sequence(string())) :: string()
+  @example """
+      gan> Agent.std_line("Enum", ["map", "filter"])
+      '- **Enum**: map filter'
+  """
+  def std_line(mod, names), do: "- **" <> mod <> "**: " <> Enum.join(names, " ")
+
+  # the pack as compact Markdown a harness can inline
+  defp render(pack) do
+    std = Map.get(pack, "std", %{})
+    std_lines = for {mod, names} <- std.items(), do: std_line(mod, names)
+    project = Map.get(pack, "project", %{})
+    proj_lines = Enum.flat_map($builtins.sorted(project.items()), fn {mod, heads} ->
+      ["- **#{mod}**"] ++ Enum.map(heads, fn h -> "    - `#{h}`" end)
+    end)
+    lang = Map.get(pack, "language", %{})
+    verdict = Map.get(pack, "verdict", %{})
+    Enum.join([
+      "## Standard library (every public function)",
+      Enum.join(std_lines, "\n"),
+      "\n## This project",
+      Enum.join(proj_lines, "\n"),
+      "\n## Language constructs (`gan lsc doc <name>`)",
+      Enum.join(Map.get(lang, "constructs", []), " "),
+      "\n## The spec type language",
+      Map.get(lang, "spec", ""),
+      "\n## Current verdict",
+      json.dumps(verdict),
+      "\n" <> Map.get(pack, "next", "")
+    ], "\n")
+  end
+end

@@ -75,7 +75,7 @@ defmodule Advisor do
   @param root, "Project root for symbol resolution."
   @spec analyze(string(), string()) :: list(map())
   def analyze(source, root) do
-    dedupe(common_mistakes(source) ++ reflex_hints(source) ++
+    dedupe(common_mistakes(source) ++ reflex_hints(source, root) ++
         exception_hints(source) ++ struct_update_hints(source) ++
         practice_hints(source) ++
         member_suggestions(source, root))
@@ -323,11 +323,13 @@ defmodule Advisor do
   # `Mod.fun` calls whose function does not exist on the module: the
   # classic AI typo (Enum.mpa). Checked against real module symbols.
   # Elixir stdlib modules that do not exist here (would compile to a
-  # dead bare import) — one targeted migration hint each
-  defp reflex_hints(raw) do
+  # dead bare import) — one targeted migration hint each; a project
+  # module by the same name wins and silences the hint
+  defp reflex_hints(raw, root) do
     source = mask_literals(raw)
     for {mod, advice} <- @elixir_reflexes.items(),
       not is_nil(re.compile("\\b" <> mod <> "\\.[a-z_]").search(source)),
+      Enum.empty?(module_functions(mod, root)),
       do: %{"kind" => "migration",
         "line" => line_of(source, re.compile("\\b" <> mod <> "\\.[a-z_]")),
         "message" => "`#{mod}.` — #{advice} (GEP-0003)."}

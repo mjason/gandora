@@ -38,3 +38,4 @@ manifest is [`geps.jsonc`](geps.jsonc).
 | [0023](0023-the-sandbox.md) | The Sandbox | Standards Track | Superseded | 4 | [zh](local/zh/0023-the-sandbox.md) |
 | [0024](0024-the-test-tool.md) | The Test Tool | Standards Track | Accepted | 2 | [zh](local/zh/0024-the-test-tool.md) |
 | [0025](0025-the-check.md) | The Check | Standards Track | Accepted | 1 | [zh](local/zh/0025-the-check.md) |
+| [0026](0026-the-agent-surface.md) | The Agent Surface | Standards Track | Accepted | 1 | [zh](local/zh/0026-the-agent-surface.md) |

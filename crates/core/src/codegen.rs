@@ -1187,48 +1187,74 @@ impl Codegen {
                         )),
                     },
                 },
-                Callee::Dot { base, name, .. } => match base.as_ref() {
-                    chain_base if pyref_chain(chain_base).is_some() => {
-                        let (mut segs, bounded) = pyref_chain(chain_base).unwrap();
-                        segs.push(name.clone());
-                        self.py_imports.insert(pyref_import_path(&segs, bounded));
-                        let path = segs.join(".");
-                        if c.args.is_empty() {
-                            Ok(path)
-                        } else {
-                            let parts: Vec<String> = c
-                                .args
-                                .iter()
-                                .map(|a| self.spec_hint(a))
-                                .collect::<Result<_>>()?;
-                            Ok(format!("{path}[{}]", parts.join(", ")))
+                Callee::Dot {
+                    base,
+                    name,
+                    is_call,
+                } => {
+                    // one rule (GEP-0017 rev 4): a type is a call —
+                    // `Mod.t()`, `$mod.Type()`; bare dotted spellings error
+                    if !is_call {
+                        return Err(self.err(
+                            c.span,
+                            format!(
+                                "a type is a call — write {}.{name}() \
+                                 (GEP-0017-R002)",
+                                spec_dot_base_text(base)
+                            ),
+                        ));
+                    }
+                    match base.as_ref() {
+                        chain_base if pyref_chain(chain_base).is_some() => {
+                            let (mut segs, bounded) = pyref_chain(chain_base).unwrap();
+                            segs.push(name.clone());
+                            self.py_imports.insert(pyref_import_path(&segs, bounded));
+                            let path = segs.join(".");
+                            if c.args.is_empty() {
+                                Ok(path)
+                            } else {
+                                let parts: Vec<String> = c
+                                    .args
+                                    .iter()
+                                    .map(|a| self.spec_hint(a))
+                                    .collect::<Result<_>>()?;
+                                Ok(format!("{path}[{}]", parts.join(", ")))
+                            }
                         }
-                    }
-                    // $mod.Type — the host's own types at the boundary;
-                    // $mod.Type(t, ...) parametrizes: mod.Type[t, ...]
-                    Term::PyRef(m, _) => {
-                        self.py_imports.insert(m.clone());
-                        if c.args.is_empty() {
-                            Ok(format!("{m}.{name}"))
-                        } else {
-                            let parts: Vec<String> = c
-                                .args
-                                .iter()
-                                .map(|a| self.spec_hint(a))
-                                .collect::<Result<_>>()?;
-                            Ok(format!("{m}.{name}[{}]", parts.join(", ")))
+                        // $mod.Type() — the host's own types at the boundary;
+                        // $mod.Type(t, ...) parametrizes: mod.Type[t, ...]
+                        Term::PyRef(m, _) => {
+                            self.py_imports.insert(m.clone());
+                            if c.args.is_empty() {
+                                Ok(format!("{m}.{name}"))
+                            } else {
+                                let parts: Vec<String> = c
+                                    .args
+                                    .iter()
+                                    .map(|a| self.spec_hint(a))
+                                    .collect::<Result<_>>()?;
+                                Ok(format!("{m}.{name}[{}]", parts.join(", ")))
+                            }
                         }
+                        // Mod.t() — the struct class generated for Mod
+                        // (GEP-0004); it names one class, so no parameters
+                        Term::Alias(segs) if name == "t" => {
+                            if !c.args.is_empty() {
+                                return Err(self.err(
+                                    c.span,
+                                    "Mod.t() names the struct class and takes \
+                                     no parameters (GEP-0017-R002)",
+                                ));
+                            }
+                            let segs = segs.clone();
+                            Ok(self.struct_ref(&segs))
+                        }
+                        _ => Err(self.err(
+                            c.span,
+                            "types are built-ins, $mod.Type(), or Mod.t() (GEP-0017-R002)",
+                        )),
                     }
-                    // Mod.t() — the struct class generated for Mod (GEP-0004)
-                    Term::Alias(segs) if name == "t" => {
-                        let segs = segs.clone();
-                        Ok(self.struct_ref(&segs))
-                    }
-                    _ => Err(self.err(
-                        c.span,
-                        "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
-                    )),
-                },
+                }
                 _ => Err(self.err(
                     c.span,
                     "types are built-ins, $mod.Type, or Mod.t() (GEP-0017-R002)",
@@ -3057,6 +3083,19 @@ impl Codegen {
                 Ok(format!("({body})"))
             }
             (sigil, 1) if sigil.starts_with('~') => {
+                // sigil name discipline (GEP-0005 rev 3): short names are
+                // the functional whitelist; a language tag is 3+ chars
+                let name = &sigil[1..];
+                if name.chars().count() <= 2 && !matches!(name, "w" | "s" | "r" | "p") {
+                    return Err(self.err(
+                        call.span,
+                        format!(
+                            "unknown sigil ~{name} — functional sigils are \
+                             ~w ~s ~r ~p; language-tagged text sigils use \
+                             names of 3+ characters (GEP-0005-R010)"
+                        ),
+                    ));
+                }
                 // embedded-language sigil: a string with value splices
                 // (GEP-0009-R001/R004)
                 let body = args[0].as_plain_str().ok_or_else(|| {
@@ -4285,6 +4324,16 @@ fn pyref_chain(term: &Term) -> Option<(Vec<String>, bool)> {
 
 /// A directed correction for a misspelled spec type — the errors an
 /// agent guessing from other languages actually makes (GEP-0017-R002).
+/// The dotted-base text for a spec-type error message (`App.Shop`,
+/// `$math`), best-effort.
+fn spec_dot_base_text(base: &Term) -> String {
+    match base {
+        Term::Alias(segs) => segs.join("."),
+        Term::PyRef(m, _) => format!("${m}"),
+        _ => "Mod".to_string(),
+    }
+}
+
 fn spec_type_suggestion(name: &str) -> Option<&'static str> {
     match name.to_ascii_lowercase().as_str() {
         "int" | "integer" => Some("integer()"),
@@ -4378,6 +4427,32 @@ mod tests {
         let expanded = ex.expand_module(&module).unwrap();
         let mut cg = Codegen::new("<test>", vec![]);
         cg.compile(&expanded).unwrap_err().message
+    }
+
+    #[test]
+    fn spec_types_are_calls() {
+        // GEP-0017 rev 4: bare dotted spellings error with the fix
+        let m1 = compile_err(
+            "defmodule M do\n  @spec f(App.Shop.t) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m1.contains("App.Shop.t()"), "{m1}");
+        let m2 = compile_err(
+            "defmodule M do\n  @spec f($math.Pi) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m2.contains("$math.Pi()"), "{m2}");
+        let m3 = compile_err(
+            "defmodule M do\n  @spec f(App.Shop.t(a)) :: term()\n  def f(_x), do: nil\nend",
+        );
+        assert!(m3.contains("no parameters"), "{m3}");
+    }
+
+    #[test]
+    fn short_sigil_names_are_a_whitelist() {
+        let msg = compile_err("defmodule M do\n  def f(), do: ~q(hello)\nend");
+        assert!(msg.contains("~w ~s ~r ~p"), "{msg}");
+        // ~p is the blessed prompt sigil: raw text
+        let py = compile("defmodule M do\n  def f(), do: ~p(raw \"x\" {y})\nend");
+        assert!(py.contains("raw \\\"x\\\" {y}"), "{py}");
     }
 
     #[test]
@@ -4864,7 +4939,7 @@ mod tests {
     #[test]
     fn spec_interop_and_struct_types() {
         let py = compile(
-            "defmodule M do\n  @spec load(string()) :: $decimal.Decimal | map()\n  def load(p), do: p\nend",
+            "defmodule M do\n  @spec load(string()) :: $decimal.Decimal() | map()\n  def load(p), do: p\nend",
         );
         assert!(py.contains("def load(p: str) -> decimal.Decimal | dict:"), "{py}");
         assert!(py.contains("import decimal"), "{py}");
@@ -5230,8 +5305,9 @@ mod gep0005_tests {
 
     #[test]
     fn any_name_is_an_embedded_sigil_now() {
-        // GEP-0005-R009 was repealed by GEP-0009-R001
-        let py = compile("defmodule M do\n  def f(), do: ~z(nope)\nend");
+        // GEP-0005-R009 was repealed by GEP-0009-R001; short names are
+        // the functional whitelist (GEP-0005-R010), 3+ chars are tags
+        let py = compile("defmodule M do\n  def f(), do: ~zzz(nope)\nend");
         assert!(py.contains("return \"nope\""), "{py}");
     }
 }

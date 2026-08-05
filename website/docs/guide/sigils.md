@@ -37,16 +37,16 @@ Splices in `$python` are *compiled Gandora expressions*; everything
 else is your Python, untouched. It is the escape hatch for
 Python-only spellings — reach for it rarely.
 
-## `~prompt` — AI prose without escaping
+## `~p` — AI prose without escaping
 
 The blessed text-sigil name for prompts (GEP-0009-R006): quotes,
 braces, backslashes, and inline JSON all pass through raw — never
 fight `\\\"` again:
 
 ```elixir
-@task ~prompt(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
+@task ~p(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
 
-@system ~prompt"""
+@system ~p"""
 You are a coding agent. Reply with {"status": "ok"} when done.
 The user's name is <%= name %>.
 """

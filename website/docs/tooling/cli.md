@@ -11,6 +11,8 @@ gan doc Enum.take        # docs in the terminal (+ --locale zh-CN)
 gan repl                 # interactive; state carries across lines
 gan exec "1 |> to_string()"
 gan init my-app          # new uv-compatible project
+gan agent [--json]       # the AI-session briefing: working loop +
+                         # context pack in one output — no files written
 ```
 
 `gan run` executes with the *project* Python — `.venv/bin/python` when
@@ -30,6 +32,9 @@ agents and shells:
 
 ```console
 gan lsc check --root .          # the verdict: {ok, clean, diagnostics, suggestions}
+gan lsc pack [Mod ...]          # ONE-call agent context: std lists, project
+                                # signatures, construct index, verdict summary
+gan lsc doc Enum.map Enum.take --brief   # many targets, one line each
 gan lsc doc Enum.map            # docs: spec, prose, translations, examples
 gan lsc doc for                 # language-construct cards (for, spec, with, ...)
 gan lsc symbols Enum            # every function with rendered heads

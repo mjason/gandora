@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-02
 updated: 2026-08-02
-revision: 3
+revision: 4
 requires: [1, 3, 7]
 replaces: []
 superseded-by: null
@@ -140,6 +140,15 @@ prints them above the prose, `gandora_core.doc` returns them as
 `specs`, and the LSP shows them in hover and signature help
 (GEP-0015).
 
+**GEP-0017-R00X (one spelling rule, revision 4):** a type is a
+call. `integer()`, `list(t)`, `fun()`, `$mod.Type()`, and `Mod.t()`
+all take parentheses; the only bare spellings are **type variables**
+(one or two lowercase letters) and the literal **`nil`**. The
+compiler enforces the rule everywhere: a bare `Mod.t` or `$mod.Type`
+errors with the parenthesized fix, `Mod.t(...)` with arguments errors
+(the struct class takes no parameters), and bare lowercase words get
+the existing did-you-mean corrections.
+
 ## Rationale
 
 Compiling to hints instead of inventing a checker means every
@@ -184,6 +193,11 @@ LSP surfacing; and a pyright run over annotated output accepting a
 well-typed module.
 
 ## Change History
+
+- Revision 4, 2026-08-05: one spelling rule — a type is a call;
+  bare = type variables and `nil` only; `Mod.t`/`$mod.Type` without
+  parentheses and parameterized `Mod.t(...)` are now compile errors
+  with the fix.
 
 - Revision 3, 2026-08-02: The abstract containers (`iterable`,
   `sequence`, `mapping`) and `keyword()`/`term()` became built-in

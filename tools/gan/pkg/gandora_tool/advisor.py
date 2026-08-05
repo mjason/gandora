@@ -43,7 +43,7 @@ practice gaps, and member/name did-you-means.
   - source: The Gandora source text.
   - root: Project root for symbol resolution.
 """
-    return _dedupe(_common_mistakes(source) + (_reflex_hints(source) + (_exception_hints(source) + (_struct_update_hints(source) + (_practice_hints(source) + _member_suggestions(source, root))))))
+    return _dedupe(_common_mistakes(source) + (_reflex_hints(source, root) + (_exception_hints(source) + (_struct_update_hints(source) + (_practice_hints(source) + _member_suggestions(source, root))))))
 
 
 def error_hints(source: str, msg: str, line: int) -> list[dict]:
@@ -240,9 +240,9 @@ def _error_suggestions(source, msg, line):
     return gandora_std.enum.flat_map(gandora_std.enum.reject(gandora_std.enum.uniq(from_msg + at_line), lambda word, *, source=source: gandora_std.string.contains_p(source, "@" + word)), _gan_fn4)
 
 
-def _reflex_hints(raw):
+def _reflex_hints(raw, root):
     source = _mask_literals(raw)
-    return [{"kind": "migration", "line": _line_of(source, re.compile("\\b" + (mod + "\\.[a-z_]"))), "message": f"`{mod}.` — {advice} (GEP-0003)."} for _gan_for15 in elixir_reflexes.items() if isinstance(_gan_for15, tuple) and len(_gan_for15) == 2 for (mod, advice,) in [(_gan_for15[0], _gan_for15[1],)] if not ((re.compile("\\b" + (mod + "\\.[a-z_]")).search(source) is None))]
+    return [{"kind": "migration", "line": _line_of(source, re.compile("\\b" + (mod + "\\.[a-z_]"))), "message": f"`{mod}.` — {advice} (GEP-0003)."} for _gan_for15 in elixir_reflexes.items() if isinstance(_gan_for15, tuple) and len(_gan_for15) == 2 for (mod, advice,) in [(_gan_for15[0], _gan_for15[1],)] if not ((re.compile("\\b" + (mod + "\\.[a-z_]")).search(source) is None)) if _gan_truthy(gandora_std.enum.empty_p(_module_functions(mod, root)))]
 
 
 def _struct_update_hints(raw):

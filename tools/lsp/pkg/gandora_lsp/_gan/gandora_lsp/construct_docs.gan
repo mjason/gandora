@@ -20,7 +20,8 @@ defmodule ConstructDocs do
     "with" => "Chains `pattern <- expr` matches; the first failure falls to `else` (GEP-0001). Shape:\nwith {:ok, a} <- parse(s),\n     {:ok, b} <- check(a) do\n  {:ok, b}\nelse\n  {:error, why} -> {:error, why}\nend",
     "format" => "Number/width formatting is Python's format mini-language on a string literal: `\"{:.2f}\".format(3.14159)` -> '3.14'; `\"{:>8}\".format(x)` pads; combine with interpolation: \"total \#{\"{:.2f}\".format(t)}\".",
     "json" => "Data is Gandora maps: a JSON object pastes as %{\"key\" => value} (atom keys: %{key: value}); lists keep [ ]. Runtime JSON text parses with $json.loads(s); ~json is just a text template tag.",
-    "prompt" => "Raw prose sigil for AI prompts (GEP-0009-R006): `~prompt(one line with \"quotes\" and {braces})` or `~prompt\"\"\"...\"\"\"` blocks — no escaping ever; `<%= expr %>` splices values in.",
+    "p" => "Raw prose sigil for AI prompts (GEP-0009-R006): `~p(one line with \"quotes\" and {braces})` or `~p\"\"\"...\"\"\"` blocks — no escaping ever; `<%= expr %>` splices values in. Longer tags (~prompt, ~sql, ...) are equivalent text sigils.",
+    "prompt" => "Raw prose sigil for AI prompts (GEP-0009-R006): the blessed short spelling is `~p(...)` / `~p\"\"\"...\"\"\"` — no escaping ever; `<%= expr %>` splices values in.",
     "defaults" => "Trailing default parameters: `def f(x, y \\\\ 1, mark \\\\ \"!\")` — callers omit suffix arguments (`f(1)`, `f(1, 2)`); defaults must be trailing, one clause declares them (GEP-0011).",
     "try" => "Runs a body with `rescue` clauses matching Python exception types and an always-run `after` (GEP-0014).",
     "rescue" => "Clauses of a `try`: `e in $mod.Type -> ...` matches by exception class; a bare variable catches every Exception (GEP-0014).",
@@ -33,7 +34,7 @@ defmodule ConstructDocs do
     "require" => "Makes the target module's macros available in this file (GEP-0002).",
     "unless" => "`if` with the condition negated (GEP-0001).",
     "when" => "A guard on a clause head or case pattern (GEP-0001).",
-    "spec" => "@spec name(arg_types) :: return — the whole type language: scalars integer() float() number() string() boolean() atom() nil term(); containers list(t) tuple(a, b) map(k, v); abstract sequence(t) iterable(t) mapping(k, v) keyword(); unions a | b; ok/error tuples tuple(atom(), term()); named args name :: type; type variables are 1-2 lowercase letters; Python types $mod.Type(); struct types Mod.t(); functions fun() (GEP-0017).",
+    "spec" => "@spec name(arg_types) :: return — the whole type language: scalars integer() float() number() string() boolean() atom() nil term(); containers list(t) tuple(a, b) map(k, v); abstract sequence(t) iterable(t) mapping(k, v) keyword(); unions a | b; ok/error tuples tuple(atom(), term()); named args name :: type; type variables are 1-2 lowercase letters; Python types $mod.Type(); struct types Mod.t(); functions fun() (GEP-0017). ONE RULE: a type is a call — only type variables (1-2 lowercase letters) and nil are bare; Mod.t / $mod.Type without () is an error.",
     "example" => "@example \"\"\" / four-space-indented gan> call / expected output (Python repr) / \"\"\" — placed above the def; gan test runs every one (GEP-0007).",
     "python" => "Python interop: `$math.sqrt(2.0)` imports and calls inline; `pyimport numpy, as: np` then `np.array(...)` for repeated use; `$(PIL.Image).open(f)` locks an explicit module boundary; trailing keywords become kwargs: `$json.dumps(data, indent: 2)` (GEP-0003).",
     "interop" => "Python interop: `$math.sqrt(2.0)` imports and calls inline; `pyimport numpy, as: np` then bare `np...` for repeated use; `$(...)` locks the module boundary; keyword args become kwargs (GEP-0003).",
@@ -51,4 +52,12 @@ defmodule ConstructDocs do
       hit
     end
   end
+
+  @doc "Every construct that has a card — the index the pack ships."
+  @spec names() :: list(string())
+  @example """
+      gan> "for" in ConstructDocs.names()
+      True
+  """
+  def names(), do: Enum.sort($builtins.list(@cards.keys()))
 end

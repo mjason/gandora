@@ -22,6 +22,8 @@ defmodule Main do
     gan run <file> [args...] | exec <code> | repl
     gan fmt [--check] [path...] | init <path> | version
     gan test                doctests + tests/*.gan (GEP-0024)
+    gan agent [--json]      the AI-session briefing: working loop +
+                            context pack in one output (GEP-0026)
     gan <plugin> ...        delegates to gan-<plugin>, then to ganc
   """
 
@@ -43,6 +45,7 @@ defmodule Main do
       ["exec", code | _] -> exec_code(code)
       ["exec"] -> die_usage("exec requires code")
       ["repl" | _] -> repl()
+      ["agent" | rest] -> Agent.run(rest)
       ["fmt" | rest] -> Fmt.run(rest)
       ["init", path | _] -> init(path)
       ["init"] -> die_usage("init requires a path")

@@ -47,7 +47,7 @@ def main() -> None:
     args = parser.parse_args()
     env = tg.load_env(REPO_ROOT / ".env")
     system = tg.SYSTEM_PROMPT.format(language="Simplified Chinese (简体中文)")
-    targets = [Path(p) for p in args.pages] if args.pages else pages()
+    targets = [Path(p).resolve() for p in args.pages] if args.pages else pages()
     for page in targets:
         out = page.with_name(page.name[: -len(".md")] + ".zh.md")
         if out.exists() and not args.force:

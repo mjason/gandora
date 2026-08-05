@@ -20,7 +20,10 @@ defmodule Lsc do
     expand <file>               quoted term after macro expansion
     compile <file>              generated Python source (plain text)
     resolve <module>            how a module reference resolves
-    doc <Mod>[.<fun>]           docs: specs, signatures, prose, examples
+    pack [<Mod> ...]            one-call agent context: std lists, project
+                                signatures, construct index, verdict summary;
+                                named modules ride along with full docs
+    doc <target> [...] [--brief]  docs for one or many targets; --brief = one line each
     definition <Mod>[.<fun>]    defining source path/line/col
     symbols <Mod>               every definition with rendered heads
     references <Mod>.<fun>      every project call site (+ definitions)
@@ -70,26 +73,35 @@ defmodule Lsc do
         IO.puts(core.compile_string(read(file), file, root))
       ["resolve", module | _] ->
         emit(core.resolve(root, module))
-      ["doc", target | _] ->
-        info = core.doc(target, root)
-        card = ConstructDocs.card(target)
-        cond do
-          not is_nil(info) -> emit(info)
-          not is_nil(card) ->
-            emit(%{"label" => target, "construct" => card})
-          String.match?(target, ~r/^[a-z_][a-z0-9_.]*$/) ->
-            md = PyIntel.hover_markdown(root, import_line(target), target)
-            if is_nil(md) do
-              emit(nil)
-            else
-              emit(%{"label" => target, "pydoc" => md})
-            end
-          true -> emit(info)
+      ["doc", target | rest] ->
+        # many targets in one call; --brief trims each to one line
+        # (GEP-0026-R001/R002)
+        brief = Enum.member?(rest, "--brief")
+        targets = [target] ++ Enum.filter(rest, fn a ->
+          not String.starts_with?(a, "--")
+        end)
+        results = Enum.map(targets, fn t -> doc_one(t, root, brief) end)
+        if Enum.count(targets) == 1 do
+          emit(Enum.at(results, 0))
+        else
+          emit(results)
         end
       ["definition", target | _] ->
         emit(core.definition(target, root))
-      ["symbols", module | _] ->
-        emit(core.symbols(module, root))
+      ["symbols", module | rest] ->
+        mods = [module] ++ Enum.filter(rest, fn a ->
+          not String.starts_with?(a, "--")
+        end)
+        if Enum.count(mods) == 1 do
+          emit(core.symbols(module, root))
+        else
+          pairs = for m <- mods, do: {m, core.symbols(m, root)}
+          emit(Map.new(pairs))
+        end
+      ["pack" | rest] ->
+        # the one-call agent context (GEP-0026-R003)
+        deep = Enum.filter(rest, fn a -> not String.starts_with?(a, "--") end)
+        emit(ContextPack.build(root, deep))
       ["references", target | _] ->
         emit(core.references(target, root))
       ["wsymbols", query | _] ->
@@ -162,6 +174,35 @@ defmodule Lsc do
         IO.puts(@usage)
         sys.exit(2)
     end
+  end
+
+  # one doc lookup: project/std docs, construct cards, then pydoc
+  defp doc_one(target, root, brief) do
+    info = core.doc(target, root)
+    card = ConstructDocs.card(target)
+    cond do
+      not is_nil(info) and brief -> brief_doc(target, info)
+      not is_nil(info) -> info
+      not is_nil(card) ->
+        %{"label" => target, "construct" => card}
+      String.match?(target, ~r/^[a-z_][a-z0-9_.]*$/) ->
+        md = PyIntel.hover_markdown(root, import_line(target), target)
+        if is_nil(md) do
+          nil
+        else
+          %{"label" => target, "pydoc" => md}
+        end
+      true -> nil
+    end
+  end
+
+  # one line per item: the spec (or label) plus the first doc sentence
+  defp brief_doc(target, info) do
+    specs = Map.get(info, "specs", [])
+    head = if Enum.empty?(specs), do: target, else: Enum.at(specs, 0)
+    prose = Map.get(Map.get(info, "entries", %{}), "default", "")
+    summary = Enum.at(prose.split("\n"), 0)
+    %{"label" => target, "head" => head, "summary" => summary}
   end
 
   @doc "The import statement that brings a dotted Python chain into scope."

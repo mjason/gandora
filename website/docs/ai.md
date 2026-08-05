@@ -5,6 +5,16 @@ written by models. That shapes the toolchain in concrete ways: one
 verdict, taught corrections, JSON everywhere, and prompts as
 first-class text.
 
+## Start with one call
+
+`gan agent` prints the whole session briefing — the working loop plus
+the **context pack** (GEP-0026): every std function name, every
+project signature, the construct index, the spec cheat sheet, and the
+current verdict, in one prompt-sized output. A model that starts from
+the pack writes immediately instead of spending its first five tool
+calls on discovery. `gan lsc pack --root .` returns the same as JSON;
+`gan lsc pack Enum` deep-dives one module.
+
 ## The loop
 
 **write → `gan build` (fix every finding) → `gan test` → ship.**
@@ -38,13 +48,13 @@ the manual.
 
 ## Prompts and tool schemas in the language
 
-`~prompt` is raw prose — quotes, braces, backslashes, and inline JSON
+`~p` is raw prose — quotes, braces, backslashes, and inline JSON
 need no escaping; `<%= expr %>` splices values:
 
 ```elixir
-@task ~prompt(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
+@task ~p(Parse the JSON string {"b": 2, "a": 1} and print its keys sorted.)
 
-@system ~prompt"""
+@system ~p"""
 You are a coding agent. The user's name is <%= name %>.
 Reply with {"status": "ok"} when done.
 """
@@ -66,7 +76,7 @@ swapping `:` for `=>` (the build teaches this on sight):
 ## An agent, in Gandora
 
 The repository's own evaluation harness is a tool-calling DeepSeek
-agent written in Gandora — litellm for the model call, `~prompt` for
+agent written in Gandora — litellm for the model call, `~p` for
 the tasks, tail recursion for the loop:
 
 ```elixir
@@ -87,8 +97,8 @@ evaluator — purely by following the verdict's teaching.
 ## Discovery tools worth wiring in
 
 ```console
-gan lsc doc spec        # the type-language cheat sheet
-gan lsc doc with        # construct cards: shapes, not prose
-gan lsc symbols Enum    # what actually exists
+gan agent               # everything above, once, as Markdown
+gan lsc pack Enum       # one module's full docs in one call
+gan lsc doc with for spec --brief   # many cards, one line each
 gan lsc compile f.gan   # what the Python will be
 ```

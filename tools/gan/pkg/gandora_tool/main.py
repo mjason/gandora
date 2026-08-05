@@ -15,6 +15,7 @@ import gandora_std.enum
 import gandora_std.map
 import gandora_std.string
 import gandora_tool.advisor
+import gandora_tool.agent
 import gandora_tool.fmt
 import gandora_tool.verifier
 
@@ -25,7 +26,7 @@ def _gan_truthy(value):
 class GanMatchError(Exception):
     pass
 
-usage = "gan - the Gandora task runner\n\nUsage:\n  gan build [--strict]    the verdict + compile: diagnostics, advice,\n                          artifact verification; errors stop artifacts\n                          (--strict adds type-flow warnings via ty)\n  gan run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | init <path> | version\n  gan test                doctests + tests/*.gan (GEP-0024)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
+usage = "gan - the Gandora task runner\n\nUsage:\n  gan build [--strict]    the verdict + compile: diagnostics, advice,\n                          artifact verification; errors stop artifacts\n                          (--strict adds type-flow warnings via ty)\n  gan run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | init <path> | version\n  gan test                doctests + tests/*.gan (GEP-0024)\n  gan agent [--json]      the AI-session briefing: working loop +\n                          context pack in one output (GEP-0026)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
 
 gandora_jsonc = "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\"\n}\n"
 
@@ -59,13 +60,15 @@ def main() -> None:
             return _die_usage("exec requires code")
         case ["repl", *_] as _gan_l9 if isinstance(_gan_l9, list):
             return repl()
-        case ["fmt", *rest] as _gan_l10 if isinstance(_gan_l10, list):
+        case ["agent", *rest] as _gan_l10 if isinstance(_gan_l10, list):
+            return gandora_tool.agent.run(rest)
+        case ["fmt", *rest] as _gan_l11 if isinstance(_gan_l11, list):
             return gandora_tool.fmt.run(rest)
-        case ["init", path, *_] as _gan_l11 if isinstance(_gan_l11, list):
+        case ["init", path, *_] as _gan_l12 if isinstance(_gan_l12, list):
             return init(path)
-        case ["init"] as _gan_l12 if isinstance(_gan_l12, list):
+        case ["init"] as _gan_l13 if isinstance(_gan_l13, list):
             return _die_usage("init requires a path")
-        case [cmd, *rest] as _gan_l13 if isinstance(_gan_l13, list):
+        case [cmd, *rest] as _gan_l14 if isinstance(_gan_l14, list):
             return _delegate(cmd, rest)
         case _:
             raise GanMatchError("no case clause matched: " + repr(_gan_case0))
@@ -130,46 +133,46 @@ def _run_check(with_suggestions=True, strict=False):
             cache = _root() + "/.gandora/cache"
             try:
                 modules = core.build(_root(), cache)
-                _gan_tmp15 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
+                _gan_tmp16 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
             except Exception as _e:
-                _gan_tmp15 = []
-            verification = _gan_tmp15
-            _gan_tmp14 = diags + verification
+                _gan_tmp16 = []
+            verification = _gan_tmp16
+            _gan_tmp15 = diags + verification
         else:
-            _gan_tmp14 = diags
-        diags = _gan_tmp14
+            _gan_tmp15 = diags
+        diags = _gan_tmp15
         def _gan_fn0(d):
-            _gan_fstr20 = gandora_std.map.get(d, "severity")
-            _gan_fstr21 = gandora_std.map.get(d, "path")
-            _gan_fstr22 = gandora_std.map.get(d, "line")
-            _gan_fstr23 = gandora_std.map.get(d, "message")
-            return print(f"{_gan_fstr20}: {_gan_fstr21}:{_gan_fstr22}: {_gan_fstr23}")
+            _gan_fstr21 = gandora_std.map.get(d, "severity")
+            _gan_fstr22 = gandora_std.map.get(d, "path")
+            _gan_fstr23 = gandora_std.map.get(d, "line")
+            _gan_fstr24 = gandora_std.map.get(d, "message")
+            return print(f"{_gan_fstr21}: {_gan_fstr22}:{_gan_fstr23}: {_gan_fstr24}")
         gandora_std.enum.each(diags, _gan_fn0)
         if _gan_truthy(with_suggestions):
-            _gan_tmp24 = _collect_files(["src", "tests"])
+            _gan_tmp25 = _collect_files(["src", "tests"])
         else:
-            _gan_tmp24 = []
-        sources = _gan_tmp24
+            _gan_tmp25 = []
+        sources = _gan_tmp25
         def _gan_fn1(path, *, diags=diags):
             try:
-                _gan_tmp25 = pathlib.Path(path).read_text()
+                _gan_tmp26 = pathlib.Path(path).read_text()
             except Exception as _e:
-                _gan_tmp25 = ""
-            text = _gan_tmp25
+                _gan_tmp26 = ""
+            text = _gan_tmp26
             per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
             return gandora_std.enum.map(gandora_tool.advisor.analyze(text, _root()) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
         hints = gandora_std.enum.flat_map(sources, _gan_fn1)
         def _gan_fn2(h):
             line = gandora_std.map.get(h, "line", 0)
             if line > 0:
-                _gan_tmp26 = f":{line}"
+                _gan_tmp27 = f":{line}"
             else:
-                _gan_tmp26 = ""
-            at = _gan_tmp26
-            _gan_fstr27 = gandora_std.map.get(h, "kind")
-            _gan_fstr28 = gandora_std.map.get(h, "path")
-            _gan_fstr29 = gandora_std.map.get(h, "message")
-            return print(f"{_gan_fstr27}: {_gan_fstr28}{at}: {_gan_fstr29}")
+                _gan_tmp27 = ""
+            at = _gan_tmp27
+            _gan_fstr28 = gandora_std.map.get(h, "kind")
+            _gan_fstr29 = gandora_std.map.get(h, "path")
+            _gan_fstr30 = gandora_std.map.get(h, "message")
+            return print(f"{_gan_fstr28}: {_gan_fstr29}{at}: {_gan_fstr30}")
         gandora_std.enum.each(gandora_tool.advisor.consolidate(hints), _gan_fn2)
         errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
         return gandora_std.enum.empty_p(errors)
@@ -207,8 +210,8 @@ def run(file: str, args: list[str]) -> None:
             print(f"gan: {file} is not a module of this project")
             return sys.exit(1)
         elif (gandora_std.map.get(target, "python") is None):
-            _gan_fstr30 = gandora_std.map.get(target, "module")
-            print(f"gan: {_gan_fstr30} defines only macros; nothing to run")
+            _gan_fstr31 = gandora_std.map.get(target, "module")
+            print(f"gan: {_gan_fstr31} defines only macros; nothing to run")
             return sys.exit(1)
         else:
             code = subprocess.call([_project_python(), "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
@@ -238,12 +241,12 @@ def repl() -> None:
 def _repl_walk(ns):
     while True:
         try:
-            _gan_tmp31 = builtins.input("gan> ")
+            _gan_tmp32 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp31 = "eof"
+            _gan_tmp32 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp31 = "eof"
-        line = _gan_tmp31
+            _gan_tmp32 = "eof"
+        line = _gan_tmp32
         if line == "eof":
             return "ok"
         elif gandora_std.string.trim(line) == "":

@@ -1,10 +1,15 @@
 schema = 1
-compiler = "0.16.0"
+compiler = "0.16.1"
 
 [[modules]]
 name = "ConstructDocs"
 python = "gandora_lsp/construct_docs.py"
 source = "gandora_lsp/_gan/gandora_lsp/construct_docs.gan"
+
+[[modules]]
+name = "ContextPack"
+python = "gandora_lsp/context_pack.py"
+source = "gandora_lsp/_gan/gandora_lsp/context_pack.gan"
 
 [[modules]]
 name = "Lsc"

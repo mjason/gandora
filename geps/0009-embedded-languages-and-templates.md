@@ -10,7 +10,7 @@ areas:
   - Interop
 created: 2026-08-01
 updated: 2026-08-02
-revision: 6
+revision: 7
 requires: [5]
 replaces: []
 superseded-by: null
@@ -84,12 +84,13 @@ the body text with each splice replaced by the runtime value of its
 expression, formatted as by `#{}` interpolation (compiling to an
 f-string when splices are present, a plain literal otherwise).
 
-**GEP-0009-R006:** `~prompt` is the blessed spelling of R004 for
-prose destined for an AI model: `~prompt(...)` for one-liners,
-`~prompt"""..."""` for blocks. The body is raw — quotes, braces,
+**GEP-0009-R006:** `~p` is the blessed spelling of R004 for prose
+destined for an AI model — a member of the GEP-0005-R010 functional
+whitelist alongside `~w ~s ~r`: `~p(...)` for one-liners,
+`~p"""..."""` for blocks. The body is raw — quotes, braces,
 backslashes, and JSON need no escaping — while `<%= expr %>` still
-splices values. Tooling (docs cards, the manual) teaches this name;
-any other R004 sigil name behaves identically.
+splices values. Tooling teaches this name; longer tags such as
+`~prompt` remain ordinary R004 text sigils with identical semantics.
 
 **GEP-0009-R007 (repealed in revision 6):** the `%json` data literal
 was withdrawn the day it shipped: Gandora maps (`%{}`) are the one
@@ -161,6 +162,10 @@ escape; multi-line `"""` bodies; the single-expression diagnostic; and
 byte preservation outside splices.
 
 ## Change History
+
+- Revision 7, 2026-08-05: R006 — the prompt sigil is `~p`, joining the
+  short functional whitelist (GEP-0005-R010); `~prompt` stays an
+  ordinary text tag.
 
 - Revision 6, 2026-08-04: R007 repealed — `%json` withdrawn; maps are
   the one data spelling, the Advisor teaches the JSON→map rewrite.

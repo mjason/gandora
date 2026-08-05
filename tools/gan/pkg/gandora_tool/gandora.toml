@@ -1,10 +1,15 @@
 schema = 1
-compiler = "0.16.0"
+compiler = "0.16.1"
 
 [[modules]]
 name = "Advisor"
 python = "gandora_tool/advisor.py"
 source = "gandora_tool/_gan/gandora_tool/advisor.gan"
+
+[[modules]]
+name = "Agent"
+python = "gandora_tool/agent.py"
+source = "gandora_tool/_gan/gandora_tool/agent.gan"
 
 [[modules]]
 name = "Fmt"
