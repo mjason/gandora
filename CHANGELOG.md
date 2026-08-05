@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.18.1 — 2026-08-05
+
+**Decorators: the doctrine, taught.**
+
+- Audited end-to-end (all passing): `@decorate` with Python decorators,
+  multi-clause dispatchers, Gandora-written wrappers (same and cross
+  module), stacking with Python's order, and coexistence with
+  TCO/defp/specs.
+- The two-tier doctrine is now in the manual, the site, and a new
+  `decorate` construct card: **runtime decoration belongs to the `$`
+  world** (any-arity generic decorators are Python's job — a `.py`
+  next to your sources, referenced as `$mymod.deco`; Gandora-written
+  wrappers are deliberately arity-exact); **compile-time rewriting
+  belongs to macros** — `defattr` + `@on_definition` (GEP-0008), the
+  zero-runtime Gandora way, worked example in the tour's `@cache`
+  chapter. Introspection caveat documented (fn wrappers are lambdas).
+
 ## v0.18.0 — 2026-08-05
 
 **Named types (GEP-0027): generics get a declaration site.**

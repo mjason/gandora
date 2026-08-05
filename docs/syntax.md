@@ -448,6 +448,28 @@ def fib(n), do: ...
 The generated module is a normal ASGI target:
 `uvicorn app.api:app --app-dir dist`.
 
+### Decorators: two tiers
+
+Runtime decoration belongs to the `$` world; compile-time decoration
+belongs to macros. Concretely:
+
+- **`@decorate <expr>`** attaches any Python decorator to the next
+  def — a library's (`$functools.lru_cache(maxsize: 64)`,
+  `@app.get("/")`), or a Gandora function returning a wrapper.
+  Several stack; the one nearest the def wraps first, as in Python.
+- A **Gandora-written wrapper is arity-exact** (`fn x -> ... f.(x) end`
+  wraps 1-arg functions only) — Gandora has no `*args`, deliberately.
+  A *general* any-arity decorator is Python's job: put it in a `.py`
+  next to your sources and reference it as `$mymod.deco`.
+- **Compile-time rewriting** — the Elixir-flavored decorator — is
+  `defattr :name` + an `@on_definition` macro (GEP-0008): it sees the
+  real head, keeps zero runtime, and can itself emit `@decorate` for
+  the Python side. The tour's `@cache` chapter is the worked example.
+- A wrapper built from a Gandora `fn` is a lambda underneath — it
+  drops `__name__`/`__doc__`; if introspection matters, write that
+  decorator in Python.
+
+
 ## Error handling
 
 `try/rescue/after` maps onto Python exceptions; rescue clauses match
