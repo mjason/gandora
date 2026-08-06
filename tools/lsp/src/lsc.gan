@@ -186,13 +186,35 @@ defmodule Lsc do
       not is_nil(card) ->
         %{"label" => target, "construct" => card}
       String.match?(target, ~r/^[a-z_][a-z0-9_.]*$/) ->
-        md = PyIntel.hover_markdown(root, import_line(target), target)
-        if is_nil(md) do
-          nil
+        # a bare project/std name (macros included) before Python docs
+        project = project_doc(target, root)
+        if not is_nil(project) do
+          project
         else
-          %{"label" => target, "pydoc" => md}
+          md = PyIntel.hover_markdown(root, import_line(target), target)
+          if is_nil(md) do
+            nil
+          else
+            %{"label" => target, "pydoc" => md}
+          end
         end
       true -> nil
+    end
+  end
+
+  # exact-name search across the project's symbols; resolves the
+  # owning module and returns its full doc (GEP-0026)
+  defp project_doc(name, root) do
+    syms = try do
+      core.wsymbols(name, root)
+    rescue
+      _e -> []
+    end
+    hit = Enum.find(syms, fn s -> Map.get(s, "name") == name end)
+    if is_nil(hit) do
+      nil
+    else
+      core.doc("#{Map.get(hit, "module")}.#{name}", root)
     end
   end
 

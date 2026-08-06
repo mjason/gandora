@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.18.5 — 2026-08-06
+
+**Macros are first-class citizens of the documentation surfaces.**
+
+- **`@doc`/`@param` on `defmacro` now compile** — the long-standing
+  "text given twice" leak (macro annotations attaching to the next
+  def) is fixed: codegen consumes them for the macro, the doc surfaces
+  serve them. Document your DSL macros like any function.
+- **Hover follows `import`/`require`/`use`**: a bare macro call like
+  `factor n: 168` in a DSL consumer now hovers with the macro's own
+  docs, resolved through the buffer's imports.
+- **`gan lsc doc <bare_name>` searches the project first**: an exact
+  symbol-name match (functions *and* macros) resolves to the owning
+  module's full doc before falling back to Python docs — agents can
+  ask about `rolling_mean` without knowing where it lives.
+- defmacro construct card updated; +2 BDD; lsp 59, five repos clean.
+
 ## v0.18.4 — 2026-08-05
 
 **The scaffold passes its own verdict, and the verdict looks good.**

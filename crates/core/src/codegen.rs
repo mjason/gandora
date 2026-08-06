@@ -799,7 +799,16 @@ impl Codegen {
                     self.star_imports.insert(resolved_path);
                 }
                 "require" => { /* compile-time only */ }
-                "defmacro" => { /* compile-time only */ }
+                "defmacro" => {
+                    // compile-time only — but its @doc/@param/@spec belong
+                    // to IT (served by the doc surfaces), not to the next
+                    // def; consume them here so they cannot leak
+                    let _ = pending_doc.take();
+                    let _ = pending_spec.take();
+                    pending_params.clear();
+                    pending_decorators.clear();
+                    pending_allows.clear();
+                }
                 "defstruct" => {
                     if self.struct_fields.is_some() {
                         return Err(self.err(

@@ -12,7 +12,7 @@ defmodule Main do
   pyimport lsprotocol.types, as: types
   pyimport os
 
-  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.18.4",
+  @server $pygls.lsp.server.LanguageServer("gan-lsp", "0.18.5",
     text_document_sync_kind: types.TextDocumentSyncKind.Full)
 
   @word_re ~r/[A-Za-z_][A-Za-z0-9_.!?]*/
@@ -164,6 +164,11 @@ defmodule Main do
           target = target_of(doc.source, token)
           info = lookup_doc(target)
           h = render_hover(target, info)
+          h = if is_nil(h) and String.match?(token, ~r/^[a-z_]/) do
+            imported_hover(doc.source, token)
+          else
+            h
+          end
           if is_nil(h) and String.match?(token, ~r/^[a-z_]/) do
             var_hover(doc, token, params.position.line)
           else
@@ -171,6 +176,19 @@ defmodule Main do
           end
       end
     end
+  end
+
+  # a bare name may come from an imported/required/used module —
+  # macros especially live behind `import` (GEP-0015 rev; GEP-0002)
+  defp imported_hover(source, token) do
+    mods = Enum.uniq(~r/(?m)^\s*(?:import|require|use)\s+([A-Z][A-Za-z0-9_.]*)/.findall(source))
+    Enum.reduce(mods, nil, fn mod, acc ->
+      if is_nil(acc) do
+        render_hover("#{mod}.#{token}", lookup_doc("#{mod}.#{token}"))
+      else
+        acc
+      end
+    end)
   end
 
   # local-variable hover: infer from the compiled Python (GEP-0015-R011)

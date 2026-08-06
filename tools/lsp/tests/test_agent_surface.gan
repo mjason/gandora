@@ -86,6 +86,26 @@ defmodule TestAgentSurface do
     end
   end
 
+  describe "macro documentation surfaces" do
+    test "a documented defmacro compiles and keeps docs separate" do
+      dir = scratch()
+      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+      |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"Doubles at compile time.\"\n  defmacro dbl(x) do\n    quote do\n      unquote(x) * 2\n    end\n  end\n  @doc \"d\"\n  @spec f(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.f(3)\n      6\n  \"\"\"\n  def f(y), do: dbl(y)\nend") end).()
+      v = lsc(["check"], dir)
+      assert Map.get(v, "ok") == true
+      info = lsc(["doc", "Prog.dbl"], dir)
+      assert String.contains?(Map.get(Map.get(info, "entries"), "default"), "Doubles")
+    end
+
+    test "a bare lowercase name resolves project-wide before pydoc" do
+      dir = scratch()
+      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
+      |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"The answer.\"\n  @spec answer() :: integer()\n  @example \"\"\"\n      gan> Prog.answer()\n      42\n  \"\"\"\n  def answer(), do: 42\nend") end).()
+      info = lsc(["doc", "answer"], dir)
+      assert String.contains?(Map.get(info, "label"), "Prog.answer")
+    end
+  end
+
   describe "named types (GEP-0027)" do
     test "a generic alias expands in the verdict pipeline" do
       dir = scratch()

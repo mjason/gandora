@@ -152,22 +152,40 @@ def _doc_one(target, root, brief):
     elif not ((card is None)):
         return {"label": target, "construct": card}
     elif _gan_truthy(gandora_std.string.match_p(target, re.compile("^[a-z_][a-z0-9_.]*$"))):
-        md = gandora_lsp.py_intel.hover_markdown(root, import_line(target), target)
-        if (md is None):
-            return None
+        project = _project_doc(target, root)
+        if not ((project is None)):
+            return project
         else:
-            return {"label": target, "pydoc": md}
+            md = gandora_lsp.py_intel.hover_markdown(root, import_line(target), target)
+            if (md is None):
+                return None
+            else:
+                return {"label": target, "pydoc": md}
     else:
         return None
+
+
+def _project_doc(name, root):
+    try:
+        _gan_tmp26 = core.wsymbols(name, root)
+    except Exception as _e:
+        _gan_tmp26 = []
+    syms = _gan_tmp26
+    hit = gandora_std.enum.find(syms, lambda s, *, name=name: gandora_std.map.get(s, "name") == name)
+    if (hit is None):
+        return None
+    else:
+        _gan_fstr27 = gandora_std.map.get(hit, "module")
+        return core.doc(f"{_gan_fstr27}.{name}", root)
 
 
 def _brief_doc(target, info):
     specs = gandora_std.map.get(info, "specs", [])
     if _gan_truthy(gandora_std.enum.empty_p(specs)):
-        _gan_tmp26 = target
+        _gan_tmp28 = target
     else:
-        _gan_tmp26 = gandora_std.enum.at(specs, 0)
-    head = _gan_tmp26
+        _gan_tmp28 = gandora_std.enum.at(specs, 0)
+    head = _gan_tmp28
     prose = gandora_std.map.get(gandora_std.map.get(info, "entries", {}), "default", "")
     summary = gandora_std.enum.at(prose.split("\n"), 0)
     return {"label": target, "head": head, "summary": summary}
@@ -187,8 +205,8 @@ def import_line(chain: str) -> str:
 
 
 def _take_root(args):
-    _gan_case27 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case27:
+    _gan_case29 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case29:
         case None:
             return (os.getcwd(), args)
         case i:

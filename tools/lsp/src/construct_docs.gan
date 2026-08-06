@@ -10,7 +10,7 @@ defmodule ConstructDocs do
     "def" => "Defines a public function. `def f(x), do: expr` or a `do ... end` body. Multi-clause heads dispatch by pattern, top to bottom (GEP-0001).",
     "defp" => "Defines a private function — callable only inside its module; compiled with a leading underscore (GEP-0001).",
     "defmodule" => "Declares the module for this file. One `defmodule` per file; the name maps to the generated Python module path (GEP-0001-R013).",
-    "defmacro" => "Defines a compile-time macro: it receives quoted arguments and returns quoted code (GEP-0002).",
+    "defmacro" => "Defines a compile-time macro: it receives quoted arguments and returns quoted code (GEP-0002). @doc/@param above it document the macro (hover + gan lsc doc Mod.name), same as a def.",
     "defstruct" => "Declares the module's struct with defaulted fields; literals `%Mod{...}`, updates `%Mod{s | ...}` and patterns work on it (GEP-0004).",
     "defattr" => "Registers a custom annotation attribute handled by the module's `@on_definition` hook (GEP-0008).",
     "quote" => "Returns the quoted AST of its block instead of evaluating it; `unquote` splices values back in (GEP-0002).",
