@@ -46,7 +46,7 @@ ride along.
 
 
 def _language():
-    return {"constructs": gandora_lsp.construct_docs.names(), "spec": gandora_lsp.construct_docs.card("spec"), "notes": ["No return/while; last expression is the value; only false and nil are falsy.", "Interop: $math.sqrt(x) one-off; pyimport json for repeated use; $python(expr) for a raw Python expression.", "Prompts: ~p(raw text, no escaping); data is maps %{\"k\" => v}; runtime JSON via $json.loads(s).", "Doctest expected output is the Python repr: {:ok, 21} prints ('ok', 21)."]}
+    return {"constructs": gandora_lsp.construct_docs.names(), "spec": gandora_lsp.construct_docs.card("spec"), "notes": ["No return/while; last expression is the value; only false and nil are falsy.", "Interop: $math.sqrt(x) one-off; pyimport json for repeated use; $python(expr) for a raw Python expression.", "Prompts: ~p(raw text, no escaping); data is maps %{\"k\" => v}; runtime JSON via $json.loads(s).", "Docs: @doc is prose only; examples go in the separate @example attribute (gan> call / Python-repr output) — never an Examples: section inside @doc."]}
 
 
 def _std_lists(root):

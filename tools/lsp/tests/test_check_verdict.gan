@@ -223,6 +223,12 @@ defmodule TestCheckVerdict do
       assert Map.get(v, "suggestions") == []
     end
 
+    test "prose examples inside @doc teach @example" do
+      src = "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"\"\"\n  Does things.\n\n  Example:\n\n      factor n: 168\n  \"\"\"\n  defmacro f(x) do\n    quote do\n      unquote(x)\n    end\n  end\nend"
+      {v, _rc} = check(src)
+      assert suggests?(v, "practice", "lives in @example")
+    end
+
     test "count == 0 wants empty?" do
       {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: Enum.count(xs) == 0\nend")
       assert suggests?(v, "practice", "Enum.empty?")

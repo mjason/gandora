@@ -350,6 +350,7 @@ def word_count(sentence), do: ...
 
 - `@param` names must match clause-head variables — validated at
   compile time.
+- Never write prose `Example:` sections inside `@doc` (an Elixir habit) — `@example` is the only channel; on defs it runs, on defmacro it is displayed.
 - `@example` is the only doctest channel: `gan test` compiles the
   `gan>` lines into native Python doctests and runs them. Expected
   output is the Python `repr` (what `inspect/1` shows): atoms print as

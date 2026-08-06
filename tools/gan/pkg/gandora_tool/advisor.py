@@ -123,7 +123,7 @@ def _common_mistakes(source):
 def _practice_hints(raw):
     source = _mask_literals(raw)
     in_module = gandora_std.string.match_p(source, re.compile("defmodule"))
-    return _coverage_hints(raw, source, in_module) + (_spec_container_hints(source) + (_lone_typevar_hints(source) + (_idiom_hints(source) + _pyimport_hints(source))))
+    return _coverage_hints(raw, source, in_module) + (_spec_container_hints(source) + (_lone_typevar_hints(source) + (_doc_example_hints(raw) + (_idiom_hints(source) + _pyimport_hints(source)))))
 
 
 def _coverage_hints(raw, source, in_module):
@@ -175,6 +175,15 @@ def _coverage_hints(raw, source, in_module):
 
 def _count_attr_blocks(source, attr):
     return gandora_std.enum.count(re.compile(f"(?m)^\\s*{attr} ").findall(source))
+
+
+def _doc_example_hints(raw):
+    bodies = re.compile("@(?:module)?doc(?:_trans[^\"]*)?\\s+\"{3}([\\s\\S]*?)\"{3}").findall(raw)
+    smells = gandora_std.enum.filter(bodies, lambda b: _gan_or(_gan_or(gandora_std.string.match_p(b, re.compile("(?mi)^\\s*(##\\s*)?examples?:?\\s*$")), lambda: gandora_std.string.contains_p(b, "iex>")), lambda: gandora_std.string.contains_p(b, "gan>")))
+    if _gan_truthy(gandora_std.enum.empty_p(smells)):
+        return []
+    else:
+        return [{"kind": "practice", "line": _line_of(raw, re.compile("@doc\\s+\"{3}")), "message": "an example lives in @example, not prose inside @doc — move it to:\n@example \"\"\"\n    gan> call(...)\n    expected_repr\n\"\"\"\n(runnable by `gan test` on defs; displayed in docs on defmacro). Keep @doc to what/why prose (GEP-0007)."}]
 
 
 def _lone_typevar_hints(source):

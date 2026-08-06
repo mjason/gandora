@@ -49,6 +49,13 @@ def word_count(sentence), do: ...
   user-facing surfaces add the `_trans` pair. The build's coverage
   report keeps score.
 
+
+!!! note "No `## Examples` sections"
+    The Elixir habit of example blocks *inside* `@doc` does not apply:
+    `@doc` is prose only. Examples always go in the separate
+    `@example` attribute — runnable doctests on defs, displayed
+    documentation on macros. The build teaches this on sight.
+
 Documentation *language* is a developer preference, never project
 config: `gandora.local.jsonc` (`{"docLocale": "zh-CN"}`, gitignored) →
 `GAN_DOC_LOCALE` → English.

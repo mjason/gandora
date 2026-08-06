@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.18.7 — 2026-08-06
+
+**The `## Examples`-inside-`@doc` reflex now teaches itself away.**
+
+- New practice hint: a prose `Example:` section (or `iex>`/`gan>`
+  lines) inside `@doc`/`@moduledoc` points to the `@example`
+  attribute — Elixir's ExDoc habit does not apply here. `@doc` is
+  prose; `@example` runs on defs and displays on macros.
+- New `doc` construct card; `example` card states the macro
+  (display-only) semantics; the context pack's notes carry the rule;
+  manual and site updated.
+- Fixed en route: a bare `"""` inside a regex sigil could desync the
+  Advisor's heredoc masking and swallow real code between two @doc
+  blocks — sigil regexes now spell `"{3}` (with a fmt-safe rewrite of
+  the detection pattern).
+
 ## v0.18.6 — 2026-08-06
 
 - `gan lsc doc Mod.name` on an **undocumented** def/defmacro now

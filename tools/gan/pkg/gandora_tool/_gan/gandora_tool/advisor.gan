@@ -163,6 +163,7 @@ defmodule Advisor do
     coverage_hints(raw, source, in_module) ++
       spec_container_hints(source) ++
       lone_typevar_hints(source) ++
+      doc_example_hints(raw) ++
       idiom_hints(source) ++
       pyimport_hints(source)
   end
@@ -227,6 +228,23 @@ defmodule Advisor do
 
   defp count_attr_blocks(source, attr) do
     Enum.count(~r/(?m)^\s*#{attr} /.findall(source))
+  end
+
+  # the Elixir reflex of prose examples inside @doc — Gandora's
+  # examples live in @example (runnable for defs, displayed for
+  # macros); scan the RAW @doc bodies, which masking blanks out
+  defp doc_example_hints(raw) do
+    bodies = ~r/@(?:module)?doc(?:_trans[^"]*)?\s+"{3}([\s\S]*?)"{3}/.findall(raw)
+    smells = Enum.filter(bodies, fn b ->
+      String.match?(b, ~r/(?mi)^\s*(##\s*)?examples?:?\s*$/) or
+        String.contains?(b, "iex>") or String.contains?(b, "gan>")
+    end)
+    if Enum.empty?(smells) do
+      []
+    else
+      [%{"kind" => "practice", "line" => line_of(raw, ~r/@doc\s+"{3}/),
+        "message" => "an example lives in @example, not prose inside @doc — move it to:\n@example \"\"\"\n    gan> call(...)\n    expected_repr\n\"\"\"\n(runnable by `gan test` on defs; displayed in docs on defmacro). Keep @doc to what/why prose (GEP-0007)."}]
+    end
   end
 
   # a bare type variable as the WHOLE return that appears nowhere else
