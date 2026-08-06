@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.18.6 — 2026-08-06
+
+- `gan lsc doc Mod.name` on an **undocumented** def/defmacro now
+  returns its kind and head with a document-me recipe instead of
+  `null` — hover and agents always get an answer for anything that
+  exists.
+
 ## v0.18.5 — 2026-08-06
 
 **Macros are first-class citizens of the documentation surfaces.**

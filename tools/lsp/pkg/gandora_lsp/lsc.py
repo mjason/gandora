@@ -144,6 +144,11 @@ def _dispatch(args, root):
 
 def _doc_one(target, root, brief):
     info = core.doc(target, root)
+    if (info is None):
+        _gan_tmp26 = _symbol_stub(target, root)
+    else:
+        _gan_tmp26 = info
+    info = _gan_tmp26
     card = gandora_lsp.construct_docs.card(target)
     if _gan_truthy(_gan_and(not ((info is None)), lambda: brief)):
         return _brief_doc(target, info)
@@ -165,27 +170,47 @@ def _doc_one(target, root, brief):
         return None
 
 
+def _symbol_stub(target, root):
+    parts = target.rsplit(".", 1)
+    if gandora_std.enum.count(parts) != 2:
+        return None
+    else:
+        mod = gandora_std.enum.at(parts, 0)
+        name = gandora_std.enum.at(parts, 1)
+        try:
+            _gan_tmp27 = core.symbols(mod, root)
+        except Exception as _e:
+            _gan_tmp27 = []
+        syms = _gan_tmp27
+        hit = gandora_std.enum.find(syms, lambda s, *, name=name: gandora_std.map.get(s, "name") == name)
+        if (hit is None):
+            return None
+        else:
+            _gan_fstr28 = gandora_std.map.get(hit, "kind")
+            return {"label": target, "kind": gandora_std.map.get(hit, "kind"), "head": gandora_std.map.get(hit, "head"), "entries": {"default": f"(undocumented — add @doc above the {_gan_fstr28})"}}
+
+
 def _project_doc(name, root):
     try:
-        _gan_tmp26 = core.wsymbols(name, root)
+        _gan_tmp29 = core.wsymbols(name, root)
     except Exception as _e:
-        _gan_tmp26 = []
-    syms = _gan_tmp26
+        _gan_tmp29 = []
+    syms = _gan_tmp29
     hit = gandora_std.enum.find(syms, lambda s, *, name=name: gandora_std.map.get(s, "name") == name)
     if (hit is None):
         return None
     else:
-        _gan_fstr27 = gandora_std.map.get(hit, "module")
-        return core.doc(f"{_gan_fstr27}.{name}", root)
+        _gan_fstr30 = gandora_std.map.get(hit, "module")
+        return core.doc(f"{_gan_fstr30}.{name}", root)
 
 
 def _brief_doc(target, info):
     specs = gandora_std.map.get(info, "specs", [])
     if _gan_truthy(gandora_std.enum.empty_p(specs)):
-        _gan_tmp28 = target
+        _gan_tmp31 = target
     else:
-        _gan_tmp28 = gandora_std.enum.at(specs, 0)
-    head = _gan_tmp28
+        _gan_tmp31 = gandora_std.enum.at(specs, 0)
+    head = _gan_tmp31
     prose = gandora_std.map.get(gandora_std.map.get(info, "entries", {}), "default", "")
     summary = gandora_std.enum.at(prose.split("\n"), 0)
     return {"label": target, "head": head, "summary": summary}
@@ -205,8 +230,8 @@ def import_line(chain: str) -> str:
 
 
 def _take_root(args):
-    _gan_case29 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case29:
+    _gan_case32 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case32:
         case None:
             return (os.getcwd(), args)
         case i:

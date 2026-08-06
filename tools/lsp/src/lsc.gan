@@ -179,6 +179,7 @@ defmodule Lsc do
   # one doc lookup: project/std docs, construct cards, then pydoc
   defp doc_one(target, root, brief) do
     info = core.doc(target, root)
+    info = if is_nil(info), do: symbol_stub(target, root), else: info
     card = ConstructDocs.card(target)
     cond do
       not is_nil(info) and brief -> brief_doc(target, info)
@@ -199,6 +200,31 @@ defmodule Lsc do
           end
         end
       true -> nil
+    end
+  end
+
+  # an undocumented def/defmacro still deserves an answer: its head,
+  # plus the recipe for documenting it
+  defp symbol_stub(target, root) do
+    parts = target.rsplit(".", 1)
+    if Enum.count(parts) != 2 do
+      nil
+    else
+      mod = Enum.at(parts, 0)
+      name = Enum.at(parts, 1)
+      syms = try do
+        core.symbols(mod, root)
+      rescue
+        _e -> []
+      end
+      hit = Enum.find(syms, fn s -> Map.get(s, "name") == name end)
+      if is_nil(hit) do
+        nil
+      else
+        %{"label" => target, "kind" => Map.get(hit, "kind"),
+          "head" => Map.get(hit, "head"),
+          "entries" => %{"default" => "(undocumented — add @doc above the #{Map.get(hit, "kind")})"}}
+      end
     end
   end
 
