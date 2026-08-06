@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.18.8 — 2026-08-06
+
+**Attributes are data; do blocks reach qualified calls.** Three fixes
+surfaced by watching a macro-DSL project evolve in the wild:
+
+- `@spec factor(...)` above `defmacro factor` used to *invoke* the
+  macro (the annotation head is call-shaped by design). The expander
+  now treats every attribute value as data — annotations describe
+  code, they never run it. Specs on macros are safe again.
+- `Mod.macro(args) do ... end` now parses: the do block attaches to
+  qualified paren calls exactly as to bare ones (as in Elixir). The
+  previous gap forced consumers into the `do:` keyword spelling.
+- A `raise` inside a macro used to report the macro's internal line
+  under the consumer file's path (e.g. `LowPrice.gan:64` in a 9-line
+  file). Macro-raise diagnostics now anchor at the call site, with
+  the macro-internal span kept in the origin chain.
+
 ## v0.18.7 — 2026-08-06
 
 **The `## Examples`-inside-`@doc` reflex now teaches itself away.**

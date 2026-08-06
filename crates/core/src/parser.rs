@@ -255,10 +255,14 @@ impl Parser {
         let primary = self.parse_primary(command)?;
         let mut t = self.parse_postfix(primary)?;
         // a do-block after a paren call in command position belongs to it:
-        // `foo(x) do ... end`
+        // `foo(x) do ... end`, and equally the qualified spelling
+        // `Mod.macro(x) do ... end` (do attaches to remote calls, as in
+        // Elixir)
         if command && *self.peek() == Tok::Kw("do") {
             if let Term::Call(ref mut c) = t {
-                if matches!(c.callee, Callee::Name(_)) {
+                if matches!(c.callee, Callee::Name(_))
+                    || matches!(c.callee, Callee::Dot { is_call: true, .. })
+                {
                     let mut block_args = self.parse_do_block()?;
                     c.args.append(&mut block_args);
                 }

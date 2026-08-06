@@ -163,6 +163,13 @@ impl Expander {
                         // macro definitions are already collected; keep as-is
                         return Ok(term.clone());
                     }
+                    if name.starts_with('@') {
+                        // attribute values are annotations — data for codegen
+                        // and hooks, never macro-invocation sites: `@spec
+                        // factor(...)` above `defmacro factor` must describe
+                        // the macro, not invoke it (GEP-0008)
+                        return Ok(term.clone());
+                    }
                     if name == "defmodule" {
                         // module bodies get the attribute-aware sequential
                         // pass (GEP-0008-R001/R004/R005)
@@ -447,7 +454,12 @@ impl Expander {
             env.bind(param, arg.clone());
         }
         let result = self.eval(&def.body, &mut env, ctx).map_err(|mut d| {
-            d.origin.push((format!("macro {name}"), call.span));
+            // the failure site lives in the macro's own source, but the
+            // diagnostic carries the consumer file's path — anchor the
+            // span at the call site so path and line agree, and keep the
+            // macro-internal span in the origin chain
+            d.origin.push((format!("macro {name}"), d.span));
+            d.span = call.span;
             d
         })?;
         Ok(result)
@@ -1120,6 +1132,48 @@ mod tests {
             "defmacro double(x) do\n  quote do\n    unquote(x) * 2\n  end\nend\ny = double(3)",
         );
         assert!(out.contains("y = 3 * 2"), "{out}");
+    }
+
+    #[test]
+    fn attributes_never_expand_as_macro_calls() {
+        // `@spec factor(...)` above `defmacro factor` describes the macro;
+        // it must not invoke it (the head is call-shaped by design)
+        let out = expand(
+            "defmodule M do\n  @doc \"d\"\n  @spec factor(term(), term()) :: term()\n  defmacro factor(x, y) do\n    quote do\n      unquote(x) + unquote(y)\n    end\n  end\nend",
+        );
+        assert!(out.contains("@spec factor(term(), term())"), "{out}");
+        // and the same protection inside macro-generated output
+        let out2 = expand(
+            "defmodule M do\n  defmacro gen() do\n    quote do\n      @spec gen() :: term()\n      def helper(), do: 1\n    end\n  end\nend\ndefmodule N do\n  require M\n  M.gen()\nend",
+        );
+        assert!(out2.contains("@spec gen()"), "{out2}");
+    }
+
+    #[test]
+    fn qualified_paren_call_takes_do_block() {
+        // `Mod.macro(args) do ... end` — the do block belongs to the call,
+        // and the qualified macro expands with it
+        let out = expand(
+            "defmodule M do\n  defmacro twice(opts, body) do\n    quote do\n      unquote(opts) + unquote(body)\n    end\n  end\nend\ndefmodule N do\n  require M\n  def go() do\n    M.twice(1) do\n      2\n    end\n  end\nend",
+        );
+        // body arrives as the `do:` pair, exactly as in the command form
+        assert!(out.contains("1 + do: 2"), "{out}");
+        assert!(!out.contains("M.twice"), "{out}");
+    }
+
+    #[test]
+    fn macro_raise_anchors_at_call_site() {
+        // the raise lives in the macro's source; the diagnostic must point
+        // at the consumer's call line (path and line agree), with the
+        // macro-internal span preserved in the origin chain
+        let src = "defmodule M do\n  defmacro boom() do\n    raise \"nope\"\n  end\nend\ndefmodule N do\n  require M\n  def go() do\n    M.boom()\n  end\nend";
+        let module = parse_file("<test>", src).unwrap();
+        let macros = collect_macros("<test>", &module).unwrap();
+        let mut ex = Expander::new("<test>", macros);
+        let err = ex.expand_module(&module).unwrap_err();
+        assert!(err.message.contains("macro raised"), "{}", err.message);
+        assert_eq!(err.span.line, 9, "call site line, not raise line: {err:?}");
+        assert!(err.origin.iter().any(|(o, s)| o == "macro boom" && s.line == 3));
     }
 
     #[test]
