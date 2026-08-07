@@ -108,7 +108,7 @@ defmodule TestTask do
   end
 
   def test_async_stream_orders_results() do
-    Test.assert_eq(Task.run(Task.async_stream([4, 3, 2, 1], fn x -> flip(x) end, 4)), [4, 3, 2, 1])
+    Test.assert_eq(Task.run(Task.async_stream([4, 3, 2, 1], &flip/1, 4)), [4, 3, 2, 1])
   end
 
   # with a bound of 2 a three-party barrier can never fill — every

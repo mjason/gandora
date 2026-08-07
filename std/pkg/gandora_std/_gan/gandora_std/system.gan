@@ -1,0 +1,90 @@
+defmodule System do
+  @moduledoc """
+  The host process surface, thin (GEP-0010-R011): running commands,
+  reading the environment, finding executables, and leaving. `cmd`
+  follows Elixir's contract — captured text output plus exit status —
+  because a subprocess whose output you did not capture is a
+  subprocess you cannot put in a verdict.
+  """
+  @moduledoc_trans zh_CN: "宿主进程面薄封(GEP-0010-R011):跑命令、读环境、找可执行文件、退出。`cmd` 循 Elixir 契约——捕获的文本输出加退出码——没捕获输出的子进程,是放不进裁决的子进程。"
+
+  pyimport os
+  pyimport subprocess
+  pyimport shutil
+  pyimport sys
+
+  @doc """
+  Runs `bin` with `args`, capturing text output: `{stdout, exit_status}`.
+  Options: `cd:` runs in a directory, `stderr_to_stdout: true` merges
+  the streams (both Elixir's), and `timeout:` milliseconds raises the
+  host's timeout error on expiry (a Gandora extension, recorded per
+  GEP-0010-R004).
+  """
+  @doc_trans zh_CN: "以 `args` 运行 `bin` 并捕获文本输出:`{stdout, exit_status}`。选项:`cd:` 指定运行目录,`stderr_to_stdout: true` 合并两流(皆同 Elixir);`timeout:` 毫秒,超时抛宿主超时异常(Gandora 扩展,按 GEP-0010-R004 记录)。"
+  @param bin, "The executable."
+  @param_trans bin, zh_CN: "可执行文件。"
+  @param args, "Its arguments."
+  @param_trans args, zh_CN: "参数列表。"
+  @param opts, "`cd:`, `stderr_to_stdout:`, `timeout:` (ms)."
+  @param_trans opts, zh_CN: "`cd:`、`stderr_to_stdout:`、`timeout:`(毫秒)。"
+  @spec cmd(string(), sequence(string()), keyword()) :: tuple(string(), integer())
+  @example """
+      gan> System.cmd("echo", ["hi"])
+      ('hi\\n', 0)
+      gan> System.cmd("pwd", [], [cd: "/"])
+      ('/\\n', 0)
+  """
+  def cmd(bin, args, opts \\ []) do
+    ms = Keyword.get(opts, :timeout)
+    # stderr passes through to the caller's stderr unless merged —
+    # Elixir's default, and a failing tool stays diagnosable
+    err = if Keyword.get(opts, :stderr_to_stdout, false),
+      do: subprocess.STDOUT,
+      else: nil
+    r = subprocess.run([bin] ++ args,
+      stdout: subprocess.PIPE, stderr: err, text: true,
+      cwd: Keyword.get(opts, :cd),
+      timeout: if(is_nil(ms), do: nil, else: ms / 1000))
+    {r.stdout, r.returncode}
+  end
+
+  @doc "The value of an environment variable, or `default` (nil unless given) when unset."
+  @doc_trans zh_CN: "环境变量的值;未设时为 `default`(缺省 nil)。"
+  @param name, "The variable name."
+  @param_trans name, zh_CN: "变量名。"
+  @param default, "Returned when the variable is unset."
+  @param_trans default, zh_CN: "未设时返回的值。"
+  @spec get_env(string(), a) :: string() | a
+  @example """
+      gan> is_nil(System.get_env("GAN_STD_SURELY_UNSET"))
+      True
+      gan> System.get_env("GAN_STD_SURELY_UNSET", "fallback")
+      'fallback'
+  """
+  def get_env(name, default \\ nil), do: os.environ.get(name, default)
+
+  @doc "The absolute path of an executable on `PATH`, or nil when absent."
+  @doc_trans zh_CN: "PATH 上可执行文件的绝对路径;找不到为 nil。"
+  @param name, "The executable name."
+  @param_trans name, zh_CN: "可执行文件名。"
+  @spec find_executable(string()) :: string() | nil
+  @example """
+      gan> is_nil(System.find_executable("sh"))
+      False
+      gan> is_nil(System.find_executable("gan-no-such-tool"))
+      True
+  """
+  def find_executable(name), do: shutil.which(name)
+
+  @doc "The command-line arguments, program name excluded (as in Elixir)."
+  @doc_trans zh_CN: "命令行参数,不含程序名(同 Elixir)。"
+  @spec argv() :: list(string())
+  def argv(), do: $builtins.list(sys.argv) |> Enum.drop(1)
+
+  @doc "Exits the VM with `status` (0 unless given)."
+  @doc_trans zh_CN: "以 `status` 退出(缺省 0)。"
+  @param status, "The exit status."
+  @param_trans status, zh_CN: "退出码。"
+  @spec halt(integer()) :: nil
+  def halt(status \\ 0), do: sys.exit(status)
+end

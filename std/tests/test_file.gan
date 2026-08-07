@@ -1,0 +1,57 @@
+defmodule TestFile do
+  @moduledoc "File, exhaustively: round-trips in a scratch tree, verdict reads, bang raises."
+  @moduledoc_trans zh_CN: "File 全函数测试:临时目录中的读写往返、裁决式读取、! 抛错。"
+
+  import Test
+
+  @scratch "/tmp/gan_std_test_file"
+
+  def test_cwd_is_absolute(), do: Test.assert_true(Path.absolute?(File.cwd!()))
+  def test_exists_root(), do: Test.assert_true(File.exists?("/"))
+  def test_exists_missing(), do: Test.assert_false(File.exists?("/gan_no_such_file"))
+  def test_dir_root(), do: Test.assert_true(File.dir?("/"))
+  def test_dir_on_file(), do: Test.assert_false(File.dir?("/dev/null"))
+  def test_read_missing_is_error(), do: Test.assert_eq(elem(File.read("/gan_no_such_file"), 0), :error)
+  def test_read_bang_raises() do
+    msg = Test.assert_raise($builtins.OSError, fn -> File.read!("/gan_no_such_file") end)
+    Test.assert_contains(msg, "gan_no_such_file")
+  end
+  def test_rm_rf_missing_is_ok(), do: Test.assert_eq(File.rm_rf!("/tmp/gan_std_never_created"), :ok)
+
+  def test_write_read_round_trip() do
+    File.mkdir_p!(@scratch)
+    path = @scratch |> Path.join("t.txt")
+    wrote = File.write!(path, "hello")
+    bang = File.read!(path)
+    verdict = File.read(path)
+    File.rm_rf!(@scratch)
+    Test.assert_eq({wrote, bang, verdict}, {:ok, "hello", {:ok, "hello"}})
+  end
+
+  def test_ls_is_sorted() do
+    File.mkdir_p!(@scratch)
+    File.write!(@scratch |> Path.join("b.txt"), "")
+    File.write!(@scratch |> Path.join("a.txt"), "")
+    listed = File.ls!(@scratch)
+    File.rm_rf!(@scratch)
+    Test.assert_eq(listed, ["a.txt", "b.txt"])
+  end
+
+  def test_mkdir_p_nested_and_repeat() do
+    deep = @scratch |> Path.join("x") |> Path.join("y")
+    twice = {File.mkdir_p!(deep), File.mkdir_p!(deep)}
+    made = File.dir?(deep)
+    File.rm_rf!(@scratch)
+    Test.assert_eq({twice, made}, {{:ok, :ok}, true})
+  end
+
+  def test_rm_rf_removes_file() do
+    File.mkdir_p!(@scratch)
+    path = @scratch |> Path.join("gone.txt")
+    File.write!(path, "x")
+    removed = File.rm_rf!(path)
+    gone = not File.exists?(path)
+    File.rm_rf!(@scratch)
+    Test.assert_eq({removed, gone}, {:ok, true})
+  end
+end

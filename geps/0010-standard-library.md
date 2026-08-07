@@ -8,8 +8,8 @@ type: Standards Track
 areas:
   - Standard Library
 created: 2026-08-02
-updated: 2026-08-02
-revision: 3
+updated: 2026-08-07
+revision: 4
 requires: [1, 3, 7]
 replaces: []
 superseded-by: null
@@ -103,8 +103,13 @@ duplicate, trim_leading, trim_trailing, codepoints, match?), `Map`
 update, fetch!, put_new, take, drop, filter), `List` (first, last,
 flatten, wrap, duplicate, insert_at, delete_at, to_tuple,
 starts_with?, replace_at, update_at), `Keyword` (get, put, keys,
-values, has_key?, delete, merge). Additions accumulate under this GEP
-by revision.
+values, has_key?, delete, merge), `Path` (join,
+dirname, basename, extname, expand, absolute?, wildcard), `File`
+(cwd!, read, read!, write!, exists?, dir?, ls!, mkdir_p!, rm_rf!),
+`System` (cmd — /2 and /3, get_env — /1 and /2, find_executable, argv,
+halt). Additions accumulate under this GEP by revision. (`Test` and
+`Task` are stdlib modules governed by their own GEPs — 0024 and 0029 —
+and are listed there, not here.)
 
 **GEP-0010-R006:** Every stdlib function MUST carry a default `@doc`,
 a `zh-CN` `@doc_trans`, and — for functions whose behavior is not
@@ -135,15 +140,51 @@ algorithmic code does not belong in the stdlib; it belongs in a
 package (GEP-0006).
 
 **GEP-0010-R009A:** Intra-stdlib dependencies MUST stay acyclic and
-layered: `Enum` is the base; `List` and `Keyword` may call `Enum`;
-`String` and `Map` stand alone. A qualified reference to the current
-module compiles as a local call (no self-import).
+layered: `Enum` is the base; `List`, `Keyword`, `Path`, `File`, and
+`System` may call `Enum` (and `System` may call `Keyword` for its
+options); `String` and `Map` stand alone. A qualified reference to the
+current module compiles as a local call (no self-import).
 
 **GEP-0010-R010:** The R005 list is the complete library. There is no
 partial-parity tracking against Elixir: a function is either fully
 present (documented, translated, doctested, Elixir-named,
 subject-first) or absent. Additions land as GEP revisions extending
 R005, never as unlisted code.
+
+### Host-facing modules
+
+`Path`, `File`, and `System` wrap the host's filesystem and process
+surface the way `Task` wraps its coroutine surface: thin, named after
+Elixir, no simulation. They exist because interop makes these calls
+*possible* but not *reviewable* — `os.path.join(os.path.dirname(x), y)`
+is Python wearing Gandora clothes, while `x |> Path.dirname() |>
+Path.join(y)` is the language's own idiom over the same host call.
+
+**GEP-0010-R011:** Their contracts, with every divergence recorded in
+`@doc` (R004):
+
+- `Path` functions are pure string arithmetic over `os.path`;
+  `Path.wildcard/1` is Python's recursive `glob`, sorted for
+  determinism. `Path.absolute?/1` spells Elixir's
+  `Path.type(p) == :absolute` as a predicate.
+- `File` bang functions (`read!`, `write!`, `ls!`, `mkdir_p!`,
+  `rm_rf!`, `cwd!`) let the host exception fly, verbatim — a wrapper
+  that translated exceptions would be a runtime. `File.read/1` returns
+  the verdict `{:ok, text}` / `{:error, message}` with the host's
+  message as a string, not Elixir's posix atom. `File.ls!/1` sorts.
+  `write!`, `mkdir_p!` (missing parents created, existing dir fine),
+  and `rm_rf!` (missing target fine) return `:ok`.
+- `System.cmd(bin, args, opts \\ [])` captures text output and returns
+  `{stdout, exit_status}` exactly as Elixir does; options are the
+  keywords `cd:`, `stderr_to_stdout:` (Elixir's), plus `timeout:` in
+  milliseconds (a Gandora extension — the host raises on expiry, which
+  the caller treats like any other raise). `System.argv/0` excludes
+  the program name, as in Elixir. `System.halt/1` exits the VM.
+
+These three modules complete the toolchain's own dogfood loop: the
+`gan`/`gan-lsc`/`gan-mcp` sources MUST prefer them over raw
+`$os`/`$pathlib`/`$subprocess` interop wherever the wrapped shape
+suffices.
 
 ## Rationale
 
@@ -172,7 +213,10 @@ reservation — a project module named `Enum` simply shadows the package
 
 Marker-based resolution reads static files only (GEP-0006-R006's
 rule). The stdlib compiles like any package; nothing executes at
-compile time.
+compile time. `File` and `System` touch the filesystem and spawn
+processes at *runtime*, exactly as the interop calls they wrap always
+could — they add reviewability (a `System.cmd` call is greppable where
+a `$subprocess.run` hid among imports), not capability.
 
 ## Tooling and AI Usage
 
@@ -213,6 +257,14 @@ precedence; pipe usage of each module against an installed
 package's own `gan test` passing every doctest.
 
 ## Change History
+
+- Revision 4, 2026-08-07: R005 extended with the host-facing modules
+  `Path` (7 functions), `File` (9), `System` (5, `cmd`/`get_env`/`halt`
+  with option or default arities) under the new R011
+  contracts; R009A layering updated for them. Motivated by the
+  toolchain audit: the `gan`/`gan-lsc`/`gan-mcp` sources spent five
+  `pyimport`s per file re-spelling `os.path` dances that are one
+  pipeline in the language's own idiom.
 
 - Revision 3, 2026-08-02: Examples updated to the GEP-0003 revision 2 `$` interop syntax.
 

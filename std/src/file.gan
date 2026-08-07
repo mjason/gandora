@@ -1,0 +1,152 @@
+defmodule File do
+  @moduledoc """
+  The filesystem, thin (GEP-0010-R011). Bang functions let the host
+  exception fly verbatim — a wrapper that translated exceptions would
+  be a runtime. `read/1` is the one verdict-shaped reader, for the
+  everyday "use the file if it is there" pattern.
+  """
+  @moduledoc_trans zh_CN: "文件系统薄封(GEP-0010-R011)。带 ! 的函数让宿主异常原样飞出——翻译异常的包装就成了 runtime。`read/1` 是唯一裁决形状的读取,服务「文件在就用」这一日常。"
+
+  pyimport os
+  pyimport pathlib
+  pyimport shutil
+
+  @doc "The current working directory."
+  @doc_trans zh_CN: "当前工作目录。"
+  @spec cwd!() :: string()
+  @example """
+      gan> String.starts_with?(File.cwd!(), "/")
+      True
+  """
+  def cwd!(), do: os.getcwd()
+
+  @doc """
+  The verdict-shaped read: `{:ok, text}`, or `{:error, message}` with
+  the host's message as a string. Divergence from Elixir recorded per
+  GEP-0010-R004: Elixir returns a posix atom, this returns the message.
+  """
+  @doc_trans zh_CN: "裁决形状的读取:`{:ok, text}`,或带宿主消息字符串的 `{:error, message}`。与 Elixir 的偏离按 GEP-0010-R004 记录:Elixir 返回 posix 原子,此处返回消息文本。"
+  @param path, "The file to read."
+  @param_trans path, zh_CN: "要读的文件。"
+  @spec read(string()) :: tuple(atom(), string())
+  @example """
+      gan> File.read("/dev/null")
+      ('ok', '')
+      gan> elem(File.read("/gan_no_such_file"), 0)
+      'error'
+  """
+  def read(path) do
+    try do
+      {:ok, pathlib.Path(path).read_text()}
+    rescue
+      e in $builtins.OSError -> {:error, to_string(e)}
+    end
+  end
+
+  @doc "The text of a file; raises the host exception when it cannot be read."
+  @doc_trans zh_CN: "文件文本;读不到时原样抛出宿主异常。"
+  @param path, "The file to read."
+  @param_trans path, zh_CN: "要读的文件。"
+  @spec read!(string()) :: string()
+  @example """
+      gan> File.read!("/dev/null")
+      ''
+  """
+  def read!(path), do: pathlib.Path(path).read_text()
+
+  @doc "Writes text to a file, replacing what was there; returns `:ok`."
+  @doc_trans zh_CN: "把文本写入文件并覆盖原内容;返回 `:ok`。"
+  @param path, "The file to write."
+  @param_trans path, zh_CN: "要写的文件。"
+  @param content, "The text to write."
+  @param_trans content, zh_CN: "要写入的文本。"
+  @spec write!(string(), string()) :: atom()
+  @example """
+      gan> File.write!("/tmp/gan_std_file_example.txt", "hi")
+      'ok'
+      gan> File.read!("/tmp/gan_std_file_example.txt")
+      'hi'
+  """
+  def write!(path, content) do
+    _chars = pathlib.Path(path).write_text(content)
+    :ok
+  end
+
+  @doc "Whether a path exists at all — file, directory, or anything else."
+  @doc_trans zh_CN: "路径是否存在——文件、目录或其他皆算。"
+  @param path, "The path to test."
+  @param_trans path, zh_CN: "要判断的路径。"
+  @spec exists?(string()) :: boolean()
+  @example """
+      gan> File.exists?("/")
+      True
+      gan> File.exists?("/gan_no_such_file")
+      False
+  """
+  def exists?(path), do: os.path.exists(path)
+
+  @doc "Whether a path is a directory."
+  @doc_trans zh_CN: "路径是否为目录。"
+  @param path, "The path to test."
+  @param_trans path, zh_CN: "要判断的路径。"
+  @spec dir?(string()) :: boolean()
+  @example """
+      gan> File.dir?("/")
+      True
+      gan> File.dir?("/dev/null")
+      False
+  """
+  def dir?(path), do: os.path.isdir(path)
+
+  @doc """
+  The entries of a directory, sorted for determinism (Elixir leaves
+  the order unspecified); raises when the directory cannot be listed.
+  """
+  @doc_trans zh_CN: "目录条目,排序以求确定(Elixir 不规定顺序);列不出时抛宿主异常。"
+  @param path, "The directory to list."
+  @param_trans path, zh_CN: "要列的目录。"
+  @spec ls!(string()) :: list(string())
+  @example """
+      gan> Enum.member?(File.ls!("/"), "tmp")
+      True
+  """
+  def ls!(path), do: os.listdir(path) |> Enum.sort()
+
+  @doc "Creates a directory and any missing parents; an existing directory is fine. Returns `:ok`."
+  @doc_trans zh_CN: "创建目录及缺失的父目录;目录已存在也算成功。返回 `:ok`。"
+  @param path, "The directory to create."
+  @param_trans path, zh_CN: "要创建的目录。"
+  @spec mkdir_p!(string()) :: atom()
+  @example """
+      gan> File.mkdir_p!("/tmp/gan_std_file_example_dir/deep")
+      'ok'
+      gan> File.rm_rf!("/tmp/gan_std_file_example_dir")
+      'ok'
+  """
+  def mkdir_p!(path) do
+    os.makedirs(path, exist_ok: true)
+    :ok
+  end
+
+  @doc """
+  Removes a file or a directory tree; a missing target is fine.
+  Returns `:ok`. Divergence from Elixir recorded per GEP-0010-R004:
+  Elixir's `rm_rf` returns the removed paths, this does not track them.
+  """
+  @doc_trans zh_CN: "删除文件或整棵目录树;目标不存在也算成功。返回 `:ok`。与 Elixir 的偏离按 GEP-0010-R004 记录:Elixir 的 `rm_rf` 返回被删路径,此处不追踪。"
+  @param path, "The file or directory to remove."
+  @param_trans path, zh_CN: "要删除的文件或目录。"
+  @spec rm_rf!(string()) :: atom()
+  @example """
+      gan> File.rm_rf!("/tmp/gan_std_never_created")
+      'ok'
+  """
+  def rm_rf!(path) do
+    if os.path.isdir(path) do
+      shutil.rmtree(path, ignore_errors: true)
+    else
+      pathlib.Path(path).unlink(missing_ok: true)
+    end
+    :ok
+  end
+end

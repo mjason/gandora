@@ -1,0 +1,30 @@
+defmodule TestPath do
+  @moduledoc "Path, exhaustively: pure string arithmetic plus wildcard against a real tree."
+  @moduledoc_trans zh_CN: "Path 全函数测试:纯字符串运算,wildcard 对真实目录树验证。"
+
+  import Test
+
+  def test_join(), do: Test.assert_eq(Path.join("a", "b.gan"), "a/b.gan")
+  def test_join_pipeline(), do: Test.assert_eq("a" |> Path.join("b") |> Path.join("c"), "a/b/c")
+  def test_dirname(), do: Test.assert_eq(Path.dirname("a/b/c.gan"), "a/b")
+  def test_dirname_bare(), do: Test.assert_eq(Path.dirname("c.gan"), "")
+  def test_basename(), do: Test.assert_eq(Path.basename("a/b/c.gan"), "c.gan")
+  def test_extname(), do: Test.assert_eq(Path.extname("a/b/c.gan"), ".gan")
+  def test_extname_none(), do: Test.assert_eq(Path.extname("Makefile"), "")
+  def test_expand_is_absolute(), do: Test.assert_true(Path.absolute?(Path.expand("x")))
+  def test_expand_home(), do: Test.assert_false(String.contains?(Path.expand("~/x"), "~"))
+  def test_absolute(), do: Test.assert_true(Path.absolute?("/etc"))
+  def test_relative(), do: Test.assert_false(Path.absolute?("src/main.gan"))
+  def test_wildcard_missing_dir(), do: Test.assert_eq(Path.wildcard("/gan_no_such_dir/**/*.x"), [])
+
+  # wildcard against a tree this test builds and removes itself
+  def test_wildcard_finds_recursively() do
+    root = "/tmp/gan_std_test_wildcard"
+    File.mkdir_p!(root |> Path.join("deep"))
+    File.write!(root |> Path.join("a.gan"), "")
+    File.write!(root |> Path.join("deep") |> Path.join("b.gan"), "")
+    found = Path.wildcard(root |> Path.join("**") |> Path.join("*.gan"))
+    File.rm_rf!(root)
+    Test.assert_eq(found, [root <> "/a.gan", root <> "/deep/b.gan"])
+  end
+end

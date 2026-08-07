@@ -7,6 +7,11 @@ python = "gandora_std/enum.py"
 source = "gandora_std/_gan/gandora_std/enum.gan"
 
 [[modules]]
+name = "File"
+python = "gandora_std/file.py"
+source = "gandora_std/_gan/gandora_std/file.gan"
+
+[[modules]]
 name = "Keyword"
 python = "gandora_std/keyword.py"
 source = "gandora_std/_gan/gandora_std/keyword.gan"
@@ -22,9 +27,19 @@ python = "gandora_std/map.py"
 source = "gandora_std/_gan/gandora_std/map.gan"
 
 [[modules]]
+name = "Path"
+python = "gandora_std/path.py"
+source = "gandora_std/_gan/gandora_std/path.gan"
+
+[[modules]]
 name = "String"
 python = "gandora_std/string.py"
 source = "gandora_std/_gan/gandora_std/string.gan"
+
+[[modules]]
+name = "System"
+python = "gandora_std/system.py"
+source = "gandora_std/_gan/gandora_std/system.gan"
 
 [[modules]]
 name = "Task"

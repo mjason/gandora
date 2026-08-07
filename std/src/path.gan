@@ -1,0 +1,113 @@
+defmodule Path do
+  @moduledoc """
+  Pure path arithmetic over `os.path` (GEP-0010-R011): joining,
+  splitting, and matching path strings. Nothing here touches the
+  filesystem except `wildcard/1`, which only reads directory listings.
+  """
+  @moduledoc_trans zh_CN: "基于 `os.path` 的纯路径运算(GEP-0010-R011):拼接、拆分与匹配路径字符串。除只读目录列表的 `wildcard/1` 外,此处不触碰文件系统。"
+
+  pyimport os
+  pyimport glob, as: pyglob
+
+  @doc """
+  Joins two path segments with the host separator. More than two
+  segments are a pipeline: `"a" |> Path.join("b") |> Path.join("c")`.
+  """
+  @doc_trans zh_CN: "以宿主分隔符拼接两个路径段。多段就是管线:`\"a\" |> Path.join(\"b\") |> Path.join(\"c\")`。"
+  @param left, "The leading segment."
+  @param_trans left, zh_CN: "前段。"
+  @param right, "The trailing segment."
+  @param_trans right, zh_CN: "后段。"
+  @spec join(string(), string()) :: string()
+  @example """
+      gan> Path.join("src", "main.gan")
+      'src/main.gan'
+      gan> "a" |> Path.join("b") |> Path.join("c.gan")
+      'a/b/c.gan'
+  """
+  def join(left, right), do: os.path.join(left, right)
+
+  @doc "The directory part of a path."
+  @doc_trans zh_CN: "路径的目录部分。"
+  @param path, "The path."
+  @param_trans path, zh_CN: "路径。"
+  @spec dirname(string()) :: string()
+  @example """
+      gan> Path.dirname("a/b/c.gan")
+      'a/b'
+  """
+  def dirname(path), do: os.path.dirname(path)
+
+  @doc "The final component of a path."
+  @doc_trans zh_CN: "路径的最后一段。"
+  @param path, "The path."
+  @param_trans path, zh_CN: "路径。"
+  @spec basename(string()) :: string()
+  @example """
+      gan> Path.basename("a/b/c.gan")
+      'c.gan'
+  """
+  def basename(path), do: os.path.basename(path)
+
+  @doc "The extension of the final component, dot included; empty when there is none."
+  @doc_trans zh_CN: "最后一段的扩展名(含点);没有则为空串。"
+  @param path, "The path."
+  @param_trans path, zh_CN: "路径。"
+  @spec extname(string()) :: string()
+  @example """
+      gan> Path.extname("a/b/c.gan")
+      '.gan'
+      gan> Path.extname("Makefile")
+      ''
+  """
+  def extname(path), do: elem(os.path.splitext(path), 1)
+
+  @doc """
+  The absolute form of a path: `~` expanded, then resolved against the
+  current working directory (Elixir's `Path.expand/1`).
+  """
+  @doc_trans zh_CN: "路径的绝对形式:先展开 `~`,再相对当前工作目录解析(即 Elixir 的 `Path.expand/1`)。"
+  @param path, "The path to expand."
+  @param_trans path, zh_CN: "要展开的路径。"
+  @spec expand(string()) :: string()
+  @example """
+      gan> String.starts_with?(Path.expand("x"), "/")
+      True
+  """
+  def expand(path), do: os.path.abspath(os.path.expanduser(path))
+
+  @doc """
+  Whether a path is absolute. Divergence from Elixir recorded per
+  GEP-0010-R004: Elixir spells this `Path.type(path) == :absolute`;
+  Gandora prefers the predicate.
+  """
+  @doc_trans zh_CN: "路径是否为绝对路径。与 Elixir 的偏离按 GEP-0010-R004 记录:Elixir 拼作 `Path.type(path) == :absolute`,Gandora 取谓词拼写。"
+  @param path, "The path to test."
+  @param_trans path, zh_CN: "要判断的路径。"
+  @spec absolute?(string()) :: boolean()
+  @example """
+      gan> Path.absolute?("/etc")
+      True
+      gan> Path.absolute?("src/main.gan")
+      False
+  """
+  def absolute?(path), do: os.path.isabs(path)
+
+  @doc """
+  Every path matching a glob pattern, sorted for determinism (Elixir
+  leaves the order unspecified). `**` matches directories recursively.
+  """
+  @doc_trans zh_CN: "匹配 glob 模式的全部路径,排序以求确定(Elixir 不规定顺序)。`**` 递归匹配目录。"
+  @param pattern, "The glob pattern, e.g. `src/**/*.gan`."
+  @param_trans pattern, zh_CN: "glob 模式,如 `src/**/*.gan`。"
+  @spec wildcard(string()) :: list(string())
+  @example """
+      gan> Path.wildcard("/gan_no_such_dir/**/*.gan")
+      []
+  """
+  def wildcard(pattern) do
+    pyglob.glob(pattern, recursive: true)
+    |> $builtins.list()
+    |> Enum.sort()
+  end
+end
