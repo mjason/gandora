@@ -102,6 +102,41 @@ defmodule TestInitCli do
     shutil.rmtree(tmp, ignore_errors: true)
   end
 
+  # init now owns both shapes (GEP-0013-R002): ganc carries no scaffold
+  test "the package scaffold lays out a publishable project" do
+    tmp = tempfile.mkdtemp(prefix: "gan-pkg-")
+    target = os.path.join(tmp, "acme-demo")
+    subprocess.run([gan_bin(), "init", "--package", target], capture_output: true, text: true)
+    # jsonc carries comments, so this one is read as text
+    conf = read(target, "gandora.jsonc")
+    assert_true(String.contains?(conf, "\"outDir\": \"pkg\""))
+    assert_true(String.contains?(conf, "\"package\": true"))
+    # the distribution name becomes the python package and the module
+    core = read(target, "src/acme_demo/core.gan")
+    assert_true(String.contains?(core, "defmodule AcmeDemo.Core do"))
+    # the fence and the interpolation hole survived the template
+    assert_true(String.contains?(core, "@example \"\"\""))
+    assert_true(String.contains?(core, "\#{name}"))
+    # a package wires the agents too
+    assert_true(pathlib.Path(os.path.join(target, ".mcp.json")).exists())
+    shutil.rmtree(tmp, ignore_errors: true)
+  end
+
+  # re-running is how an existing project acquires new scaffold files —
+  # it must never refuse and never overwrite (GEP-0013-R002)
+  test "re-running init fills gaps without touching what is there" do
+    dir = scaffold()
+    pathlib.Path(os.path.join(dir, "src", "main.gan")).write_text("defmodule Main do\n  def main(), do: nil\nend\n")
+    os.remove(os.path.join(dir, ".mcp.json"))
+    out = subprocess.run([gan_bin(), "init", dir], capture_output: true, text: true)
+    assert_eq(out.returncode, 0)
+    # the gap is filled...
+    assert_true(pathlib.Path(os.path.join(dir, ".mcp.json")).exists())
+    # ...and the file the user edited is untouched
+    assert_true(String.contains?(read(dir, "src/main.gan"), "def main(), do: nil"))
+    cleanup(dir)
+  end
+
   # the scaffold faces the verdict it will be judged by, from birth
   test "the generated entry module carries its annotations" do
     dir = scaffold()

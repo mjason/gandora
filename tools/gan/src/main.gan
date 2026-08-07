@@ -20,7 +20,8 @@ defmodule Main do
                             artifact verification; errors stop artifacts
                             (--strict adds type-flow warnings via ty)
     gan run <file> [args...] | exec <code> | repl
-    gan fmt [--check] [path...] | init <path> | version
+    gan fmt [--check] [path...] | version
+    gan init [--package] <path>   scaffold a project (or fill an existing one)
     gan test                doctests + tests/*.gan (GEP-0024)
     gan agent [--json]      the AI-session briefing: working loop +
                             context pack in one output (GEP-0026)
@@ -47,8 +48,7 @@ defmodule Main do
       ["repl" | _] -> repl()
       ["agent" | rest] -> Agent.run(rest)
       ["fmt" | rest] -> Fmt.run(rest)
-      ["init", path | _] -> init(path)
-      ["init"] -> die_usage("init requires a path")
+      ["init" | rest] -> init_cmd(rest)
       [cmd | rest] -> delegate(cmd, rest)
     end
   end
@@ -393,33 +393,52 @@ defmodule Main do
     write_if_absent(p / ".codex" / "config.toml", @mcp_codex)
   end
 
-  @doc "Creates a new project (or fills an existing directory) in place."
+  # `init [--package] <path>`: the flag selects which scaffold
+  defp init_cmd(args) do
+    paths = Enum.filter(args, fn a -> not String.starts_with?(a, "--") end)
+    path = if Enum.empty?(paths), do: ".", else: Enum.at(paths, 0)
+    if Enum.member?(args, "--package") do
+      if Enum.empty?(paths) do
+        die_usage("init --package requires a package name")
+      else
+        init_package(path)
+      end
+    else
+      init(path)
+    end
+  end
+
+  @doc """
+  Creates a project, or fills in what an existing one is missing.
+
+  Since the scaffold also writes the agent wiring (GEP-0028-R012),
+  re-running it on a project that already exists is how that wiring
+  arrives — so this never refuses and never overwrites: every file it
+  would write, it writes only when absent.
+  """
   @param path, "Where to create the project."
   @spec init(string()) :: nil
   def init(path) do
     p = pathlib.Path(path)
-    cond do
-      p.exists() and not p.is_dir() ->
-        IO.puts("gan: #{path} is a file")
-        sys.exit(1)
-      (p / "gandora.jsonc").exists() ->
-        IO.puts("gan: #{path} is already a Gandora project")
-        sys.exit(1)
-      true -> nil
+    if p.exists() and not p.is_dir() do
+      IO.puts("gan: #{path} is a file")
+      sys.exit(1)
     end
-    # an existing directory is fine (gan init .): create what is
-    # missing, never overwrite what is there
     (p / "src").mkdir(parents: true, exist_ok: true)
     name = to_string(p.resolve().name)
-    (p / "gandora.jsonc").write_text(@gandora_jsonc)
+    write_if_absent(p / "gandora.jsonc", @gandora_jsonc)
     pyproject = p / "pyproject.toml"
     if pyproject.exists() do
       # the MCP configs below are written either way, but their command
       # only resolves once the project depends on the toolchain — say
-      # exactly what to add rather than leave dead wiring behind
-      IO.puts("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
-      IO.puts("  dependencies: \"gandora-std\"        (generated code imports it)")
-      IO.puts("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
+      # exactly what to add rather than leave dead wiring behind. A
+      # pyproject that already names them needs no advice: re-running
+      # init on a wired project is the normal way to pick up new files.
+      if not String.contains?(pyproject.read_text(), "gandora-mcp") do
+        IO.puts("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
+        IO.puts("  dependencies: \"gandora-std\"        (generated code imports it)")
+        IO.puts("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
+      end
     else
       pyproject.write_text(pyproject_toml(name))
     end
@@ -435,6 +454,130 @@ defmodule Main do
     if not file.exists() do
       file.write_text(content)
     end
+  end
+
+  # outDir must not be `dist`: hatchling excludes its own artifact
+  # directory from wheel inputs
+  @package_jsonc ~jsonc"""
+  {
+    // Gandora package project (GEP-0006): `gan build` also emits the
+    // gandora.toml marker and ships .gan sources for macro consumers.
+    "source": ["src"],
+    "outDir": "pkg",
+    "targetPython": "3.11",
+    "package": true
+  }
+  """
+
+  defp package_pyproject(dist_name, py_pkg) do
+    ~toml"""
+    [project]
+    name = "<%= dist_name %>"
+    version = "0.1.0"
+    description = "A Gandora package"
+    requires-python = ">=3.11"
+    dependencies = ["gandora-std>=<%= core.version() %>"]
+
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+
+    # pkg/ is gitignored build output but must enter the distribution
+    [tool.hatch.build]
+    ignore-vcs = true
+
+    # the sdist carries sources and the compiled output of `gan build`
+    [tool.hatch.build.targets.sdist]
+    include = ["pkg", "src", "gandora.jsonc"]
+
+    # the wheel packages the compiled output (marker and .gan sources included)
+    [tool.hatch.build.targets.wheel]
+    packages = ["pkg/<%= py_pkg %>"]
+
+    # the toolchain and the MCP surface are development-time, never runtime
+    [dependency-groups]
+    dev = ["gandora-tool[dev]>=<%= core.version() %>", "gandora-mcp>=<%= core.version() %>"]
+    """
+  end
+
+  # the starter faces the same verdict every other module does. `~gan` is
+  # raw text (GEP-0009-R006): a backslash means a backslash, so the two
+  # spellings the template must EMIT rather than obey — the heredoc fence
+  # and an interpolation hole — arrive through `<%= %>` splices.
+  defp package_starter(module, dist_name) do
+    fence = "\"\"\""
+    hole = "#" <> "{name}"
+    ~gan"""
+    defmodule <%= module %>.Core do
+      @moduledoc "Public surface of <%= dist_name %>: functions run anywhere, macros expand in consumers."
+
+      @doc "Greets `name` in this package's voice."
+      @param name, "Who to greet."
+      @spec hello(string()) :: string()
+      @example <%= fence %>
+          gan> <%= module %>.Core.hello("world")
+          'Hello from <%= dist_name %>, world!'
+      <%= fence %>
+      def hello(name), do: "Hello from <%= dist_name %>, <%= hole %>!"
+
+      @doc "Evaluates `expr` twice and pairs the results — a macro consumers expand."
+      @param expr, "The expression to duplicate."
+      @spec twice(term()) :: tuple()
+      defmacro twice(expr) do
+        quote do
+          {unquote(expr), unquote(expr)}
+        end
+      end
+
+      @doc "Proof the macro expands where it is used — a macro's own example is displayed, never run."
+      @spec twice_demo() :: tuple()
+      @example <%= fence %>
+          gan> <%= module %>.Core.twice_demo()
+          (2, 2)
+      <%= fence %>
+      def twice_demo(), do: twice(1 + 1)
+    end
+    """
+  end
+
+  @doc """
+  Creates a publishable Gandora package (GEP-0006-R001): sources under
+  `src/<py_pkg>/`, compiled output in `pkg/` shipped in the wheel.
+  """
+  @param path, "The package directory to create; its name is the distribution name."
+  @spec init_package(string()) :: nil
+  def init_package(path) do
+    p = pathlib.Path(path)
+    if p.exists() do
+      IO.puts("gan: #{path} already exists")
+      sys.exit(1)
+    end
+    dist_name = to_string(p.resolve().name)
+    py_pkg = String.replace(dist_name, "-", "_")
+    module = camelize(py_pkg)
+    (p / "src" / py_pkg).mkdir(parents: true, exist_ok: true)
+    (p / "gandora.jsonc").write_text(@package_jsonc)
+    (p / "pyproject.toml").write_text(package_pyproject(dist_name, py_pkg))
+    (p / ".gitignore").write_text(@gitignore <> "pkg/\n")
+    (p / ".python-version").write_text("3.11\n")
+    (p / "src" / py_pkg / "core.gan").write_text(package_starter(module, dist_name))
+    write_mcp_configs(p)
+    IO.puts("Initialized Gandora package #{dist_name} in #{path}")
+    IO.puts("Publish with:")
+    IO.puts("  cd #{path}")
+    IO.puts("  gan build && uv build && uv publish")
+  end
+
+  @doc "A snake_case package name as its Gandora module name."
+  @param name, "The snake_case name."
+  @spec camelize(string()) :: string()
+  @example """
+      gan> Main.camelize("gan_coin")
+      'GanCoin'
+  """
+  def camelize(name) do
+    parts = for part <- String.split_on(name, "_"), part != "", do: String.capitalize(part)
+    Enum.join(parts, "")
   end
 
   @doc "The executable name a plugin subcommand delegates to (GEP-0013-R003)."

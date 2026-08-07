@@ -8,8 +8,8 @@ type: Standards Track
 areas:
   - Tooling
 created: 2026-08-02
-updated: 2026-08-02
-revision: 2
+updated: 2026-08-07
+revision: 3
 requires: [6, 12, 14]
 replaces: []
 superseded-by: null
@@ -85,8 +85,11 @@ entry point — installing one is `uv add`.
 `pyproject.toml`: `gandora-std` as a runtime dependency (generated
 code imports it) and `gandora-tool[dev]` in the `dev` dependency
 group — the `dev` extra aggregates the toolchain (the language
-server, with the compiler library arriving transitively). Scaffolds
-(`gan init`, `ganc init`) MUST emit exactly this shape.
+server, with the compiler library arriving transitively), alongside
+`gandora-mcp` for the MCP surface the scaffold wires up
+(GEP-0028-R012). The scaffold MUST emit exactly this shape; where it
+keeps a pyproject that already exists, it MUST name the entries the
+project still needs rather than leave its agent wiring unresolvable.
 
 **GEP-0013-R004:** Runner output and exit codes follow GEP-0001-R023.
 The runner MUST NOT depend on the `gan` rust binary existing at
@@ -160,6 +163,13 @@ no Rust toolchain present.
 
 ## Change History
 
+- Revision 3, 2026-08-07: `init` belongs to the runner alone — `ganc`
+  loses its scaffold and stays a compiler. Two implementations had
+  already drifted (differing templates, one of them failing the
+  Advisor), and R006's "both scaffolds must agree" was a rule that
+  existed only because there were two. `gan init` gains `--package`
+  and becomes re-runnable, which is how an existing project acquires
+  the GEP-0028-R012 agent wiring; R006 now also names `gandora-mcp`.
 - Revision 2, 2026-08-02: Added R006 — the `gandora-tool[dev]` extra
   as the single dev-dependency entry; scaffolds emit it.
 

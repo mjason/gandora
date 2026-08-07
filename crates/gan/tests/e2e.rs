@@ -7,6 +7,40 @@ fn gan() -> Command {
     Command::new(env!("CARGO_BIN_EXE_ganc"))
 }
 
+/// A minimal project on disk. `init` belongs to the `gan` runner
+/// (GEP-0013-R002), so the compiler's own tests scaffold what they
+/// need rather than depend on a runner command.
+fn scaffold(project: &Path) {
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(
+        project.join("gandora.jsonc"),
+        "{\n  \"source\": [\"src\"],\n  \"outDir\": \"dist\",\n  \"targetPython\": \"3.11\"\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("src/main.gan"),
+        "defmodule Main do\n  @moduledoc \"e2e fixture.\"\n\n  @doc \"Prints a greeting.\"\n  @spec main() :: nil\n  def main() do\n    IO.puts(\"Hello from Gandora!\")\n  end\nend\n",
+    )
+    .unwrap();
+}
+
+/// The package-project variant (GEP-0006): `pkg/` outDir, package: true.
+fn scaffold_package(pkg: &Path, py_pkg: &str, module: &str, dist: &str) {
+    std::fs::create_dir_all(pkg.join("src").join(py_pkg)).unwrap();
+    std::fs::write(
+        pkg.join("gandora.jsonc"),
+        "{\n  \"source\": [\"src\"],\n  \"outDir\": \"pkg\",\n  \"targetPython\": \"3.11\",\n  \"package\": true\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        pkg.join("src").join(py_pkg).join("core.gan"),
+        format!(
+            "defmodule {module}.Core do\n  @moduledoc \"Public surface of {dist}.\"\n\n  def hello(name), do: \"Hello from {dist}, #{{name}}!\"\n\n  defmacro twice(expr) do\n    quote do\n      {{unquote(expr), unquote(expr)}}\n    end\n  end\nend\n"
+        ),
+    )
+    .unwrap();
+}
+
 fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("gandora-e2e-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -37,51 +71,6 @@ fn run_generated(root: &Path, script: &Path) -> String {
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).to_string()
-}
-
-#[test]
-fn init_creates_a_runnable_project() {
-    let dir = temp_dir("init");
-    let project = dir.join("app");
-    let out = gan().arg("init").arg(&project).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    for f in [
-        "gandora.jsonc",
-        "pyproject.toml",
-        ".python-version",
-        ".gitignore",
-        "src/main.gan",
-        // the MCP wiring each agent reads on its own (GEP-0028-R012)
-        ".mcp.json",
-        "opencode.json",
-        ".codex/config.toml",
-    ] {
-        assert!(project.join(f).exists(), "missing {f}");
-    }
-    // one pathless command in every config, so a checked-in file works
-    // for everyone who clones it
-    for f in [".mcp.json", "opencode.json", ".codex/config.toml"] {
-        let text = std::fs::read_to_string(project.join(f)).unwrap();
-        assert!(text.contains("gan"), "{f}: {text}");
-        assert!(!text.contains("cwd"), "{f} carries a cwd: {text}");
-        assert!(
-            !text.contains(project.to_str().unwrap()),
-            "{f} carries an absolute path: {text}"
-        );
-    }
-    // gan-mcp resolves from the project's own .venv (GEP-0013-R003)
-    let pyproject = std::fs::read_to_string(project.join("pyproject.toml")).unwrap();
-    assert!(pyproject.contains("gandora-mcp>="), "{pyproject}");
-    // compile and execute the starter module without uv
-    let out = gan()
-        .current_dir(&project)
-        .args(["build"])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let stdout = run_generated(&project.join("dist"), &project.join("dist/main.py"));
-    assert!(stdout.contains("Hello from Gandora!"), "{stdout}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -277,8 +266,7 @@ fn package_publication_round_trip() {
     // publisher side: scaffold, build, verify marker + shipped sources
     let dir = temp_dir("pkg");
     let pkg = dir.join("acme-demo");
-    let out = gan().args(["init", "--package"]).arg(&pkg).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    scaffold_package(&pkg, "acme_demo", "AcmeDemo", "acme-demo");
     let out = gan().current_dir(&pkg).arg("build").output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let marker = std::fs::read_to_string(pkg.join("pkg/acme_demo/gandora.toml")).unwrap();
@@ -289,8 +277,7 @@ fn package_publication_round_trip() {
     // consumer side: simulate an installed wheel by copying the built
     // package into a fake site-packages, then use it from Gandora
     let consumer = dir.join("app");
-    let out = gan().arg("init").arg(&consumer).output().unwrap();
-    assert!(out.status.success());
+    scaffold(&consumer);
     let site = consumer.join(".venv/lib/python3.11/site-packages");
     copy_tree(&pkg.join("pkg/acme_demo"), &site.join("acme_demo"));
     std::fs::write(
@@ -407,8 +394,7 @@ fn doctests_and_localized_docs() {
     // a failing doctest is detected by gan test
     let dir = temp_dir("doctest");
     let proj = dir.join("app");
-    let out = gan().arg("init").arg(&proj).output().unwrap();
-    assert!(out.status.success());
+    scaffold(&proj);
     std::fs::write(
         proj.join("src/main.gan"),
         "defmodule Main do\n  @example \"\"\"\n      gan> broken(1)\n      999\n  \"\"\"\n  def broken(x), do: x + 1\n\n  def main(), do: nil\nend\n",
@@ -438,8 +424,7 @@ fn marker_runtime_resolution_and_py_package() {
     // under the gandora_std prefix (GEP-0006-R005A, GEP-0010-R002/R003)
     let dir = temp_dir("stdres");
     let proj = dir.join("app");
-    let out = gan().arg("init").arg(&proj).output().unwrap();
-    assert!(out.status.success());
+    scaffold(&proj);
     let site = proj.join(".venv/lib/python3.11/site-packages/gandora_std");
     std::fs::create_dir_all(&site).unwrap();
     std::fs::write(
@@ -469,8 +454,7 @@ fn marker_runtime_resolution_and_py_package() {
 fn warns_when_module_shadows_python_stdlib() {
     let dir = temp_dir("shadow");
     let project = dir.join("app");
-    let out = gan().arg("init").arg(&project).output().unwrap();
-    assert!(out.status.success());
+    scaffold(&project);
     std::fs::write(
         project.join("src/collections.gan"),
         "defmodule Collections do\n  def ok(), do: 1\nend\n",

@@ -29,7 +29,7 @@ def _gan_and(value, then):
 class GanMatchError(Exception):
     pass
 
-usage = "gan - the Gandora task runner\n\nUsage:\n  gan build [--strict]    the verdict + compile: diagnostics, advice,\n                          artifact verification; errors stop artifacts\n                          (--strict adds type-flow warnings via ty)\n  gan run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | init <path> | version\n  gan test                doctests + tests/*.gan (GEP-0024)\n  gan agent [--json]      the AI-session briefing: working loop +\n                          context pack in one output (GEP-0026)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
+usage = "gan - the Gandora task runner\n\nUsage:\n  gan build [--strict]    the verdict + compile: diagnostics, advice,\n                          artifact verification; errors stop artifacts\n                          (--strict adds type-flow warnings via ty)\n  gan run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | version\n  gan init [--package] <path>   scaffold a project (or fill an existing one)\n  gan test                doctests + tests/*.gan (GEP-0024)\n  gan agent [--json]      the AI-session briefing: working loop +\n                          context pack in one output (GEP-0026)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
 
 labels = {"error": ("error", "1;31"), "warning": ("warning", "1;33"), "practice": ("practice", "1;36"), "migration": ("migration", "1;35"), "did_you_mean": ("did you mean", "1;34"), "type": ("type", "2;37")}
 
@@ -44,6 +44,8 @@ mcp_claude = "{\n  \"mcpServers\": {\n    \"gandora\": {\n      \"type\": \"stdi
 mcp_codex = "# Codex reads this for a trusted project; `codex mcp list` shows it.\n[mcp_servers.gandora]\ncommand = \"uv\"\nargs = [\"run\", \"gan\", \"mcp\"]\n"
 
 mcp_opencode = "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"mcp\": {\n    \"gandora\": {\n      \"type\": \"local\",\n      \"command\": [\"uv\", \"run\", \"gan\", \"mcp\"],\n      \"enabled\": true\n    }\n  }\n}\n"
+
+package_jsonc = "{\n  // Gandora package project (GEP-0006): `gan build` also emits the\n  // gandora.toml marker and ships .gan sources for macro consumers.\n  \"source\": [\"src\"],\n  \"outDir\": \"pkg\",\n  \"targetPython\": \"3.11\",\n  \"package\": true\n}\n"
 
 
 def main() -> None:
@@ -75,11 +77,9 @@ def main() -> None:
             return gandora_tool.agent.run(rest)
         case ["fmt", *rest] as _gan_l11 if isinstance(_gan_l11, list):
             return gandora_tool.fmt.run(rest)
-        case ["init", path, *_] as _gan_l12 if isinstance(_gan_l12, list):
-            return init(path)
-        case ["init"] as _gan_l13 if isinstance(_gan_l13, list):
-            return _die_usage("init requires a path")
-        case [cmd, *rest] as _gan_l14 if isinstance(_gan_l14, list):
+        case ["init", *rest] as _gan_l12 if isinstance(_gan_l12, list):
+            return _init_cmd(rest)
+        case [cmd, *rest] as _gan_l13 if isinstance(_gan_l13, list):
             return _delegate(cmd, rest)
         case _:
             raise GanMatchError("no case clause matched: " + repr(_gan_case0))
@@ -144,26 +144,26 @@ def _run_check(with_suggestions=True, strict=False):
             cache = _root() + "/.gandora/cache"
             try:
                 modules = core.build(_root(), cache)
-                _gan_tmp16 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
+                _gan_tmp15 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
             except Exception as _e:
-                _gan_tmp16 = []
-            verification = _gan_tmp16
-            _gan_tmp15 = diags + verification
+                _gan_tmp15 = []
+            verification = _gan_tmp15
+            _gan_tmp14 = diags + verification
         else:
-            _gan_tmp15 = diags
-        diags = _gan_tmp15
+            _gan_tmp14 = diags
+        diags = _gan_tmp14
         gandora_std.enum.each(diags, lambda d: _print_finding(gandora_std.map.get(d, "severity"), gandora_std.map.get(d, "path"), gandora_std.map.get(d, "line", 0), gandora_std.map.get(d, "message")))
         if _gan_truthy(with_suggestions):
-            _gan_tmp17 = _collect_files(["src", "tests"])
+            _gan_tmp16 = _collect_files(["src", "tests"])
         else:
-            _gan_tmp17 = []
-        sources = _gan_tmp17
+            _gan_tmp16 = []
+        sources = _gan_tmp16
         def _gan_fn0(path, *, diags=diags):
             try:
-                _gan_tmp18 = pathlib.Path(path).read_text()
+                _gan_tmp17 = pathlib.Path(path).read_text()
             except Exception as _e:
-                _gan_tmp18 = ""
-            text = _gan_tmp18
+                _gan_tmp17 = ""
+            text = _gan_tmp17
             per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
             return gandora_std.enum.map(gandora_tool.advisor.analyze(text, _root()) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
         hints = gandora_std.enum.flat_map(sources, _gan_fn0)
@@ -187,21 +187,21 @@ def _paint(text, code):
 
 
 def _print_finding(kind, path, line, message):
-    _gan_val19 = gandora_std.map.get(labels, kind, (kind, "1"))
-    match _gan_val19:
-        case (label, code) as _gan_t20 if isinstance(_gan_t20, tuple):
+    _gan_val18 = gandora_std.map.get(labels, kind, (kind, "1"))
+    match _gan_val18:
+        case (label, code) as _gan_t19 if isinstance(_gan_t19, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val19))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val18))
     if line > 0:
-        _gan_tmp21 = f":{line}"
+        _gan_tmp20 = f":{line}"
     else:
-        _gan_tmp21 = ""
-    at = _gan_tmp21
+        _gan_tmp20 = ""
+    at = _gan_tmp20
     rel = gandora_std.string.replace(str(path), _root() + "/", "")
     print("")
-    _gan_fstr22 = _paint(rel + at, "2")
-    print(f"{_paint(label, code)} {_gan_fstr22}")
+    _gan_fstr21 = _paint(rel + at, "2")
+    print(f"{_paint(label, code)} {_gan_fstr21}")
     return gandora_std.enum.each(message.split("\n"), lambda l: print("  " + l))
 
 
@@ -255,8 +255,8 @@ def run(file: str, args: list[str]) -> None:
             print(f"gan: {file} is not a module of this project")
             return sys.exit(1)
         elif (gandora_std.map.get(target, "python") is None):
-            _gan_fstr23 = gandora_std.map.get(target, "module")
-            print(f"gan: {_gan_fstr23} defines only macros; nothing to run")
+            _gan_fstr22 = gandora_std.map.get(target, "module")
+            print(f"gan: {_gan_fstr22} defines only macros; nothing to run")
             return sys.exit(1)
         else:
             code = subprocess.call([_project_python(), "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
@@ -286,12 +286,12 @@ def repl() -> None:
 def _repl_walk(ns):
     while True:
         try:
-            _gan_tmp24 = builtins.input("gan> ")
+            _gan_tmp23 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp24 = "eof"
+            _gan_tmp23 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp24 = "eof"
-        line = _gan_tmp24
+            _gan_tmp23 = "eof"
+        line = _gan_tmp23
         if line == "eof":
             return "ok"
         elif gandora_std.string.trim(line) == "":
@@ -337,8 +337,29 @@ Codex, `opencode.json` for opencode. Never overwrites what is there.
     return _write_if_absent((p / ".codex") / "config.toml", mcp_codex)
 
 
+def _init_cmd(args):
+    paths = gandora_std.enum.filter(args, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
+    if _gan_truthy(gandora_std.enum.empty_p(paths)):
+        _gan_tmp24 = "."
+    else:
+        _gan_tmp24 = gandora_std.enum.at(paths, 0)
+    path = _gan_tmp24
+    if _gan_truthy(gandora_std.enum.member_p(args, "--package")):
+        if _gan_truthy(gandora_std.enum.empty_p(paths)):
+            return _die_usage("init --package requires a package name")
+        else:
+            return init_package(path)
+    else:
+        return init(path)
+
+
 def init(path: str) -> None:
-    """Creates a new project (or fills an existing directory) in place.
+    """Creates a project, or fills in what an existing one is missing.
+
+Since the scaffold also writes the agent wiring (GEP-0028-R012),
+re-running it on a project that already exists is how that wiring
+arrives — so this never refuses and never overwrites: every file it
+would write, it writes only when absent.
 
 ## Parameters
 
@@ -348,19 +369,15 @@ def init(path: str) -> None:
     if _gan_truthy(_gan_and(p.exists(), lambda: not (_gan_truthy(p.is_dir())))):
         print(f"gan: {path} is a file")
         sys.exit(1)
-    elif _gan_truthy((p / "gandora.jsonc").exists()):
-        print(f"gan: {path} is already a Gandora project")
-        sys.exit(1)
-    else:
-        pass
     (p / "src").mkdir(parents=True, exist_ok=True)
     name = str(p.resolve().name)
-    (p / "gandora.jsonc").write_text(gandora_jsonc)
+    _write_if_absent(p / "gandora.jsonc", gandora_jsonc)
     pyproject = p / "pyproject.toml"
     if _gan_truthy(pyproject.exists()):
-        print("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
-        print("  dependencies: \"gandora-std\"        (generated code imports it)")
-        print("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
+        if not (_gan_truthy(gandora_std.string.contains_p(pyproject.read_text(), "gandora-mcp"))):
+            print("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
+            print("  dependencies: \"gandora-std\"        (generated code imports it)")
+            print("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
     else:
         pyproject.write_text(_pyproject_toml(name))
     _write_if_absent(p / ".gitignore", gitignore)
@@ -376,6 +393,59 @@ def _write_if_absent(file, content):
         return file.write_text(content)
     else:
         return None
+
+
+def _package_pyproject(dist_name, py_pkg):
+    return f"[project]\nname = \"{dist_name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora package\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n\n# pkg/ is gitignored build output but must enter the distribution\n[tool.hatch.build]\nignore-vcs = true\n\n# the sdist carries sources and the compiled output of `gan build`\n[tool.hatch.build.targets.sdist]\ninclude = [\"pkg\", \"src\", \"gandora.jsonc\"]\n\n# the wheel packages the compiled output (marker and .gan sources included)\n[tool.hatch.build.targets.wheel]\npackages = [\"pkg/{py_pkg}\"]\n\n# the toolchain and the MCP surface are development-time, never runtime\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
+
+
+def _package_starter(module, dist_name):
+    fence = "\"\"\""
+    hole = "#" + "{name}"
+    return f"defmodule {module}.Core do\n  @moduledoc \"Public surface of {dist_name}: functions run anywhere, macros expand in consumers.\"\n\n  @doc \"Greets `name` in this package's voice.\"\n  @param name, \"Who to greet.\"\n  @spec hello(string()) :: string()\n  @example {fence}\n      gan> {module}.Core.hello(\"world\")\n      'Hello from {dist_name}, world!'\n  {fence}\n  def hello(name), do: \"Hello from {dist_name}, {hole}!\"\n\n  @doc \"Evaluates `expr` twice and pairs the results — a macro consumers expand.\"\n  @param expr, \"The expression to duplicate.\"\n  @spec twice(term()) :: tuple()\n  defmacro twice(expr) do\n    quote do\n      {{unquote(expr), unquote(expr)}}\n    end\n  end\n\n  @doc \"Proof the macro expands where it is used — a macro's own example is displayed, never run.\"\n  @spec twice_demo() :: tuple()\n  @example {fence}\n      gan> {module}.Core.twice_demo()\n      (2, 2)\n  {fence}\n  def twice_demo(), do: twice(1 + 1)\nend\n"
+
+
+def init_package(path: str) -> None:
+    """Creates a publishable Gandora package (GEP-0006-R001): sources under
+`src/<py_pkg>/`, compiled output in `pkg/` shipped in the wheel.
+
+## Parameters
+
+  - path: The package directory to create; its name is the distribution name.
+"""
+    p = pathlib.Path(path)
+    if _gan_truthy(p.exists()):
+        print(f"gan: {path} already exists")
+        sys.exit(1)
+    dist_name = str(p.resolve().name)
+    py_pkg = gandora_std.string.replace(dist_name, "-", "_")
+    module = camelize(py_pkg)
+    ((p / "src") / py_pkg).mkdir(parents=True, exist_ok=True)
+    (p / "gandora.jsonc").write_text(package_jsonc)
+    (p / "pyproject.toml").write_text(_package_pyproject(dist_name, py_pkg))
+    (p / ".gitignore").write_text(gitignore + "pkg/\n")
+    (p / ".python-version").write_text("3.11\n")
+    (((p / "src") / py_pkg) / "core.gan").write_text(_package_starter(module, dist_name))
+    write_mcp_configs(p)
+    print(f"Initialized Gandora package {dist_name} in {path}")
+    print("Publish with:")
+    print(f"  cd {path}")
+    return print("  gan build && uv build && uv publish")
+
+
+def camelize(name: str) -> str:
+    """A snake_case package name as its Gandora module name.
+
+## Parameters
+
+  - name: The snake_case name.
+
+    >>> camelize("gan_coin")
+    'GanCoin'
+"""
+    _gan_tmp25 = [gandora_std.string.capitalize(part) for part in gandora_std.string.split_on(name, "_") if part != ""]
+    parts = _gan_tmp25
+    return gandora_std.enum.join(parts, "")
 
 
 def plugin_name(cmd: str) -> str:
