@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-02
 updated: 2026-08-02
-revision: 2
+revision: 3
 requires: [1, 12, 13]
 replaces: []
 superseded-by: null
@@ -23,8 +23,10 @@ translations:
 ## Abstract
 
 `gan fmt` normalizes Gandora source: structural indentation, horizontal
-whitespace, blank-line runs, and trailing whitespace — and nothing
-else. It never joins or splits the author's lines. Its safety contract
+whitespace, blank-line runs, and trailing whitespace — plus one
+structural reflow: a map literal that spans lines takes its canonical
+one-pair-per-line form (R011). It never joins the author's lines, and
+splits them only there. Its safety contract
 is mechanical: the formatted text MUST tokenize to the same token
 sequence (comments included) as the original, or the file is left
 untouched. The formatter is a Gandora program inside `gandora-tool`,
@@ -72,9 +74,10 @@ would change. Output and exit codes follow GEP-0001-R023.
 indentation (two spaces per structural level); spaces around binary
 operators and after commas outside string-like tokens; trailing
 whitespace; runs of two or more blank lines (collapsed to one); and a
-missing final newline. It MUST NOT join lines, split lines, or alter
-the interior of strings, heredocs, or sigil bodies except for the
-uniform shift of R005 and the R008 capture parenthesization.
+missing final newline. It MUST NOT join lines, and MUST NOT split
+lines except as R011 prescribes; it MUST NOT alter the interior of
+strings, heredocs, or sigil bodies except for the uniform shift of
+R005 and the R008 capture parenthesization.
 
 **GEP-0016-R004:** Structural indent: `do`, `fn`, and each unclosed
 bracket push a level; `end` and closing brackets pop before the line
@@ -115,6 +118,18 @@ code is 2. A clean run exits 0 whether or not anything changed.
 of what formatting would change and rewrites nothing; it exits 1 when
 any file would change, 0 otherwise, mirroring `--check`'s contract
 with evidence attached.
+
+**GEP-0016-R011 (multi-line maps take one shape):** A `%{` map
+literal whose tokens span more than one line is reflowed to the
+canonical form: the opener stays where the author put it, every
+top-level pair starts its own line one structural level deeper, and
+the closing `}` starts its own line at the opener's level, keeping the
+tokens that follow it (`)`, `,`). A single-line map is untouched —
+fitting on one line is the author's call; how to wrap is not. A map
+whose span contains a comment or a multi-line string/heredoc/sigil is
+left as written: relocating those is not the formatter's business. The
+rewrite only splits lines, and the R006 verification applies to it
+unchanged.
 
 ## Rationale
 
@@ -164,6 +179,8 @@ files untouched.
 
 ## Change History
 
+- Revision 3, 2026-08-06: R011 — multi-line map literals reflow to
+  one pair per line; R003 and the abstract amended accordingly.
 - Revision 2, 2026-08-03: R009 `gan fmt -` (stdin to stdout, verified,
   exit 0/2), R010 `--diff` (unified diff, no rewrite, exit 1 when
   changes exist).

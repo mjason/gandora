@@ -209,6 +209,19 @@ impl Parser {
                 let operand = self.parse_unary(false)?;
                 return Ok(Term::call("not", vec![operand], span));
             }
+            Tok::Ident(n) if n == "await" => {
+                // native await (GEP-0030-R002): a prefix binding tighter
+                // than any binary operator and looser than the operand's
+                // own call chain; anywhere else `await` stays an ordinary
+                // name (GEP-0030-R004)
+                self.bump();
+                if self.starts_expr() {
+                    let operand = self.parse_unary(false)?;
+                    return Ok(Term::call("await", vec![operand], span));
+                }
+                let primary = self.parse_postfix(Term::Var("await".into(), None))?;
+                return Ok(primary);
+            }
             Tok::Op("-") => {
                 self.bump();
                 let operand = self.parse_unary(false)?;
@@ -300,6 +313,21 @@ impl Parser {
                 Ok(Term::Pair(k, Box::new(value)))
             }
             Tok::Ident(name) => {
+                // native async function syntax (GEP-0030-R001):
+                // `async def f(...)` / `async defp f(...)` — the only
+                // positions where `async` is claimed (GEP-0030-R004)
+                if command
+                    && name == "async"
+                    && matches!(self.peek(), Tok::Ident(d) if d == "def" || d == "defp")
+                {
+                    let Tok::Ident(d) = self.bump() else { unreachable!() };
+                    let args = self.parse_command_args()?;
+                    return Ok(Term::Call(Box::new(Call {
+                        callee: Callee::Name(format!("async {d}")),
+                        args,
+                        span,
+                    })));
+                }
                 let var = Term::Var(name.clone(), None);
                 // paren call binds directly: `f(...)`
                 if *self.peek() == Tok::Op("(") {

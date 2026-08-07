@@ -1,0 +1,44 @@
+# NOT PUBLISHED YET — this project builds and runs from the checkout,
+# but it is deliberately absent from .github/workflows/release.yml until
+# GEP-0028 settles its shape. The five released packages stay five.
+[project]
+name = "gandora-mcp"
+version = "0.18.8"
+description = "gan-mcp — the Gandora MCP surface, written in Gandora (GEP-0028)"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "gandora-core>=0.18.8",
+    "gandora-std>=0.18.8",
+    "gandora-tool>=0.18.8",
+    "gandora-lsp>=0.18.8",
+    "mcp>=2",
+    "pydantic-ai-slim[openai]>=2",
+]
+
+[project.scripts]
+gan-mcp = "gandora_mcp.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+ignore-vcs = true
+
+[tool.hatch.build.targets.sdist]
+include = ["pkg", "src", "gandora.jsonc"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pkg/gandora_mcp"]
+
+[tool.uv.sources]
+gandora-core = { path = "../../crates/core-py" }
+gandora-std = { path = "../../std" }
+gandora-tool = { path = "../gan" }
+gandora-lsp = { path = "../lsp" }
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]

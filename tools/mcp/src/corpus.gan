@@ -1,0 +1,379 @@
+defmodule Corpus do
+  @moduledoc """
+  Whole-module atoms for the syntax the standard library cannot
+  demonstrate (GEP-0028-R009). A `defmacro` has no `Enum.map` to
+  imitate — so the corpus carries one working module per construct, and
+  the test suite puts every one of them through the same verdict a
+  composed answer faces. An atom that stopped compiling stops being an
+  atom: that is what makes it safe to show a model.
+  """
+  @moduledoc_trans zh_CN: "标准库无法示范的语法,其整模块原子(GEP-0028-R009)。`defmacro` 没有 `Enum.map` 可模仿——故语料为每个构造备一个可用模块,且测试套件让每一个都走一遍合成答案所面对的同一裁决。不再编译的原子就不再是原子:正因如此,把它拿给模型看才是安全的。"
+
+  @shape_module """
+  defmodule Doubler do
+    @moduledoc "One function, annotated the way every module must be."
+
+    @doc "Doubles a number."
+    @param x, "The number to double."
+    @spec double(integer()) :: integer()
+    @example \"\"\"
+        gan> Doubler.double(21)
+        42
+    \"\"\"
+    def double(x), do: x * 2
+  end
+  """
+
+  @macro_module """
+  defmodule Tagger do
+    @moduledoc "A macro that tags a value, and a function that uses it."
+
+    @doc "Wraps `expr` in a tuple with `label`, at compile time."
+    @param label, "The tag."
+    @param expr, "The expression to tag."
+    @example \"\"\"
+        Tagger.tagged("sum", 1 + 2)
+    \"\"\"
+    defmacro tagged(label, expr) do
+      quote do
+        {unquote(label), unquote(expr)}
+      end
+    end
+
+    @doc "Tags a small computation, proving the macro expands."
+    @spec demo() :: tuple()
+    @example \"\"\"
+        gan> Tagger.demo()
+        ('sum', 3)
+    \"\"\"
+    def demo(), do: tagged("sum", 1 + 2)
+  end
+  """
+
+  @struct_module """
+  defmodule Point do
+    @moduledoc "A point, as a struct."
+
+    defstruct x: 0, y: 0
+
+    @doc "Moves a point along the x axis."
+    @param point, "The point to move."
+    @param dx, "How far to move."
+    @spec move(Point(), integer()) :: Point()
+    @example \"\"\"
+        gan> Point.move(%Point{x: 1, y: 2}, 3).x
+        4
+    \"\"\"
+    def move(point, dx), do: %Point{point | x: point.x + dx}
+  end
+  """
+
+  @match_module """
+  defmodule Shape do
+    @moduledoc "Pattern matching: clauses with patterns, guards, and case."
+
+    @doc "The area of a shape given as a tagged tuple, matched with case."
+    @param shape, "`{:rect, w, h}` or `{:circle, r}`."
+    @spec area(tuple()) :: number()
+    @example \"\"\"
+        gan> Shape.area({:rect, 3, 4})
+        12
+        gan> Shape.area({:circle, 1})
+        3.14
+    \"\"\"
+    def area(shape) do
+      case shape do
+        {:rect, w, h} -> w * h
+        {:circle, r} when r > 0 -> 3.14 * r * r
+        _other -> 0
+      end
+    end
+
+    @doc "The same dispatch as clauses in the function head, with a guard."
+    @spec describe(tuple()) :: string()
+    @example \"\"\"
+        gan> Shape.describe({:rect, 3, 4})
+        'a rectangle'
+        gan> Shape.describe({:circle, 0})
+        'nothing'
+    \"\"\"
+    def describe({:rect, _w, _h}), do: "a rectangle"
+    def describe({:circle, r}) when r > 0, do: "a circle"
+    def describe(_other), do: "nothing"
+  end
+  """
+
+  @for_module """
+  defmodule Squares do
+    @moduledoc "A comprehension with a filter."
+
+    @doc "The squares of the even numbers in `xs`."
+    @param xs, "The numbers."
+    @spec evens_squared(sequence(integer())) :: list(integer())
+    @example \"\"\"
+        gan> Squares.evens_squared([1, 2, 3, 4])
+        [4, 16]
+    \"\"\"
+    def evens_squared(xs), do: for x <- xs, rem(x, 2) == 0, do: x * x
+  end
+  """
+
+  @sigil_module """
+  defmodule Sigils do
+    @moduledoc "The text sigils: word lists and regexes."
+
+    @doc "The words of a ~w list joined by `sep`."
+    @param sep, "The separator."
+    @spec joined(string()) :: string()
+    @example \"\"\"
+        gan> Sigils.joined("-")
+        'red-green-blue'
+    \"\"\"
+    def joined(sep), do: Enum.join(~w(red green blue), sep)
+
+    @doc "Whether `s` looks like a year, matched with a ~r regex."
+    @param s, "The text to test."
+    @spec year?(string()) :: boolean()
+    @example \"\"\"
+        gan> Sigils.year?("2026")
+        True
+    \"\"\"
+    def year?(s), do: not is_nil(~r/^\\d{4}$/.match(s))
+  end
+  """
+
+  @interop_module """
+  defmodule Interop do
+    @moduledoc "Reaching into Python: one-off calls and imported modules."
+
+    pyimport json
+
+    @doc "The square root, via a one-off Python call."
+    @param x, "A non-negative number."
+    @spec root(number()) :: float()
+    @example \"\"\"
+        gan> Interop.root(9)
+        3.0
+    \"\"\"
+    def root(x), do: $math.sqrt(x)
+
+    @doc "A JSON document as a map, via an imported module."
+    @param text, "The JSON text."
+    @spec decode(string()) :: map()
+    @example \"\"\"
+        gan> Interop.decode(~s({"a": 1}))
+        {'a': 1}
+    \"\"\"
+    def decode(text), do: json.loads(text)
+  end
+  """
+
+  @task_module """
+  defmodule FanOut do
+    @moduledoc "Concurrent fan-out: async def interiors, one Task.run rim."
+
+    @doc "Doubles `x` after yielding to the loop — a real coroutine."
+    @param x, "The number."
+    @spec double_soon(integer()) :: integer()
+    @example \"\"\"
+        gan> Task.run(FanOut.double_soon(21))
+        42
+    \"\"\"
+    async def double_soon(x) do
+      _pause = await Task.sleep(0)
+      x * 2
+    end
+
+    @doc "Spawns three coroutines and joins them in input order."
+    @spec spread() :: list(integer())
+    @example \"\"\"
+        gan> Task.run(FanOut.spread())
+        [2, 4, 6]
+    \"\"\"
+    async def spread() do
+      tasks = for x <- [1, 2, 3], do: Task.async(double_soon(x))
+      await Task.all(tasks)
+    end
+  end
+  """
+
+  @async_module """
+  defmodule Fetcher do
+    @moduledoc "Deadlines and blocking work in the coroutine world."
+
+    @doc "Joins an awaitable under `ms` milliseconds: a verdict, not an exception."
+    @param coro, "The awaitable to join."
+    @param ms, "The deadline in milliseconds; the task is cancelled on timeout."
+    @spec within(term(), integer()) :: tuple()
+    @example \"\"\"
+        gan> Task.run(Fetcher.within(Task.completed(7), 1000))
+        ('ok', 7)
+        gan> Task.run(Fetcher.within(Task.sleep(60000), 20))
+        ('error', 'timeout')
+    \"\"\"
+    async def within(coro, ms) do
+      await Task.try_await(Task.async(coro), ms)
+    end
+
+    @doc "Blocking work overlapped with a coroutine, joined in order."
+    @spec mixed() :: list(integer())
+    @example \"\"\"
+        gan> Task.run(Fetcher.mixed())
+        [41, 42]
+    \"\"\"
+    async def mixed() do
+      a = Task.async(Task.blocking(fn -> 40 + 1 end))
+      b = Task.async(Task.completed(42))
+      await Task.all([a, b])
+    end
+  end
+  """
+
+  @rescue_module """
+  defmodule Guarded do
+    @moduledoc "try/rescue: absorb a Python exception, name it only if used."
+
+    @doc "Parses an integer, falling back to `default` on bad input."
+    @param s, "The text to parse."
+    @param default, "Returned when parsing fails."
+    @spec parse_or(string(), integer()) :: integer()
+    @example \"\"\"
+        gan> Guarded.parse_or("42", 0)
+        42
+        gan> Guarded.parse_or("nope", 7)
+        7
+    \"\"\"
+    def parse_or(s, default) do
+      try do
+        $builtins.int(s)
+      rescue
+        _e in $builtins.ValueError -> default
+      end
+    end
+
+    @doc "The error message of a crash, observed and kept."
+    @param f, "A zero-argument function that may raise."
+    @spec message_of(fun()) :: string()
+    @example \"\"\"
+        gan> Guarded.message_of(fn -> 1 / 0 end)
+        'division by zero'
+    \"\"\"
+    def message_of(f) do
+      try do
+        to_string(f.())
+      rescue
+        e -> to_string(e)
+      end
+    end
+  end
+  """
+
+  @doc """
+  Every syntax atom: the words that summon it, what it shows, and the
+  module that proves it still works.
+  """
+  @doc_trans zh_CN: "全部语法原子:召唤它的词、它展示什么,以及证明它仍然可用的模块。"
+  @spec all() :: list(map())
+  @example """
+      gan> Enum.count(Corpus.all())
+      10
+  """
+  def all() do
+    [baseline()] ++ [
+      %{
+        "triggers" => ["macro", "defmacro", "quote", "unquote"],
+        "why" => "a macro plus a def that calls it — the def carries the runnable example",
+        "module" => @macro_module
+      },
+      %{
+        "triggers" => ["struct", "defstruct"],
+        "why" => "a struct, its update syntax, and the module as its own type",
+        "module" => @struct_module
+      },
+      %{
+        "triggers" => ["pattern", "match", "case", "guard", "when", "clause"],
+        "why" => "pattern matching by case and by function clauses, with a guard",
+        "module" => @match_module
+      },
+      %{
+        "triggers" => ["comprehension", "for ", "filter", "loop"],
+        "why" => "a comprehension with a filter",
+        "module" => @for_module
+      },
+      %{
+        "triggers" => ["sigil", "~w", "~r", "~s", "regex", "regular expression"],
+        "why" => "the ~w word list and the ~r regex sigil",
+        "module" => @sigil_module
+      },
+      %{
+        "triggers" => ["python", "interop", "pyimport", "json", "import"],
+        "why" => "Python interop, both one-off ($math.sqrt) and imported (pyimport json)",
+        "module" => @interop_module
+      },
+      %{
+        "triggers" => ["task", "concurrent", "parallel", "thread"],
+        "why" => "concurrent fan-out: async def authors coroutines, Task.async spawns, await Task.all joins, Task.run is the rim (GEP-0029/0030)",
+        "module" => @task_module
+      },
+      %{
+        "triggers" => ["async", "await", "coroutine", "asyncio", "stream", "event loop"],
+        "why" => "deadlines return verdicts and cancel (Task.try_await), blocking work crosses on Task.blocking; doctests enter through Task.run (GEP-0029)",
+        "module" => @async_module
+      },
+      %{
+        "triggers" => ["rescue", "try", "exception", "raise"],
+        "why" => "try/rescue: an unused binder is _e, a used one is e; the message is the repr",
+        "module" => @rescue_module
+      }
+    ]
+  end
+
+  @doc """
+  The shape every answer must take, shown rather than described: no
+  requirement summons it by name, and every prompt carries it.
+  """
+  @doc_trans zh_CN: "每个回答都必须采取的形状,用展示而非描述:没有需求会以名字召唤它,而每个 prompt 都带着它。"
+  @spec baseline() :: map()
+  @example """
+      gan> Map.get(Corpus.baseline(), "triggers")
+      []
+  """
+  def baseline() do
+    %{
+      "triggers" => [],
+      "why" => "the annotation shape every module must have",
+      "module" => @shape_module
+    }
+  end
+
+  @doc "The atoms a requirement summons, by the words it uses."
+  @doc_trans zh_CN: "需求以其用词召唤的原子。"
+  @param requirement, "The requirement text."
+  @spec matching(string()) :: list(map())
+  @example """
+      gan> Enum.count(Corpus.matching("a macro that logs a value"))
+      1
+  """
+  def matching(requirement) do
+    low = String.downcase(requirement)
+    Enum.filter(all(), fn a -> summoned?(a, low) end)
+  end
+
+  defp summoned?(atom, low) do
+    Enum.count(Enum.filter(Map.get(atom, "triggers", []),
+      fn t -> String.contains?(low, t) end)) > 0
+  end
+
+  @doc "The prompt block for one syntax atom."
+  @doc_trans zh_CN: "一个语法原子的 prompt 片段。"
+  @param atom, "One corpus entry."
+  @spec block(mapping(string(), term())) :: string()
+  @example """
+      gan> Corpus.block(%{"why" => "w", "module" => "m"})
+      '## A verified module: w\\n\\nm'
+  """
+  def block(atom) do
+    "## A verified module: " <> Map.get(atom, "why", "") <> "\n\n" <>
+      String.trim(Map.get(atom, "module", ""))
+  end
+end

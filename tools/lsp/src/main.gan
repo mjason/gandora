@@ -550,8 +550,13 @@ defmodule Main do
       idx = l.find(fun, col0)
       idx = if idx < 0 do l.find(fun) else idx end
       start = if idx < 0 do col0 else idx end
-      %{path: path, line: line0, start: start,
-        stop: start + String.length(fun), is_def: Map.get(r, "is_def")}
+      %{
+        path: path,
+        line: line0,
+        start: start,
+        stop: start + String.length(fun),
+        is_def: Map.get(r, "is_def")
+      }
     end)
   end
 

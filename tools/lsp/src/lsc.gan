@@ -221,9 +221,12 @@ defmodule Lsc do
       if is_nil(hit) do
         nil
       else
-        %{"label" => target, "kind" => Map.get(hit, "kind"),
+        %{
+          "label" => target,
+          "kind" => Map.get(hit, "kind"),
           "head" => Map.get(hit, "head"),
-          "entries" => %{"default" => "(undocumented — add @doc above the #{Map.get(hit, "kind")})"}}
+          "entries" => %{"default" => "(undocumented — add @doc above the #{Map.get(hit, "kind")})"}
+        }
       end
     end
   end

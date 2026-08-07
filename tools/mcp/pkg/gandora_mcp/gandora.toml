@@ -1,0 +1,32 @@
+schema = 1
+compiler = "0.18.8"
+
+[[modules]]
+name = "Atoms"
+python = "gandora_mcp/atoms.py"
+source = "gandora_mcp/_gan/gandora_mcp/atoms.gan"
+
+[[modules]]
+name = "Composer"
+python = "gandora_mcp/composer.py"
+source = "gandora_mcp/_gan/gandora_mcp/composer.gan"
+
+[[modules]]
+name = "Corpus"
+python = "gandora_mcp/corpus.py"
+source = "gandora_mcp/_gan/gandora_mcp/corpus.gan"
+
+[[modules]]
+name = "Intel"
+python = "gandora_mcp/intel.py"
+source = "gandora_mcp/_gan/gandora_mcp/intel.gan"
+
+[[modules]]
+name = "Main"
+python = "gandora_mcp/main.py"
+source = "gandora_mcp/_gan/gandora_mcp/main.gan"
+
+[[modules]]
+name = "Sandbox"
+python = "gandora_mcp/sandbox.py"
+source = "gandora_mcp/_gan/gandora_mcp/sandbox.gan"

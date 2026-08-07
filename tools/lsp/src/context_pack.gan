@@ -9,14 +9,14 @@ defmodule ContextPack do
 
   pyimport gandora_core, as: core
 
-  @std_modules ["Enum", "List", "Map", "Keyword", "String", "Test"]
+  @std_modules ["Enum", "List", "Map", "Keyword", "String", "Task", "Test"]
 
   @doc "The standard-library modules the pack enumerates."
   @doc_trans zh_CN: "pack 枚举的标准库模块清单。"
   @spec known_std() :: list(string())
   @example """
       gan> ContextPack.known_std()
-      ['Enum', 'List', 'Map', 'Keyword', 'String', 'Test']
+      ['Enum', 'List', 'Map', 'Keyword', 'String', 'Task', 'Test']
   """
   def known_std(), do: @std_modules
 

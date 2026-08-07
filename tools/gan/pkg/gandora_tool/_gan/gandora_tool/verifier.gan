@@ -99,8 +99,13 @@ defmodule Verifier do
     if is_nil(m) do
       nil
     else
-      %{"python" => m.group(1), "pyline" => $builtins.int(m.group(2)),
-        "severity" => m.group(4), "rule" => m.group(5), "message" => m.group(6)}
+      %{
+        "python" => m.group(1),
+        "pyline" => $builtins.int(m.group(2)),
+        "severity" => m.group(4),
+        "rule" => m.group(5),
+        "message" => m.group(6)
+      }
     end
   end
 
@@ -153,9 +158,14 @@ defmodule Verifier do
     # resolution facts gate; strict-only type-flow findings inform
     severity = if gold?(d), do: "error", else: "warning"
     tag = if severity == "error", do: "", else: "[type] "
-    %{"severity" => severity, "path" => source_path, "line" => line, "col" => 0,
+    %{
+      "severity" => severity,
+      "path" => source_path,
+      "line" => line,
+      "col" => 0,
       "message" => tag <> rewrite(Map.get(d, "message"), name, gan_name) <> hint <>
-        " (GEP-0025-R008, from the compiled artifact)"}
+        " (GEP-0025-R008, from the compiled artifact)"
+    }
   end
 
   defp read_source(path) do

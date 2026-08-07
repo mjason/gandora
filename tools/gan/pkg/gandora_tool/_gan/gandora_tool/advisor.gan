@@ -177,7 +177,7 @@ defmodule Advisor do
     if not in_module or test_module do
       []
     else
-      heads = Enum.uniq(~r/(?m)^\s*def ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source))
+      heads = Enum.uniq(~r/(?m)^\s*(?:async )?def ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source))
       |> Enum.filter(fn h -> h != "unquote" end)
       specs = ~r/(?m)^\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)/.findall(source)
       docs = count_attr_blocks(source, "@doc")
@@ -205,9 +205,11 @@ defmodule Advisor do
         not String.contains?(raw, "@example") do
           # name a real function so the template is copy-pasteable
           subject = Enum.at(Enum.filter(heads, fn h -> h != "main" end) ++ heads, 0)
-          [%{"kind" => "practice",
-            "line" => line_of(source, re.compile("(?m)^\\s*def " <> re.escape(subject))),
-            "message" => "No @example doctests — add one right above `def #{subject}`:\n@example \"\"\"\n    gan> #{subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {:ok, 21} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007)."}]
+          [%{
+            "kind" => "practice",
+            "line" => line_of(source, re.compile("(?m)^\\s*(?:async )?def " <> re.escape(subject))),
+            "message" => "No @example doctests — add one right above `def #{subject}`:\n@example \"\"\"\n    gan> #{subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {:ok, 21} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007)."
+          }]
         else
           []
         end
@@ -215,12 +217,15 @@ defmodule Advisor do
         []
       else
         first = if Enum.empty?(no_spec) do
-          ~r/(?m)^\s*def /
+          ~r/(?m)^\s*(?:async )?def /
         else
-          re.compile("(?m)^\\s*def " <> re.escape(Enum.at(no_spec, 0)))
+          re.compile("(?m)^\\s*(?:async )?def " <> re.escape(Enum.at(no_spec, 0)))
         end
-        [%{"kind" => "practice", "line" => line_of(source, first),
-          "message" => "Annotation coverage: missing #{missing |> Enum.join("; ")} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md)."}]
+        [%{
+          "kind" => "practice",
+          "line" => line_of(source, first),
+          "message" => "Annotation coverage: missing #{missing |> Enum.join("; ")} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md)."
+        }]
       end
       head_hint ++ example_hint
     end
@@ -242,8 +247,11 @@ defmodule Advisor do
     if Enum.empty?(smells) do
       []
     else
-      [%{"kind" => "practice", "line" => line_of(raw, ~r/@doc\s+"{3}/),
-        "message" => "an example lives in @example, not prose inside @doc — move it to:\n@example \"\"\"\n    gan> call(...)\n    expected_repr\n\"\"\"\n(runnable by `gan test` on defs; displayed in docs on defmacro). Keep @doc to what/why prose (GEP-0007)."}]
+      [%{
+        "kind" => "practice",
+        "line" => line_of(raw, ~r/@doc\s+"{3}/),
+        "message" => "an example lives in @example, not prose inside @doc — move it to:\n@example \"\"\"\n    gan> call(...)\n    expected_repr\n\"\"\"\n(runnable by `gan test` on defs; displayed in docs on defmacro). Keep @doc to what/why prose (GEP-0007)."
+      }]
     end
   end
 
@@ -254,9 +262,11 @@ defmodule Advisor do
     Enum.flat_map(specs, fn {name, params, ret} ->
       seen = ~r/(?<![A-Za-z0-9_$.])#{ret}(?![A-Za-z0-9_(])/.findall(params)
       if Enum.empty?(seen) do
-        [%{"kind" => "practice",
+        [%{
+          "kind" => "practice",
           "line" => line_of(source, re.compile("(?m)^\\s*@spec\\s+" <> re.escape(name))),
-          "message" => "the return of @spec #{name} is the lone type variable `#{ret}` — it constrains nothing; write term(), or use the variable in a parameter too (GEP-0027)."}]
+          "message" => "the return of @spec #{name} is the lone type variable `#{ret}` — it constrains nothing; write term(), or use the variable in a parameter too (GEP-0027)."
+        }]
       else
         []
       end
@@ -272,8 +282,11 @@ defmodule Advisor do
       []
     else
       first = re.compile("(?m)^\\s*@spec\\s+" <> re.escape(Enum.at(offenders, 0)))
-      [%{"kind" => "practice", "line" => line_of(source, first),
-        "message" => "Concrete `list()`/`map()` in parameter position of @spec #{offenders |> Enum.join(", ")} — accept `sequence(t)`/`iterable(t)`/`mapping(k, v)`, return concrete (\"abstract in, concrete out\", docs/syntax.md)."}]
+      [%{
+        "kind" => "practice",
+        "line" => line_of(source, first),
+        "message" => "Concrete `list()`/`map()` in parameter position of @spec #{offenders |> Enum.join(", ")} — accept `sequence(t)`/`iterable(t)`/`mapping(k, v)`, return concrete (\"abstract in, concrete out\", docs/syntax.md)."
+      }]
     end
   end
 
@@ -293,8 +306,11 @@ defmodule Advisor do
       if is_nil(pattern.search(source)) do
         []
       else
-        [%{"kind" => "practice", "line" => line_of(source, pattern),
-          "message" => advice}]
+        [%{
+          "kind" => "practice",
+          "line" => line_of(source, pattern),
+          "message" => advice
+        }]
       end
     end)
     # `rescue _e ->` is a deliberate swallow — only an undiscarded bare
@@ -303,8 +319,11 @@ defmodule Advisor do
     rescue_only_bare = String.match?(source, bare_pat) and
       not String.match?(source, ~r/rescue[\s\S]{0,200}? in /)
     bare_hint = if rescue_only_bare do
-      [%{"kind" => "practice", "line" => line_of(source, bare_pat),
-        "message" => "A bare `rescue e ->` catches every Exception — rescue specific types first: `e in $builtins.ValueError -> ...` (GEP-0014)."}]
+      [%{
+        "kind" => "practice",
+        "line" => line_of(source, bare_pat),
+        "message" => "A bare `rescue e ->` catches every Exception — rescue specific types first: `e in $builtins.ValueError -> ...` (GEP-0014)."
+      }]
     else
       []
     end
@@ -322,8 +341,11 @@ defmodule Advisor do
     counts = Enum.reduce(refs, %{}, fn m, acc -> Map.put(acc, m, Map.get(acc, m, 0) + 1) end)
     # $builtins is the ambient namespace — repeating it is the idiom
     for {m, n} <- counts.items(), n >= 3 and not Enum.member?(["builtins", "python"], m),
-      do: %{"kind" => "practice", "line" => line_of(source, re.compile("\\$" <> m)),
-        "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name; a dotted chain imports as `pyimport #{m}.sub, as: s` (GEP-0003 rev 6)."}
+      do: %{
+        "kind" => "practice",
+        "line" => line_of(source, re.compile("\\$" <> m)),
+        "message" => "`$#{m}` appears #{n} times — declare `pyimport #{m}` once and use the bare name; a dotted chain imports as `pyimport #{m}.sub, as: s` (GEP-0003 rev 6)."
+      }
   end
 
   # fuzzy candidates for a compile error: the token at the error line
@@ -349,8 +371,11 @@ defmodule Advisor do
       if Enum.empty?(near) or Enum.member?(@keywords, word) do
         []
       else
-        [%{"kind" => "did_you_mean", "line" => line,
-          "message" => "`#{word}` — did you mean `#{Enum.at(near, 0)}`?"}]
+        [%{
+          "kind" => "did_you_mean",
+          "line" => line,
+          "message" => "`#{word}` — did you mean `#{Enum.at(near, 0)}`?"
+        }]
       end
     end)
   end
@@ -365,9 +390,11 @@ defmodule Advisor do
     for {mod, advice} <- @elixir_reflexes.items(),
       not is_nil(re.compile("\\b" <> mod <> "\\.[a-z_]").search(source)),
       Enum.empty?(module_functions(mod, root)),
-      do: %{"kind" => "migration",
+      do: %{
+        "kind" => "migration",
         "line" => line_of(source, re.compile("\\b" <> mod <> "\\.[a-z_]")),
-        "message" => "`#{mod}.` — #{advice} (GEP-0003)."}
+        "message" => "`#{mod}.` — #{advice} (GEP-0003)."
+      }
   end
 
   # map-update syntax on a struct value dies at runtime (dict spread
@@ -376,8 +403,11 @@ defmodule Advisor do
     source = mask_literals(raw)
     pat = ~r/%\{[a-z_][A-Za-z0-9_]*\s*\|/
     if String.match?(source, ~r/defstruct/) and String.match?(source, pat) do
-      [%{"kind" => "migration", "line" => line_of(source, pat),
-        "message" => "`%{x | field: v}` updates a plain map — a struct value updates as `%Mod{x | field: v}` (compiles to a dataclass replace) (GEP-0009)."}]
+      [%{
+        "kind" => "migration",
+        "line" => line_of(source, pat),
+        "message" => "`%{x | field: v}` updates a plain map — a struct value updates as `%Mod{x | field: v}` (compiles to a dataclass replace) (GEP-0009)."
+      }]
     else
       []
     end
@@ -392,8 +422,11 @@ defmodule Advisor do
     if Enum.empty?(hits) do
       []
     else
-      [%{"kind" => "migration", "line" => line_of(source, pat),
-        "message" => "Python exceptions are spelled through their module: `$builtins.#{Enum.at(hits, 0)}` (rescue e in $builtins.#{Enum.at(hits, 0)} -> ...) (GEP-0014)."}]
+      [%{
+        "kind" => "migration",
+        "line" => line_of(source, pat),
+        "message" => "Python exceptions are spelled through their module: `$builtins.#{Enum.at(hits, 0)}` (rescue e in $builtins.#{Enum.at(hits, 0)} -> ...) (GEP-0014)."
+      }]
     end
   end
 
@@ -415,9 +448,11 @@ defmodule Advisor do
           else
             "did you mean #{near |> Enum.map(fn n -> "`#{mod}.#{n}`" end) |> Enum.join(" / ")}?"
           end
-          [%{"kind" => "did_you_mean",
+          [%{
+            "kind" => "did_you_mean",
             "line" => line_of(source, re.compile(re.escape("#{mod}.#{fun}("))),
-            "message" => "`#{mod}.#{fun}` is not a function of #{mod} — #{hint}"}]
+            "message" => "`#{mod}.#{fun}` is not a function of #{mod} — #{hint}"
+          }]
       end
     end)
   end
@@ -439,8 +474,14 @@ defmodule Advisor do
   # std members via introspection of the library this tool ships with —
   # works even when the checked project has no venv
   defp std_functions(mod) do
-    known = %{"Enum" => "enum", "Map" => "map", "List" => "list",
-      "Keyword" => "keyword", "String" => "string", "Test" => "test"}
+    known = %{
+      "Enum" => "enum",
+      "Map" => "map",
+      "List" => "list",
+      "Keyword" => "keyword",
+      "String" => "string",
+      "Test" => "test"
+    }
     pymod = Map.get(known, mod)
     if is_nil(pymod) do
       []
@@ -465,8 +506,11 @@ defmodule Advisor do
       if Enum.empty?(near) do
         []
       else
-        [%{"kind" => "did_you_mean", "line" => Map.get(d, "line"),
-          "message" => "`#{word}` — did you mean #{near |> Enum.map(fn n -> "`#{n}`" end) |> Enum.join(" / ")}?"}]
+        [%{
+          "kind" => "did_you_mean",
+          "line" => Map.get(d, "line"),
+          "message" => "`#{word}` — did you mean #{near |> Enum.map(fn n -> "`#{n}`" end) |> Enum.join(" / ")}?"
+        }]
       end
     end
   end

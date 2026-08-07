@@ -471,6 +471,38 @@ belongs to macros. Concretely:
   decorator in Python.
 
 
+## Concurrency (GEP-0029/0030)
+
+`async def` and `await` are Python's own, one-to-one: `async def
+f(x) do ... end` emits `async def f(x):`, and `await expr` emits the
+bare `await` — no deadline, no wrapper. `await` binds tighter than
+every binary operator (`await fetch(u) |> parse()` pipes the awaited
+value) and is legal only in an async body — never inside `fn`, whose
+lambda cannot await. `main` stays synchronous.
+
+`Task` is the std library over `asyncio`:
+
+```elixir
+async def fan_out(xs) do
+  ts = for x <- xs, do: Task.async(work(x))   # spawn (ensure_future)
+  await Task.all(ts)                          # join, input order
+end
+
+def main(), do: IO.puts(Task.run(fan_out([1, 2, 3])))   # the rim
+```
+
+- Deadlines are explicit and return verdicts: `Task.try_await(t, ms)`
+  → `{:ok, v}` / `{:error, :timeout}` (the task is cancelled) /
+  `{:error, e}`. Timeouts are milliseconds.
+- Blocking code crosses on the bridge: `Task.blocking(fn -> io() end)`
+  runs it on a worker thread; spawn it to overlap with coroutines.
+- Bounded fan-out: `Task.async_stream(xs, fun, max)` — `fun` returns
+  an awaitable; results keep input order.
+- Combinators `map`/`tap`/`recover` are lazy awaitables; `race`
+  settles first; `shutdown` really cancels.
+- An async function's `@example` is a runnable doctest through the
+  rim: `gan> Task.run(M.fun(args))`.
+
 ## Error handling
 
 `try/rescue/after` maps onto Python exceptions; rescue clauses match

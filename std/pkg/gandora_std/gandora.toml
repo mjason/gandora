@@ -1,5 +1,5 @@
 schema = 1
-compiler = "0.17.1"
+compiler = "0.18.8"
 
 [[modules]]
 name = "Enum"
@@ -25,6 +25,11 @@ source = "gandora_std/_gan/gandora_std/map.gan"
 name = "String"
 python = "gandora_std/string.py"
 source = "gandora_std/_gan/gandora_std/string.gan"
+
+[[modules]]
+name = "Task"
+python = "gandora_std/task.py"
+source = "gandora_std/_gan/gandora_std/task.gan"
 
 [[modules]]
 name = "Test"

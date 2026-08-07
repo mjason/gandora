@@ -1,0 +1,150 @@
+defmodule Main do
+  @moduledoc """
+  `gan-mcp` — the Gandora MCP server, written in Gandora (GEP-0028).
+
+  The tool schemas are not declared twice: `@spec` becomes the Python
+  signature, the signature becomes the MCP `inputSchema`, and `@doc`
+  becomes the tool description. What the language already demands of
+  every public function is exactly what the protocol needs.
+  """
+  @moduledoc_trans zh_CN: "`gan-mcp`——用 Gandora 写成的 Gandora MCP 服务器(GEP-0028)。工具 schema 不写第二遍:`@spec` 生成 Python 签名,签名生成 MCP `inputSchema`,`@doc` 成为工具描述。语言本就对每个公开函数的要求,恰是协议所需。"
+
+  pyimport mcp.server.mcpserver, as: ms
+  pyimport gandora_core, as: core
+  pyimport os
+
+  @instructions """
+  Gandora is an Elixir-flavored language compiling to readable Python.
+  Call `gan_briefing` once at the start of a session. Ask `gan_example`
+  when you need to know how a feature or a piece of syntax is really
+  written — it answers with prose plus a module that compiled and whose
+  doctests ran. Call `gan_verify` on every snippet before you hand it to
+  the user, including snippets you wrote yourself: a verdict of
+  `clean: true` with `doctests.passed: true` is the only evidence that
+  the code works. `gan_doc` and `gan_pack` answer what a name means, and
+  are the same answers as `gan lsc doc` / `gan lsc pack` if you have a
+  shell.
+  """
+
+  @doc """
+  Compiles a Gandora module in a throwaway project and really runs its
+  `@example` doctests; returns errors, practice suggestions, and the
+  doctest output.
+  """
+  @doc_trans zh_CN: "在一次性项目里编译一个 Gandora 模块并真跑它的 `@example` doctest;返回 error、practice 建议与 doctest 输出。"
+  @param source, "The Gandora source text of one module."
+  @spec gan_verify(string()) :: map()
+  def gan_verify(source), do: Sandbox.verdict(source, root())
+
+  @doc """
+  Explains one Gandora feature or piece of syntax and demonstrates it
+  with a complete module — returned only once that module has compiled,
+  passed the practice pass, and had its `@example` doctests really run
+  (GEP-0028-R006). The prose explains; every line of code in the answer
+  is code that ran.
+  """
+  @doc_trans zh_CN: "讲解一项 Gandora 功能或语法,并以一个完整模块示范——该模块须已编译、通过 practice 一关、并真跑过 `@example` doctest 后才返回(GEP-0028-R006)。散文负责解释;答案里每一行代码都是跑过的代码。"
+  @param requirement, "The feature, syntax, or capability to demonstrate."
+  # an async tool: the SDK detects the coroutine function and awaits it
+  # on its own loop, so the model round-trips ride the server's loop
+  # with no bridge in between
+  @spec gan_example(string()) :: map()
+  async def gan_example(requirement), do: await Composer.example(requirement, root())
+
+  @doc """
+  The documentation for one target — `Enum.map`, a bare function name,
+  or a language construct such as `defmacro`.
+  """
+  @doc_trans zh_CN: "一个目标的文档——`Enum.map`、裸函数名,或 `defmacro` 这样的语言构造。"
+  @param target, "What to look up."
+  @spec gan_doc(string()) :: term()
+  def gan_doc(target), do: Intel.doc(target, root())
+
+  @doc """
+  The one-call context pack for the current project: std function lists,
+  project signatures, the construct index, and the verdict summary.
+  """
+  @doc_trans zh_CN: "当前项目的一次调用上下文包:std 函数清单、项目签名、构造索引与裁决摘要。"
+  @param modules, "Module names whose full docs ride along; `[]` for the overview."
+  @spec gan_pack(sequence(string())) :: term()
+  # no default argument: `\\` compiles to `*_gan_args`, which erases the
+  # signature MCP derives its inputSchema from — a tool parameter must
+  # stay a named, typed parameter
+  def gan_pack(modules), do: Intel.pack(modules, root())
+
+  @doc "The verdict for the current project: `ok`, `clean`, and why not."
+  @doc_trans zh_CN: "当前项目的裁决:`ok`、`clean`,以及为何不是。"
+  @spec gan_check() :: term()
+  def gan_check(), do: Intel.check(root())
+
+  @doc "The session briefing: how to work in Gandora, plus this project."
+  @doc_trans zh_CN: "会话简报:如何在 Gandora 中工作,以及这个项目的情况。"
+  @spec gan_briefing() :: string()
+  def gan_briefing(), do: Intel.briefing(root())
+
+  @doc "The tool table: one entry per exposed function and its blurb."
+  @doc_trans zh_CN: "工具表:每个暴露的函数一条,附一句说明。"
+  @spec tools() :: list(tuple())
+  @example """
+      gan> Enum.count(Main.tools())
+      6
+  """
+  def tools() do
+    [
+      {"gan_example", "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."},
+      {"gan_verify", "Compile a Gandora module and run its @example doctests; returns the verdict."},
+      {"gan_doc", "Look up documentation for Mod.fun, a bare name, or a language construct."},
+      {"gan_pack", "The one-call context pack for the project."},
+      {"gan_check", "The build verdict for the whole project."},
+      {"gan_briefing", "The session briefing for working in Gandora."}
+    ]
+  end
+
+  @doc """
+  The project the queries run against: `$GAN_MCP_ROOT` when set,
+  otherwise the nearest ancestor of the working directory holding a
+  `gandora.jsonc`. A client chooses where it launches a server, and it
+  may well choose a subdirectory — so the project is discovered, not
+  configured.
+  """
+  @doc_trans zh_CN: "查询所针对的项目:设了 `$GAN_MCP_ROOT` 用它,否则从当前目录向上找最近一层带 `gandora.jsonc` 的祖先目录。服务器在哪启动由客户端决定,而它完全可能选个子目录——所以项目靠发现,而非靠配置。"
+  @spec root() :: string()
+  def root() do
+    env = os.getenv("GAN_MCP_ROOT")
+    if is_nil(env), do: discover(os.getcwd()), else: env
+  end
+
+  defp discover(dir) do
+    cond do
+      os.path.exists(os.path.join(dir, "gandora.jsonc")) -> dir
+      # the filesystem root: no project anywhere above, so answer for
+      # where we were launched rather than for "/"
+      os.path.dirname(dir) == dir -> os.getcwd()
+      true -> discover(os.path.dirname(dir))
+    end
+  end
+
+  @doc "Serves the tools over stdio until the client disconnects."
+  @doc_trans zh_CN: "通过 stdio 提供这些工具,直到客户端断开。"
+  @spec main() :: nil
+  def main() do
+    server = ms.MCPServer("gandora", version: core.version(), instructions: @instructions)
+    server.add_tool(&gan_example/1, name: "gan_example", description: blurb("gan_example"))
+    server.add_tool(&gan_verify/1, name: "gan_verify", description: blurb("gan_verify"))
+    server.add_tool(&gan_doc/1, name: "gan_doc", description: blurb("gan_doc"))
+    server.add_tool(&gan_pack/1, name: "gan_pack", description: blurb("gan_pack"))
+    server.add_tool(&gan_check/0, name: "gan_check", description: blurb("gan_check"))
+    server.add_tool(&gan_briefing/0, name: "gan_briefing", description: blurb("gan_briefing"))
+    server.run("stdio")
+  end
+
+  defp blurb(name) do
+    hit = Enum.find(tools(), fn {n, _d} -> n == name end)
+    if is_nil(hit) do
+      name
+    else
+      {_n, d} = hit
+      d
+    end
+  end
+end

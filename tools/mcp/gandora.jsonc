@@ -1,0 +1,8 @@
+{
+  // gan-mcp: the MCP surface, written in Gandora (GEP-0028, draft).
+  "source": ["src"],
+  "outDir": "pkg",
+  "targetPython": "3.11",
+  "package": true,
+  "pyPackage": "gandora_mcp"
+}

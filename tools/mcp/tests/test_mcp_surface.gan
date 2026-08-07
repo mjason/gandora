@@ -1,0 +1,120 @@
+defmodule TestMcpSurface do
+  @moduledoc """
+  GEP-0028 conformance: the verdict a snippet really gets — green when
+  it works, red when it calls what does not exist, and red when its
+  expected output is a wish — plus the sandbox path rule and the tool
+  table. Run by `gan test`; no model is consulted.
+  """
+  @moduledoc_trans zh_CN: "GEP-0028 conformance:片段真正拿到的裁决——能用则绿,调用不存在之物则红,预期输出是愿望时亦红——外加沙箱路径规则与工具表。由 `gan test` 运行;不问模型。"
+
+  use Test
+
+  pyimport os
+
+  @good """
+  defmodule Greeter do
+    @moduledoc "A greeting."
+
+    @doc "Greets by name."
+    @param name, "Who to greet."
+    @spec hello(string()) :: string()
+    @example \"\"\"
+        gan> Greeter.hello("world")
+        'hello world'
+    \"\"\"
+    def hello(name), do: "hello " <> name
+  end
+  """
+
+  @missing """
+  defmodule Broken do
+    @moduledoc "Calls a function the standard library does not have."
+
+    @doc "Splits on commas."
+    @param s, "Text."
+    @spec lines(string()) :: list(string())
+    @example \"\"\"
+        gan> Broken.lines("a,b")
+        ['a', 'b']
+    \"\"\"
+    def lines(s), do: String.split(s, ",")
+  end
+  """
+
+  @wishful """
+  defmodule Wishful do
+    @moduledoc "Compiles, but the example is a wish."
+
+    @doc "Doubles a number."
+    @param x, "The number."
+    @spec double(integer()) :: integer()
+    @example \"\"\"
+        gan> Wishful.double(2)
+        5
+    \"\"\"
+    def double(x), do: x * 2
+  end
+  """
+
+  test "a working module reaches a green verdict and its doctests run" do
+    v = Sandbox.verdict(@good, os.getcwd())
+    assert_true(Map.get(v, "ok"))
+    assert_true(Map.get(v, "clean"))
+    assert_true(Map.get(Map.get(v, "doctests"), "ran"))
+    assert_true(Map.get(Map.get(v, "doctests"), "passed"))
+  end
+
+  test "calling a function the standard library lacks fails the verdict" do
+    v = Sandbox.verdict(@missing, os.getcwd())
+    assert_false(Map.get(v, "ok"))
+    assert_false(Map.get(Map.get(v, "doctests"), "ran"))
+  end
+
+  test "a wrong expected value compiles clean and still fails" do
+    v = Sandbox.verdict(@wishful, os.getcwd())
+    assert_true(Map.get(v, "ok"))
+    assert_true(Map.get(Map.get(v, "doctests"), "ran"))
+    assert_false(Map.get(Map.get(v, "doctests"), "passed"))
+  end
+
+  test "the sandbox writes a module at the path its name demands" do
+    assert_eq(Sandbox.module_path("App.DMagicFactor"), "app/d_magic_factor.gan")
+    assert_eq(Sandbox.module_path(Sandbox.module_name(@good)), "greeter.gan")
+    assert_eq(Sandbox.module_path(nil), "example.gan")
+  end
+
+  test "every atom carries the example that proves it" do
+    atoms = Atoms.catalog(os.getcwd())
+    assert_true(Enum.count(atoms) > 20)
+    assert_true(Enum.empty?(Enum.filter(atoms, fn a -> Map.get(a, "example") == "" end)))
+  end
+
+  test "the tool table names the composer and the verifier" do
+    names = Enum.map(Main.tools(), fn {n, _d} -> n end)
+    assert_contains(names, "gan_example")
+    assert_contains(names, "gan_verify")
+    assert_eq(Enum.count(names), 6)
+  end
+
+  test "every construct atom survives the verdict it teaches" do
+    # the corpus proves Task (GEP-0029), and Task fans the corpus out:
+    # every atom's sandbox verdict crosses the blocking bridge, bounded
+    root = os.getcwd()
+    verdicts = Task.run(Task.async_stream(Corpus.all(),
+      fn a -> Task.blocking(fn -> Sandbox.verdict(Map.get(a, "module"), root) end) end, 4))
+    Enum.each(verdicts, fn v ->
+      assert_true(Map.get(v, "ok"))
+      assert_true(Map.get(v, "clean"))
+      assert_true(Map.get(Map.get(v, "doctests"), "passed"))
+    end)
+    nil
+  end
+
+  test "a verdict without doctests is never green" do
+    assert_false(Composer.green?(%{
+      "ok" => true,
+      "clean" => true,
+      "doctests" => %{"passed" => false}
+    }))
+  end
+end

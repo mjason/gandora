@@ -315,6 +315,9 @@ struct FnDef {
     /// real clause and every default is an immutable literal, the
     /// signature emits native Python defaults instead of a dispatcher
     defaults: Vec<Term>,
+    /// defined with `async def`/`async defp`: compiles to Python's
+    /// `async def`, and `await` is legal in the body (GEP-0030)
+    is_async: bool,
 }
 
 pub struct Codegen {
@@ -355,6 +358,9 @@ pub struct Codegen {
     tmp_counter: usize,
     tmp_names: Vec<String>,
     fn_counter: usize,
+    /// inside the body of an `async def`, where `await` is legal
+    /// (GEP-0030-R002)
+    async_ctx: bool,
     /// locals of each enclosing function scope, innermost last — the
     /// names a closure may capture and must snapshot (GEP-0021)
     scope_bound: Vec<BTreeSet<String>>,
@@ -384,6 +390,7 @@ impl Codegen {
             warnings: Vec::new(),
             typevars: BTreeSet::new(),
             tail_ctx: None,
+            async_ctx: false,
             compile_time_only: false,
             tmp_counter: 0,
             tmp_names: Vec::new(),
@@ -818,7 +825,9 @@ impl Codegen {
                     }
                     self.struct_fields = Some(self.parse_defstruct(call)?);
                 }
-                "def" | "defp" => {
+                "def" | "defp" | "async def" | "async defp" => {
+                    let is_async = name.starts_with("async ");
+                    let private = name.ends_with("defp");
                     let (fname, raw_params, guard, fbody) = self.parse_def(call)?;
                     // default parameters: `p \\ expr` (GEP-0011-R002)
                     let mut params: Vec<Term> = Vec::new();
@@ -859,7 +868,7 @@ impl Codegen {
                     }
                     for arity in (params.len() - defaults.len())..=params.len() {
                         self.local_funs.insert((fname.clone(), arity));
-                        if name == "defp" {
+                        if private {
                             self.private_funs.insert((fname.clone(), arity));
                         }
                     }
@@ -878,9 +887,16 @@ impl Codegen {
                         }
                         i
                     } else {
+                        if is_async && fname == "main" {
+                            return Err(self.err(
+                                call.span,
+                                "main stays synchronous — enter the coroutine \
+                                 world with Task.run (GEP-0030-R001)",
+                            ));
+                        }
                         funs.push(FnDef {
                             name: fname.clone(),
-                            private: name == "defp",
+                            private,
                             spec: pending_spec.take(),
                             doc: {
                                 let mut d = pending_doc.take();
@@ -896,14 +912,24 @@ impl Codegen {
                             captures: Vec::new(),
                             allows: std::mem::take(&mut pending_allows),
                             defaults: Vec::new(),
+                            is_async,
                         });
                         order.insert(key, funs.len() - 1);
                         funs.len() - 1
                     };
-                    if funs[idx].private != (name == "defp") {
+                    if funs[idx].private != private {
                         return Err(self.err(
                             call.span,
                             format!("clauses of {fname} mix def and defp"),
+                        ));
+                    }
+                    if funs[idx].is_async != is_async {
+                        return Err(self.err(
+                            call.span,
+                            format!(
+                                "clauses of {fname} mix def and async def \
+                                 (GEP-0030-R001)"
+                            ),
                         ));
                     }
                     let arity = params.len();
@@ -1042,7 +1068,8 @@ impl Codegen {
         }
 
         let mut out = String::new();
-        let module_docstring = self.docstring_text(moduledoc.as_ref(), Span::default())?;
+        let module_docstring =
+            self.docstring_text(moduledoc.as_ref(), Span::default())?;
         if let Some(doc) = &module_docstring {
             let _ = writeln!(out, "\"\"\"{}\"\"\"", doc.replace("\"\"\"", "\\\"\\\"\\\""));
         }
@@ -1667,6 +1694,9 @@ impl Codegen {
             ));
         }
         let saved_tail = self.tail_ctx.take();
+        let saved_async = self.async_ctx;
+        self.async_ctx = f.is_async;
+        let def_kw = if f.is_async { "async def" } else { "def" };
         // this function's locals: what closures inside may capture
         let mut fn_scope: BTreeSet<String> = f.captures.iter().cloned().collect();
         for (params, _, body) in &f.clauses {
@@ -1749,7 +1779,7 @@ impl Codegen {
                         .map(|(i, (n, h))| with_default(i, format!("{n}: {h}")))
                         .collect();
                     lines.push(format!(
-                        "def {py_name}({}) -> {ret}:",
+                        "{def_kw} {py_name}({}) -> {ret}:",
                         with_caps(typed.join(", "))
                     ));
                 }
@@ -1760,7 +1790,7 @@ impl Codegen {
                         .map(|(i, n)| with_default(i, n.clone()))
                         .collect();
                     lines.push(format!(
-                        "def {py_name}({}) -> {ret}:",
+                        "{def_kw} {py_name}({}) -> {ret}:",
                         with_caps(sig.join(", "))
                     ));
                 }
@@ -1770,11 +1800,13 @@ impl Codegen {
                         .enumerate()
                         .map(|(i, n)| with_default(i, n.clone()))
                         .collect();
-                    lines.push(format!("def {py_name}({}):", with_caps(sig.join(", "))))
+                    lines.push(format!("{def_kw} {py_name}({}):", with_caps(sig.join(", "))))
                 }
             }
             let mut body_lines = Vec::new();
-            if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
+            if let Some(compiled) =
+                self.docstring_text(f.doc.as_ref(), f.span)?
+            {
                 body_lines.push(format!(
                     "\"\"\"{}\"\"\"",
                     compiled.replace("\"\"\"", "\\\"\\\"\\\"")
@@ -1794,12 +1826,14 @@ impl Codegen {
         } else {
             match &spec_info {
                 Some((_, ret)) => {
-                    lines.push(format!("def {py_name}(*_gan_args{cap_star}) -> {ret}:"))
+                    lines.push(format!("{def_kw} {py_name}(*_gan_args{cap_star}) -> {ret}:"))
                 }
-                None => lines.push(format!("def {py_name}(*_gan_args{cap_star}):")),
+                None => lines.push(format!("{def_kw} {py_name}(*_gan_args{cap_star}):")),
             }
             let mut body_lines = Vec::new();
-            if let Some(compiled) = self.docstring_text(f.doc.as_ref(), f.span)? {
+            if let Some(compiled) =
+                self.docstring_text(f.doc.as_ref(), f.span)?
+            {
                 body_lines.push(format!(
                     "\"\"\"{}\"\"\"",
                     compiled.replace("\"\"\"", "\\\"\\\"\\\"")
@@ -1865,6 +1899,7 @@ impl Codegen {
         }
         self.scope_bound.pop();
         self.tail_ctx = saved_tail;
+        self.async_ctx = saved_async;
         Ok(format!("\n{}\n", lines.join("\n")))
     }
 
@@ -1895,6 +1930,8 @@ impl Codegen {
             parts.push(section);
         }
         for ex in &info.examples {
+            // every example is a doctest, async defs included: theirs are
+            // written through the sync rim, `Task.run(...)` (GEP-0030-R005)
             parts.push(self.compile_doctests(ex.trim_end(), span)?);
         }
         if let Some(v) = info.meta_value("deprecated") {
@@ -3215,6 +3252,20 @@ impl Codegen {
                 let e = self.emit_bool_expr(&args[0], pre)?;
                 Ok(format!("not ({e})"))
             }
+            ("await", 1) => {
+                // native await (GEP-0030-R002): bare, no deadline, no
+                // wrapper — and only where Python itself allows it
+                if !self.async_ctx {
+                    return Err(self.err(
+                        call.span,
+                        "await is legal only in the body of an async def — \
+                         a fn closure is synchronous and cannot await \
+                         (GEP-0030-R002/R003)",
+                    ));
+                }
+                let e = self.emit_expr(&args[0], pre)?;
+                Ok(format!("(await {e})"))
+            }
             ("-", 1) => match &args[0] {
                 Term::Int(n) => Ok(format!("-{n}")),
                 Term::Float(v) => {
@@ -3576,6 +3627,31 @@ impl Codegen {
         Ok(parts.join(", "))
     }
 
+    /// Whether `e` is one parenthesized unit — `(a or b)` is, while
+    /// `(a) or (b)` merely *starts* with a paren. The old starts_with
+    /// check let the latter through unwrapped, so `(a or b) and c`
+    /// compiled to `(a) or (b) and (c)`, which Python reads as
+    /// `a or (b and c)` — a real miscompile.
+    fn fully_parenthesized(e: &str) -> bool {
+        if !e.starts_with('(') || !e.ends_with(')') {
+            return false;
+        }
+        let mut depth = 0usize;
+        for (i, ch) in e.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return i == e.len() - 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
     fn emit_operand(&mut self, term: &Term, _parent: &str, pre: &mut Vec<String>) -> Result<String> {
         let e = self.emit_expr(term, pre)?;
         let atomic = match term {
@@ -3604,7 +3680,7 @@ impl Codegen {
             },
             _ => true,
         };
-        if atomic || e.starts_with('(') {
+        if atomic || Self::fully_parenthesized(&e) {
             Ok(e)
         } else {
             Ok(format!("({e})"))
@@ -3612,6 +3688,16 @@ impl Codegen {
     }
 
     fn emit_fn(&mut self, call: &Call, pre: &mut Vec<String>) -> Result<String> {
+        // a closure body is a sync function even inside an async def:
+        // `await` may not cross a lambda boundary (GEP-0030-R003)
+        let saved_async = self.async_ctx;
+        self.async_ctx = false;
+        let out = self.emit_fn_inner(call, pre);
+        self.async_ctx = saved_async;
+        out
+    }
+
+    fn emit_fn_inner(&mut self, call: &Call, pre: &mut Vec<String>) -> Result<String> {
         let clauses = &call.args;
         // single clause with plain variable params and a single expression body
         if clauses.len() == 1 {
@@ -3655,6 +3741,7 @@ impl Codegen {
             captures,
             allows: BTreeSet::new(),
             defaults: Vec::new(),
+            is_async: false,
             clauses: clauses
                 .iter()
                 .map(|clause| {
@@ -5430,6 +5517,97 @@ mod tests {
             "defmodule M do\n  def f(x) do\n    if x do\n      1\n    end\n  end\nend",
         );
         assert!(py.contains("_gan_truthy(x)"), "{py}");
+    }
+
+    #[test]
+    fn async_def_and_await_emit_one_to_one() {
+        let py = compile(
+            "defmodule M do\n  async defp fetch(x) do\n    r = await g(x)\n    t = Task.async(g(x))\n    u = await Task.try_await(t, 1000)\n    {r, u}\n  end\n  async def g(x), do: x\nend",
+        );
+        assert!(py.contains("async def _fetch(x):"), "{py}");
+        assert!(py.contains("async def g(x):"), "{py}");
+        assert!(py.contains("r = (await g(x))"), "{py}");
+        // Task calls are ordinary std calls everywhere (GEP-0030-R007)
+        assert!(py.contains("task.async__kw(g(x))"), "{py}");
+        assert!(py.contains("(await task.try_await(t, 1000))"), "{py}");
+        assert!(!py.contains("wait_for"), "{py}");
+    }
+
+    #[test]
+    fn await_binds_tighter_than_binary_operators() {
+        let py = compile(
+            "defmodule M do\n  async def f(a, b) do\n    x = await g(a) |> h()\n    y = await g(a) + await g(b)\n    {x, y}\n  end\n  async def g(x), do: x\n  def h(x), do: x\nend",
+        );
+        // `await g(a) |> h()` pipes the awaited value (GEP-0030-R002)
+        assert!(py.contains("h((await g(a)))"), "{py}");
+        assert!(py.contains("(await g(a)) + (await g(b))"), "{py}");
+    }
+
+    #[test]
+    fn await_in_comprehension_bodies_is_native() {
+        let py = compile(
+            "defmodule M do\n  async def all(ts) do\n    for t <- ts, do: await t\n  end\nend",
+        );
+        assert!(py.contains("[(await t) for t in ts]"), "{py}");
+    }
+
+    #[test]
+    fn await_outside_async_bodies_is_rejected() {
+        let err = compile_err("defmodule M do\n  def f(t), do: await t\nend");
+        assert!(err.contains("GEP-0030-R002"), "{err}");
+    }
+
+    #[test]
+    fn await_inside_fn_closures_is_rejected() {
+        let err = compile_err(
+            "defmodule M do\n  async def f(t) do\n    g = fn -> await t end\n    g.()\n  end\nend",
+        );
+        assert!(err.contains("fn closure is synchronous"), "{err}");
+    }
+
+    #[test]
+    fn mixed_sync_and_async_clauses_are_rejected() {
+        let err = compile_err(
+            "defmodule M do\n  async def f(0), do: 0\n  def f(x), do: x\nend",
+        );
+        assert!(err.contains("mix def and async def"), "{err}");
+    }
+
+    #[test]
+    fn async_main_is_rejected() {
+        let err = compile_err("defmodule M do\n  async def main(), do: 1\nend");
+        assert!(err.contains("GEP-0030-R001"), "{err}");
+    }
+
+    #[test]
+    fn async_examples_are_runnable_doctests() {
+        let py = compile(
+            "defmodule M do\n  @doc \"d\"\n  @example \"\"\"\n      gan> Task.run(M.f(1))\n      1\n  \"\"\"\n  async def f(x), do: x\nend",
+        );
+        // the example compiles to an ordinary doctest (GEP-0030-R005)
+        assert!(py.contains(">>>"), "{py}");
+        assert!(!py.contains("gan>"), "{py}");
+    }
+
+    #[test]
+    fn async_and_await_stay_ordinary_names_elsewhere() {
+        let py = compile(
+            "defmodule M do\n  def f(t), do: Task.async(t)\n  def g() do\n    async = 1\n    async + 1\n  end\nend",
+        );
+        assert!(py.contains("task.async__kw(t)"), "{py}");
+        assert!(py.contains("async__kw = 1"), "{py}");
+    }
+
+    #[test]
+    fn grouped_or_keeps_its_parens_under_and() {
+        let py = compile(
+            "defmodule M do\n  def f(t) do\n    (Map.get(t, \"k\") == \"a\" or Map.get(t, \"k\") == \"b\") and Map.get(t, \"n\") > 1\n  end\nend",
+        );
+        // `(A or B) and C`, never `A or B and C` (Python would re-associate)
+        assert!(py.contains(") and "), "{py}");
+        let and_split = py.split(") and ").next().unwrap();
+        assert!(and_split.ends_with("\"b\"))") || and_split.ends_with(')'), "{py}");
+        assert!(!py.contains("\"a\") or (gandora_std.map.get(t, \"k\") == \"b\") and"), "{py}");
     }
 
     #[test]

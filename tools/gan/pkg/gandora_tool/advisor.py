@@ -131,7 +131,7 @@ def _coverage_hints(raw, source, in_module):
     if _gan_truthy(_gan_or(not (_gan_truthy(in_module)), lambda: test_module)):
         return []
     else:
-        heads = gandora_std.enum.filter(gandora_std.enum.uniq(re.compile("(?m)^\\s*def ([a-z_][A-Za-z0-9_]*[?!]?)").findall(source)), lambda h: h != "unquote")
+        heads = gandora_std.enum.filter(gandora_std.enum.uniq(re.compile("(?m)^\\s*(?:async )?def ([a-z_][A-Za-z0-9_]*[?!]?)").findall(source)), lambda h: h != "unquote")
         specs = re.compile("(?m)^\\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)").findall(source)
         docs = _count_attr_blocks(source, "@doc")
         no_spec = gandora_std.enum.filter(heads, lambda h, *, specs=specs: not (_gan_truthy(gandora_std.enum.member_p(specs, h))))
@@ -153,9 +153,9 @@ def _coverage_hints(raw, source, in_module):
             _gan_tmp4 = missing + ["@moduledoc"]
         missing = _gan_tmp4
         script_only = heads == ["main"]
-        if (gandora_std.enum.count(heads) > 0) and not (_gan_truthy(script_only)) and not (_gan_truthy(gandora_std.string.contains_p(raw, "@example"))):
+        if ((gandora_std.enum.count(heads) > 0) and not (_gan_truthy(script_only))) and not (_gan_truthy(gandora_std.string.contains_p(raw, "@example"))):
             subject = gandora_std.enum.at(gandora_std.enum.filter(heads, lambda h: h != "main") + heads, 0)
-            _gan_tmp5 = [{"kind": "practice", "line": _line_of(source, re.compile("(?m)^\\s*def " + re.escape(subject))), "message": f"No @example doctests — add one right above `def {subject}`:\n@example \"\"\"\n    gan> {subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {{:ok, 21}} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007)."}]
+            _gan_tmp5 = [{"kind": "practice", "line": _line_of(source, re.compile("(?m)^\\s*(?:async )?def " + re.escape(subject))), "message": f"No @example doctests — add one right above `def {subject}`:\n@example \"\"\"\n    gan> {subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {{:ok, 21}} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007)."}]
         else:
             _gan_tmp5 = []
         example_hint = _gan_tmp5
@@ -163,9 +163,9 @@ def _coverage_hints(raw, source, in_module):
             _gan_tmp6 = []
         else:
             if _gan_truthy(gandora_std.enum.empty_p(no_spec)):
-                _gan_tmp7 = re.compile("(?m)^\\s*def ")
+                _gan_tmp7 = re.compile("(?m)^\\s*(?:async )?def ")
             else:
-                _gan_tmp7 = re.compile("(?m)^\\s*def " + re.escape(gandora_std.enum.at(no_spec, 0)))
+                _gan_tmp7 = re.compile("(?m)^\\s*(?:async )?def " + re.escape(gandora_std.enum.at(no_spec, 0)))
             first = _gan_tmp7
             _gan_fstr8 = gandora_std.enum.join(missing, "; ")
             _gan_tmp6 = [{"kind": "practice", "line": _line_of(source, first), "message": f"Annotation coverage: missing {_gan_fstr8} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md)."}]

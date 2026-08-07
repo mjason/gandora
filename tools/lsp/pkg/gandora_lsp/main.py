@@ -158,7 +158,7 @@ def hover(params: lsprotocol.types.HoverParams) -> object:
                 raise GanMatchError("no match of right-hand side value: " + repr(_gan_val7))
         pyref = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == "$")
         bounded = (start > 1) and (gandora_std.string.slice(line, start - 2, 2) == "$(")
-        postfix = (start > 0) and (gandora_std.string.slice(line, start - 1, 1) == ".") and not (_gan_truthy(pyref))
+        postfix = ((start > 0) and (gandora_std.string.slice(line, start - 1, 1) == ".")) and not (_gan_truthy(pyref))
         if _gan_truthy(bounded):
             _gan_tmp9 = ("import " + token, token)
         else:
@@ -229,7 +229,7 @@ def _var_hover(doc, token, cursor_line):
             base = py_name(gandora_std.map.get(holder, "name"))
             py_var = py_name(token)
             t = gandora_lsp.py_intel.infer_type(compiled, [base, "_" + base], py_var)
-            if (t is None) or (t == py_var) or (t == token):
+            if ((t is None) or (t == py_var)) or (t == token):
                 return None
             else:
                 return _markdown_hover(f"`{token}`: `{t}` *(inferred)*")
@@ -717,10 +717,10 @@ def _split_walk(*_gan_args):
                     return acc + [cur]
                 else:
                     ch = gandora_std.string.slice(inner, i, 1)
-                    if (ch == "(") or (ch == "[") or (ch == "{"):
+                    if ((ch == "(") or (ch == "[")) or (ch == "{"):
                         _gan_args = ((i + 1, depth + 1, cur + ch, acc), inner)
                         continue
-                    elif (ch == ")") or (ch == "]") or (ch == "}"):
+                    elif ((ch == ")") or (ch == "]")) or (ch == "}"):
                         _gan_args = ((i + 1, depth - 1, cur + ch, acc), inner)
                         continue
                     elif (ch == ",") and (depth == 0):
@@ -818,7 +818,7 @@ def _scan_call(*_gan_args):
                     return None
                 else:
                     ch = gandora_std.string.slice(prefix, i, 1)
-                    if (ch == ")") or (ch == "]") or (ch == "}"):
+                    if ((ch == ")") or (ch == "]")) or (ch == "}"):
                         _gan_args = ((i - 1, depth + 1, commas), prefix)
                         continue
                     elif (ch == "[") or (ch == "{"):

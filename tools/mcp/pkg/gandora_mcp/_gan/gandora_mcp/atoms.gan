@@ -1,0 +1,164 @@
+defmodule Atoms do
+  @moduledoc """
+  The atom corpus (GEP-0028-R009): one verified example per language
+  capability, read from `@example` blocks the test suite already runs.
+  An atom is evidence, not illustration — it earned its place by
+  passing `gan test` before anyone asked for it.
+  """
+  @moduledoc_trans zh_CN: "原子语料(GEP-0028-R009):每项语言能力一个已验证示例,取自测试套件本就在跑的 `@example` 块。原子是证据而非插图——它在有人开口之前就已通过 `gan test` 挣得席位。"
+
+  pyimport gandora_core, as: core
+
+  @doc "The standard-library modules the corpus draws from."
+  @doc_trans zh_CN: "语料抽取的标准库模块。"
+  @spec modules() :: list(string())
+  @example """
+      gan> Atoms.modules()
+      ['Enum', 'List', 'Map', 'Keyword', 'String', 'Task', 'Test']
+  """
+  def modules(), do: ["Enum", "List", "Map", "Keyword", "String", "Task", "Test"]
+
+  @doc """
+  Every atom visible from `root`: the target, its head, its spec, its
+  first doc sentence, and the example that proves it.
+  """
+  @doc_trans zh_CN: "从 `root` 可见的全部原子:目标、函数头、spec、文档首句,以及证明它的示例。"
+  @param root, "A project root whose config resolves the standard library."
+  @spec catalog(string()) :: list(map())
+  def catalog(root) do
+    Enum.flat_map(modules(), fn m -> module_atoms(m, root) end)
+  end
+
+  @doc """
+  The `k` atoms whose text best matches `query` — plain word overlap,
+  deterministic, and free: choosing what to show a model is not a
+  question that needs a model.
+  """
+  @doc_trans zh_CN: "与 `query` 文本匹配度最高的 `k` 个原子——纯词重叠,确定,免费:该给模型看什么,不是一个需要模型来答的问题。"
+  @param root, "A project root whose config resolves the standard library."
+  @param query, "The requirement text."
+  @param k, "How many atoms to return."
+  @spec search(string(), string(), integer()) :: list(map())
+  def search(root, query, k) do
+    words = for w <- keywords(query), do: stem(w)
+    all = catalog(root)
+    scored = for a <- all, do: {score(a, words), a}
+    top =
+      scored
+      |> Enum.filter(fn {s, _a} -> s > 0 end)
+      |> Enum.sort_by(fn {s, _a} -> s end)
+      |> Enum.reverse()
+      |> Enum.take(k)
+    hits = for {_s, a} <- top, do: a
+    pad(hits, all, k)
+  end
+
+  # the everyday shapes, so a requirement that matches nothing still
+  # arrives grounded rather than guessed
+  @staples ["Enum.map", "Enum.reduce", "Enum.filter", "String.split", "Map.get"]
+
+  defp pad(hits, catalog, k) do
+    have = Enum.map(hits, fn a -> Map.get(a, "target") end)
+    extra = Enum.filter(catalog, fn a ->
+      Enum.member?(@staples, Map.get(a, "target")) and
+        not Enum.member?(have, Map.get(a, "target"))
+    end)
+    Enum.take(hits ++ extra, k)
+  end
+
+  # words that appear in every requirement carry no signal
+  @stopwords ["the", "and", "for", "with", "that", "this", "from", "into",
+    "list", "value", "values", "function", "please", "write", "module",
+    "example", "gandora", "returns", "return", "given", "each", "all",
+    "use", "using", "one", "two", "its", "them", "then"]
+
+  @doc "The lowercased words of `text` worth matching on."
+  @doc_trans zh_CN: "`text` 中值得用于匹配的小写词。"
+  @param text, "Any prose."
+  @spec keywords(string()) :: list(string())
+  @example """
+      gan> Atoms.keywords("Sum the Numbers, please")
+      ['sum', 'numbers']
+  """
+  def keywords(text) do
+    text
+    |> String.downcase()
+    |> String.replace(",", " ")
+    |> String.replace(".", " ")
+    |> String.split()
+    |> Enum.filter(fn w -> String.length(w) > 2 and not Enum.member?(@stopwords, w) end)
+  end
+
+  @doc """
+  How strongly the atom answers `words`: a hit in the name is worth
+  three in the prose, because a name is what the caller will type.
+  """
+  @doc_trans zh_CN: "原子对 `words` 的应答强度:名字里的命中抵散文里的三次——调用者敲的是名字。"
+  @param atom, "One catalog entry."
+  @param words, "The query keywords."
+  @spec score(mapping(string(), term()), sequence(string())) :: integer()
+  @example """
+      gan> Atoms.score(%{"target" => "Enum.sum", "doc" => "Adds the numbers."}, ["sum", "numbers"])
+      4
+  """
+  def score(atom, words) do
+    name = for w <- name_words(Map.get(atom, "target", "")), do: stem(w)
+    prose = for w <- keywords(Map.get(atom, "doc", "")), do: stem(w)
+    Enum.sum(for w <- words, do: hit(name, prose, stem(w)))
+  end
+
+  defp hit(name, prose, stem) do
+    name_hit = if Enum.member?(name, stem), do: 3, else: 0
+    prose_hit = if Enum.member?(prose, stem), do: 1, else: 0
+    name_hit + prose_hit
+  end
+
+  # `Enum.group_by` -> ["enum", "group", "by"]: matching whole name parts
+  # keeps "word" from claiming every `Keyword` function
+  defp name_words(target) do
+    target |> String.downcase() |> String.replace(".", "_") |> String.split_on("_")
+  end
+
+  # a crude stem beats an exact match: "counts" must find "count"
+  defp stem(word) do
+    if String.length(word) > 4, do: String.slice(word, 0, 4), else: word
+  end
+
+  # one module's documented functions, keeping only what carries proof
+  defp module_atoms(module, root) do
+    syms = try do
+      core.symbols(module, root)
+    rescue
+      _e -> []
+    end
+    syms
+    |> Enum.map(fn s -> Map.get(s, "name") end)
+    |> Enum.uniq()
+    |> Enum.flat_map(fn n -> List.wrap(atom(module, n, root)) end)
+  end
+
+  defp atom(module, name, root) do
+    target = module <> "." <> name
+    info = try do
+      core.doc(target, root)
+    rescue
+      _e -> nil
+    end
+    if is_nil(info) do
+      nil
+    else
+      examples = Map.get(info, "examples", [])
+      if Enum.empty?(examples) do
+        nil
+      else
+        %{
+          "target" => target,
+          "head" => Enum.join(Map.get(info, "signatures", []), " | "),
+          "spec" => Enum.join(Map.get(info, "specs", []), " | "),
+          "doc" => Map.get(Map.get(info, "entries", %{}), "default", ""),
+          "example" => String.trim(Enum.join(examples, "\n"))
+        }
+      end
+    end
+  end
+end

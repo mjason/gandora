@@ -78,22 +78,43 @@ defmodule TestLspProtocol do
   end
 
   defp open_doc(proc, uri, text) do
-    send_msg(proc, %{"jsonrpc" => "2.0", "method" => "textDocument/didOpen",
-      "params" => %{"textDocument" => %{"uri" => uri, "languageId" => "gandora",
-        "version" => 1, "text" => text}}})
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "method" => "textDocument/didOpen",
+      "params" => %{
+        "textDocument" => %{
+          "uri" => uri,
+          "languageId" => "gandora",
+          "version" => 1,
+          "text" => text
+        }
+      }
+    })
   end
 
   defp change_doc(proc, uri, version, text) do
-    send_msg(proc, %{"jsonrpc" => "2.0", "method" => "textDocument/didChange",
-      "params" => %{"textDocument" => %{"uri" => uri, "version" => version},
-        "contentChanges" => [%{"text" => text}]}})
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "method" => "textDocument/didChange",
+      "params" => %{
+        "textDocument" => %{"uri" => uri, "version" => version},
+        "contentChanges" => [%{"text" => text}]
+      }
+    })
   end
 
   test "the whole protocol contract in one scripted session" do
     {proc, root, uri} = session()
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize",
-      "params" => %{"processId" => nil, "rootUri" => "file://" <> root,
-        "capabilities" => %{}}})
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 1,
+      "method" => "initialize",
+      "params" => %{
+        "processId" => nil,
+        "rootUri" => "file://" <> root,
+        "capabilities" => %{}
+      }
+    })
     init = wait_id(proc, 1)
     caps = Map.get(Map.get(init, "result"), "capabilities")
 
@@ -119,27 +140,45 @@ defmodule TestLspProtocol do
     _ = wait_diags(proc)
 
     # hover shows the compiled recursion shape (GEP-0019-R006)
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 2, "method" => "textDocument/hover",
-      "params" => %{"textDocument" => %{"uri" => uri},
-        "position" => %{"line" => 1, "character" => 7}}})
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 2,
+      "method" => "textDocument/hover",
+      "params" => %{
+        "textDocument" => %{"uri" => uri},
+        "position" => %{"line" => 1, "character" => 7}
+      }
+    })
     hover = wait_id(proc, 2)
     value = Map.get(Map.get(Map.get(hover, "result"), "contents"), "value")
     assert String.contains?(value, "while")
     assert String.contains?(value, "constant stack")
 
     # references find call sites and declarations (GEP-0015-R012)
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 3, "method" => "textDocument/references",
-      "params" => %{"textDocument" => %{"uri" => uri},
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 3,
+      "method" => "textDocument/references",
+      "params" => %{
+        "textDocument" => %{"uri" => uri},
         "position" => %{"line" => 1, "character" => 7},
-        "context" => %{"includeDeclaration" => true}}})
+        "context" => %{"includeDeclaration" => true}
+      }
+    })
     refs = Map.get(wait_id(proc, 3), "result")
     assert Enum.count(refs) >= 3
 
     # rename edits every occurrence
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 4, "method" => "textDocument/rename",
-      "params" => %{"textDocument" => %{"uri" => uri},
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 4,
+      "method" => "textDocument/rename",
+      "params" => %{
+        "textDocument" => %{"uri" => uri},
         "position" => %{"line" => 1, "character" => 7},
-        "newName" => "descend"}})
+        "newName" => "descend"
+      }
+    })
     ren = Map.get(wait_id(proc, 4), "result")
     edits = Map.get(Map.get(ren, "changes"), uri)
     assert Enum.count(edits) >= 3
@@ -154,10 +193,16 @@ defmodule TestLspProtocol do
     assert not is_nil(warn)
     assert Map.get(warn, "severity") == 2
 
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 5, "method" => "textDocument/codeAction",
-      "params" => %{"textDocument" => %{"uri" => uri},
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 5,
+      "method" => "textDocument/codeAction",
+      "params" => %{
+        "textDocument" => %{"uri" => uri},
         "range" => Map.get(warn, "range"),
-        "context" => %{"diagnostics" => [warn]}}})
+        "context" => %{"diagnostics" => [warn]}
+      }
+    })
     actions = Map.get(wait_id(proc, 5), "result")
     fix = Enum.find(actions, fn a ->
       String.contains?(Map.get(a, "title", ""), "stack_recursion")
@@ -168,16 +213,26 @@ defmodule TestLspProtocol do
     messy = "defmodule Main do\n      def main(), do: IO.puts(\"ok\")\nend\n"
     change_doc(proc, uri, 4, messy)
     _ = wait_diags(proc)
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 6, "method" => "textDocument/formatting",
-      "params" => %{"textDocument" => %{"uri" => uri},
-        "options" => %{"tabSize" => 2, "insertSpaces" => true}}})
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 6,
+      "method" => "textDocument/formatting",
+      "params" => %{
+        "textDocument" => %{"uri" => uri},
+        "options" => %{"tabSize" => 2, "insertSpaces" => true}
+      }
+    })
     fmt = Map.get(wait_id(proc, 6), "result")
     new_text = Map.get(Enum.at(fmt, 0), "newText")
     assert String.contains?(new_text, "  def main(), do: IO.puts(\"ok\")")
 
     # clean shutdown
-    send_msg(proc, %{"jsonrpc" => "2.0", "id" => 9, "method" => "shutdown",
-      "params" => nil})
+    send_msg(proc, %{
+      "jsonrpc" => "2.0",
+      "id" => 9,
+      "method" => "shutdown",
+      "params" => nil
+    })
     _ = wait_id(proc, 9)
     send_msg(proc, %{"jsonrpc" => "2.0", "method" => "exit", "params" => nil})
     assert proc.wait(timeout: 10) == 0

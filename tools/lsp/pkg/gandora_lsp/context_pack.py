@@ -14,14 +14,14 @@ import gandora_std.map
 class GanMatchError(Exception):
     pass
 
-std_modules = ["Enum", "List", "Map", "Keyword", "String", "Test"]
+std_modules = ["Enum", "List", "Map", "Keyword", "String", "Task", "Test"]
 
 
 def known_std() -> list[str]:
     """The standard-library modules the pack enumerates.
 
     >>> known_std()
-    ['Enum', 'List', 'Map', 'Keyword', 'String', 'Test']
+    ['Enum', 'List', 'Map', 'Keyword', 'String', 'Task', 'Test']
 """
     return std_modules
 

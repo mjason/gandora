@@ -79,7 +79,7 @@ jobs:
           ../../target/release/ganc build
           uv sync --reinstall-package gandora-tool
           ../../target/release/ganc test
-          .venv/bin/gan fmt --check src ../lsp/src ../../std/src ../../examples/tour/src
+          .venv/bin/gan fmt --check src ../lsp/src ../mcp/src ../../std/src ../../examples/tour/src
           uv build --out-dir ../../dist-tool
       - name: compile gan-lsp with ganc, then package
         run: |

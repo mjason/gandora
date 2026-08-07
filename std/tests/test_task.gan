@@ -1,0 +1,197 @@
+defmodule TestTask do
+  @moduledoc """
+  Task conformance (GEP-0029 rev 5): the rim entry, verdict joins, the
+  honest edges (timeout-cancels, crash-as-value, real cancellation),
+  and structural concurrency proofs — an Event handshake and a
+  Barrier only true concurrency can satisfy — instead of wall-clock
+  guesses (R011).
+  """
+  @moduledoc_trans zh_CN: "Task conformance(GEP-0029 rev 5):rim 入口、裁决式汇合、诚实的边界(超时即取消/崩溃作为值/真实取消),以及结构性并发证明——唯有真并发才能满足的 Event 握手与 Barrier——而非墙钟猜测(R011)。"
+
+  import Test
+
+  pyimport asyncio
+
+  def test_run_returns_the_coroutine_value() do
+    Test.assert_eq(Task.run(Task.completed(42)), 42)
+  end
+
+  def test_async_await_round_trip() do
+    Test.assert_eq(Task.run(round_trip()), 42)
+  end
+
+  # await binds tighter than +: (await t) + 2
+  async defp round_trip() do
+    t = Task.async(Task.completed(40))
+    await t + 2
+  end
+
+  # R011: the waiter finishes only if the opener runs while it is
+  # pending — an order only concurrency can produce
+  def test_tasks_really_run_concurrently() do
+    Test.assert_eq(Task.run(handshake()), :handshake)
+  end
+
+  async defp handshake() do
+    gate = asyncio.Event()
+    a = Task.async(wait_gate(gate))
+    b = Task.async(open_gate(gate))
+    _ = await Task.all([a, b])
+    :handshake
+  end
+
+  async defp wait_gate(gate) do
+    _ = await gate.wait()
+    :ok
+  end
+
+  async defp open_gate(gate) do
+    _ = await asyncio.sleep(0)
+    gate.set()
+  end
+
+  def test_bare_await_reraises_the_crash() do
+    hit = try do
+      _ = Task.run(crash_join())
+      false
+    rescue
+      _e in $builtins.ZeroDivisionError -> true
+    end
+    Test.assert_true(hit)
+  end
+
+  async defp crash_join() do
+    t = Task.async(Task.map(Task.completed(0), fn v -> 1 / v end))
+    await t
+  end
+
+  def test_try_await_ok() do
+    Test.assert_eq(Task.run(Task.try_await(Task.completed(7), 1000)), {:ok, 7})
+  end
+
+  # the deadline verdict is honest asyncio: the task is cancelled
+  def test_try_await_timeout_cancels_the_task() do
+    Test.assert_eq(Task.run(timeout_probe()), {{:error, :timeout}, true})
+  end
+
+  async defp timeout_probe() do
+    t = Task.async(Task.sleep(60000))
+    verdict = await Task.try_await(t, 20)
+    {verdict, t.cancelled()}
+  end
+
+  def test_try_await_error_carries_the_exception() do
+    {tag, err} = Task.run(Task.try_await(Task.map(Task.completed("x"), fn v -> $builtins.int(v) end), 1000))
+    Test.assert_eq(tag, :error)
+    Test.assert_true($builtins.isinstance(err, $builtins.ValueError))
+  end
+
+  def test_all_keeps_input_order() do
+    Test.assert_eq(Task.run(ordered()), [3, 1, 2])
+  end
+
+  async defp ordered() do
+    ts = for x <- [3, 1, 2], do: Task.async(flip(x))
+    await Task.all(ts)
+  end
+
+  # completes in reverse of its size: order in the join must come from
+  # the input, not from completion
+  async defp flip(x) do
+    _ = await asyncio.sleep(x / 100)
+    x
+  end
+
+  def test_try_all_applies_one_group_deadline() do
+    got = Task.run(Task.try_all([Task.completed(1), Task.sleep(60000)], 50))
+    Test.assert_eq(got, [{:ok, 1}, {:error, :timeout}])
+  end
+
+  def test_async_stream_orders_results() do
+    Test.assert_eq(Task.run(Task.async_stream([4, 3, 2, 1], fn x -> flip(x) end, 4)), [4, 3, 2, 1])
+  end
+
+  # with a bound of 2 a three-party barrier can never fill — every
+  # element times out; with a bound of 3 it fills at once
+  def test_async_stream_bounds_concurrency() do
+    under = Task.run(Task.async_stream([1, 2, 3], fn _x -> arrive(asyncio.Barrier(3)) end, 2))
+    Test.assert_eq(under, [:timeout, :timeout, :timeout])
+    full = Task.run(stream_with_shared_barrier())
+    Test.assert_eq(full, [:met, :met, :met])
+  end
+
+  async defp stream_with_shared_barrier() do
+    barrier = asyncio.Barrier(3)
+    await Task.async_stream([1, 2, 3], fn _x -> arrive(barrier) end, 3)
+  end
+
+  async defp arrive(barrier) do
+    try do
+      _ = await asyncio.wait_for(barrier.wait(), 0.3)
+      :met
+    rescue
+      _e in $builtins.TimeoutError -> :timeout
+    end
+  end
+
+  def test_map_transforms_without_joining() do
+    Test.assert_eq(Task.run(Task.map(Task.completed(20), fn v -> v + 1 end)), 21)
+  end
+
+  def test_map_propagates_the_crash_untransformed() do
+    crashed = Task.map(Task.map(Task.completed(0), fn v -> 1 / v end), fn v -> v end)
+    Test.assert_eq(elem(Task.run(Task.try_await(crashed, 1000)), 0), :error)
+  end
+
+  def test_tap_passes_the_value_through() do
+    seen = []
+    v = Task.run(Task.tap(Task.completed(5), fn x -> seen.append(x) end))
+    Test.assert_eq(v, 5)
+    Test.assert_eq(seen, [5])
+  end
+
+  def test_recover_absorbs_the_crash() do
+    crashed = Task.map(Task.completed(0), fn v -> 1 / v end)
+    Test.assert_eq(Task.run(Task.recover(crashed, fn _e -> :fallback end)), :fallback)
+  end
+
+  def test_recover_leaves_success_alone() do
+    Test.assert_eq(Task.run(Task.recover(Task.completed(3), fn _e -> :never end)), 3)
+  end
+
+  def test_race_settles_with_the_first() do
+    Test.assert_eq(Task.run(Task.race([Task.sleep(60000), Task.completed(:quick)])), :quick)
+  end
+
+  # the boundary threads could not cross: a RUNNING task really
+  # cancels, and its join says so
+  def test_shutdown_cancels_a_running_task() do
+    Test.assert_eq(Task.run(cancel_probe()), {true, true})
+  end
+
+  async defp cancel_probe() do
+    t = Task.async(Task.sleep(60000))
+    _ = await asyncio.sleep(0)
+    took = Task.shutdown(t)
+    caught = try do
+      _ = await t
+      false
+    rescue
+      _e in $asyncio.CancelledError -> true
+    end
+    {took, caught}
+  end
+
+  def test_blocking_bridges_a_blocking_function() do
+    Test.assert_eq(Task.run(Task.blocking(fn -> 40 + 2 end)), 42)
+  end
+
+  def test_sleep_and_completed_round_trip() do
+    Test.assert_eq(Task.run(Task.sleep(1)), nil)
+    Test.assert_eq(Task.run(Task.completed({:ok, 9})), {:ok, 9})
+  end
+
+  def test_demo_tours_the_world() do
+    Test.assert_eq(Task.run(Task.demo()), {[1, 2], true})
+  end
+end

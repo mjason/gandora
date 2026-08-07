@@ -1,0 +1,305 @@
+defmodule Task do
+  @moduledoc """
+  The library over Python's coroutine world (GEP-0029): `run` enters
+  it from synchronous code, `async` spawns, and the language's own
+  `await` joins — bare, with no deadline. Everything above a bare join
+  is here as a thin `asyncio` wrapper: deadlines that return verdicts
+  (`try_await`), ordered joins (`all`), bounded fan-out
+  (`async_stream`), combinators after Gleam's promise module, and
+  `blocking` — the one remaining role of threads, a bridge at the
+  edge, not a world. Cancellation is real: a cancelled coroutine task
+  actually stops. Timeouts are milliseconds, as in Elixir.
+  """
+  @moduledoc_trans zh_CN: "Python 协程世界之上的库(GEP-0029):`run` 从同步代码进入,`async` 派生,语言自身的 `await` 汇合——裸等,无截止线。裸汇合之上的一切都在这里,以 `asyncio` 薄封呈现:返回裁决的截止线(`try_await`)、保序汇合(`all`)、有界扇出(`async_stream`)、承 Gleam promise 模块的组合子,以及 `blocking`——线程仅剩的角色:边缘的桥,而非世界。取消是真实的:被取消的协程 task 真的会停下。超时单位为毫秒,同 Elixir。"
+
+  pyimport asyncio
+  pyimport time
+
+  @doc """
+  Runs a coroutine to completion from synchronous code and returns its
+  value — `asyncio.run`, verbatim. The only Task function meant for
+  the synchronous rim: `main` stays synchronous, and a program's
+  entire async portion hangs from one `run`.
+  """
+  @doc_trans zh_CN: "在同步代码中把协程运行到完成并返回其值——原样的 `asyncio.run`。Task 中唯一面向同步边缘的函数:`main` 保持同步,程序的整个异步部分悬挂在一次 `run` 之下。"
+  @example """
+      gan> Task.run(Task.completed(42))
+      42
+  """
+  @param coro, "The coroutine to run."
+  @param_trans coro, zh_CN: "要运行的协程。"
+  @spec run(term()) :: term()
+  def run(coro), do: asyncio.run(coro)
+
+  @doc """
+  Spawns a coroutine as a task running concurrently with its caller
+  and returns the handle — `asyncio.ensure_future`. Join it with the
+  language's `await`; a task nobody awaits fails silently. Only legal
+  where a loop is running, i.e. inside the coroutine world.
+  """
+  @doc_trans zh_CN: "把协程派生为与调用者并发运行的 task 并返回句柄——`asyncio.ensure_future`。用语言自身的 `await` 汇合;无人 await 的 task 静默失败。仅在事件循环运行处合法,即协程世界之内。"
+  @example """
+      gan> Task.run(Task.demo())
+      ([1, 2], True)
+  """
+  @param coro, "The coroutine to spawn."
+  @param_trans coro, zh_CN: "要派生的协程。"
+  @spec async(term()) :: term()
+  def async(coro), do: asyncio.ensure_future(coro)
+
+  @doc """
+  A coroutine that runs the zero-argument blocking function on a
+  worker thread — `asyncio.to_thread`, verbatim. Await it for the
+  value, or spawn it with `async` to overlap blocking work with
+  coroutines. This is the whole remaining role of threads.
+  """
+  @doc_trans zh_CN: "在工作线程上运行零参阻塞函数的协程——原样的 `asyncio.to_thread`。await 它取值,或用 `async` 派生以让阻塞工作与协程重叠。这是线程仅剩的全部角色。"
+  @example """
+      gan> Task.run(Task.blocking(fn -> 40 + 2 end))
+      42
+  """
+  @param fun, "A zero-argument blocking function."
+  @param_trans fun, zh_CN: "零参阻塞函数。"
+  @spec blocking(fun()) :: term()
+  def blocking(fun), do: asyncio.to_thread(fun)
+
+  @doc """
+  The join with a deadline, returning a verdict instead of raising:
+  `{:ok, value}` when the task finished, `{:error, :timeout}` when
+  `timeout` milliseconds elapsed first — the task is then cancelled,
+  asyncio's own `wait_for` semantics — and `{:error, error}` when it
+  raised (the exception as a value). The timeout is required: the
+  no-deadline join is the bare `await`.
+  """
+  @doc_trans zh_CN: "带截止线的汇合,返回裁决而非抛错:完成为 `{:ok, value}`;`timeout` 毫秒先到为 `{:error, :timeout}`——task 随即被取消,即 asyncio 自身的 `wait_for` 语义;抛错为 `{:error, error}`(异常作为值)。timeout 为必填:无截止线的汇合就是裸 `await`。"
+  @example """
+      gan> Task.run(Task.try_await(Task.completed(7), 1000))
+      ('ok', 7)
+      gan> Task.run(Task.try_await(Task.sleep(60000), 10))
+      ('error', 'timeout')
+  """
+  @param task, "The task or awaitable to join."
+  @param_trans task, zh_CN: "要汇合的 task 或可等待对象。"
+  @param timeout, "Milliseconds before the join gives up and cancels."
+  @param_trans timeout, zh_CN: "汇合放弃并取消前的毫秒数。"
+  @spec try_await(term(), integer()) :: tuple()
+  async def try_await(task, timeout) do
+    try do
+      {:ok, await asyncio.wait_for(task, timeout / 1000)}
+    rescue
+      _e in $builtins.TimeoutError -> {:error, :timeout}
+      e -> {:error, e}
+    end
+  end
+
+  @doc """
+  The values of `tasks` in input order. The tasks already run
+  concurrently, so joining them in order costs nothing — the artifact
+  is the sequential join it reads as. A crash re-raises at this join.
+  """
+  @doc_trans zh_CN: "按输入顺序返回 `tasks` 的值。这些 task 本已并发运行,按序汇合毫无代价——工件就是它读起来的顺序汇合。崩溃在此汇合处重抛。"
+  @example """
+      gan> Task.run(Task.all([Task.completed(1), Task.completed(2)]))
+      [1, 2]
+  """
+  @param tasks, "The tasks or awaitables to join."
+  @param_trans tasks, zh_CN: "要汇合的 task 或可等待对象列表。"
+  @spec all(sequence(term())) :: list(term())
+  async def all(tasks) do
+    for t <- tasks, do: await t
+  end
+
+  @doc """
+  One `try_await` verdict per task, in order, under one group deadline
+  of `timeout` milliseconds for all of them together.
+  """
+  @doc_trans zh_CN: "每个 task 一个 `try_await` 裁决,保序,`timeout` 毫秒是整组共用的一条截止线。"
+  @example """
+      gan> Task.run(Task.try_all([Task.completed(1), Task.completed(2)], 1000))
+      [('ok', 1), ('ok', 2)]
+  """
+  @param tasks, "The tasks or awaitables to join."
+  @param_trans tasks, zh_CN: "要汇合的 task 或可等待对象列表。"
+  @param timeout, "Milliseconds for the whole group."
+  @param_trans timeout, zh_CN: "整组共用的毫秒数。"
+  @spec try_all(sequence(term()), integer()) :: list(tuple())
+  async def try_all(tasks, timeout) do
+    deadline = time.monotonic() + timeout / 1000
+    for t <- tasks, do: await try_await(t, $builtins.max(deadline - time.monotonic(), 0) * 1000)
+  end
+
+  @doc """
+  Applies `fun` to each element with at most `max_concurrency` running
+  at once, and returns the results in input order. `fun` must return
+  an awaitable — call an async function, or `blocking` for a blocking
+  one; the bound is a semaphore, visible in the artifact.
+  """
+  @doc_trans zh_CN: "对每个元素应用 `fun`,同时运行至多 `max_concurrency` 个,按输入顺序返回结果。`fun` 必须返回可等待对象——调用 async 函数,或对阻塞函数用 `blocking`;上界由信号量实现,工件中可见。"
+  @example """
+      gan> Task.run(Task.async_stream([1, 2, 3], fn x -> Task.completed(x * 2) end, 2))
+      [2, 4, 6]
+  """
+  @param xs, "The inputs."
+  @param_trans xs, zh_CN: "输入序列。"
+  @param fun, "Applied to each input; must return an awaitable."
+  @param_trans fun, zh_CN: "作用于每个输入;必须返回可等待对象。"
+  @param max_concurrency, "How many may run at once (default 8)."
+  @param_trans max_concurrency, zh_CN: "同时运行的上限(默认 8)。"
+  @spec async_stream(sequence(term()), fun(), integer()) :: list(term())
+  async def async_stream(xs, fun, max_concurrency \\ 8) do
+    sem = asyncio.Semaphore(max_concurrency)
+    ts = for x <- xs, do: asyncio.ensure_future(throttle(sem, fun, x))
+    for t <- ts, do: await t
+  end
+
+  # one slot of the async_stream bound: hold the semaphore across one
+  # element's whole awaitable
+  async defp throttle(sem, fun, x) do
+    _ = await sem.acquire()
+    try do
+      await fun.(x)
+    after
+      sem.release()
+    end
+  end
+
+  @doc """
+  The awaitable of `fun(value)`, without joining — a lazy coroutine,
+  runnable anywhere an awaitable goes: await it, spawn it with
+  `async`, hand it to `run`. A crash propagates untransformed, as a
+  rejected promise passes a `map` (GEP-0029-R007).
+  """
+  @doc_trans zh_CN: "不经汇合的 `fun(value)` 可等待对象——惰性协程,可等待之处皆可用:await 它、用 `async` 派生、交给 `run`。崩溃原样传播,一如 rejected promise 穿过 `map`(GEP-0029-R007)。"
+  @example """
+      gan> Task.run(Task.map(Task.completed(20), fn v -> v + 1 end))
+      21
+  """
+  @param task, "The task or awaitable whose value to transform."
+  @param_trans task, zh_CN: "要变换其值的 task 或可等待对象。"
+  @param fun, "Applied to the value when it arrives."
+  @param_trans fun, zh_CN: "值到达时应用的函数。"
+  @spec map(term(), fun()) :: term()
+  async def map(task, fun), do: fun.(await task)
+
+  @doc """
+  Runs `fun(value)` for its effect and passes the original value
+  through — a probe on the wire, after Gleam's `tap`.
+  """
+  @doc_trans zh_CN: "为副作用运行 `fun(value)`,并原样传递原值——线上的探针,承 Gleam 的 `tap`。"
+  @example """
+      gan> Task.run(Task.tap(Task.completed(5), fn _v -> nil end))
+      5
+  """
+  @param task, "The task or awaitable to observe."
+  @param_trans task, zh_CN: "被观察的 task 或可等待对象。"
+  @param fun, "Called with the value; its result is discarded."
+  @param_trans fun, zh_CN: "以值调用之,结果丢弃。"
+  @spec tap(term(), fun()) :: term()
+  async def tap(task, fun) do
+    v = await task
+    _ = fun.(v)
+    v
+  end
+
+  @doc """
+  The awaitable of `fun(error)` when `task` crashed, of the value when
+  it did not. Gleam spells this `rescue`; `rescue` is a Gandora
+  keyword.
+  """
+  @doc_trans zh_CN: "`task` 崩溃时为 `fun(error)`、未崩溃时为原值的可等待对象。Gleam 拼作 `rescue`;`rescue` 在 Gandora 是关键字。"
+  @example """
+      gan> Task.run(Task.recover(Task.map(Task.completed(0), fn v -> 1 / v end), fn _e -> :fallback end))
+      'fallback'
+  """
+  @param task, "The task or awaitable whose crash to absorb."
+  @param_trans task, zh_CN: "要吸收其崩溃的 task 或可等待对象。"
+  @param fun, "Applied to the exception; its result becomes the value."
+  @param_trans fun, zh_CN: "作用于异常,其结果成为值。"
+  @spec recover(term(), fun()) :: term()
+  async def recover(task, fun) do
+    try do
+      await task
+    rescue
+      e -> fun.(e)
+    end
+  end
+
+  @doc """
+  Settles with the first of `tasks` to settle — value or crash —
+  after Gleam's `race_list`. The losers keep running until the loop
+  closes.
+  """
+  @doc_trans zh_CN: "以 `tasks` 中最先落定者(值或崩溃)落定,承 Gleam 的 `race_list`。落败者继续运行,直到循环关闭。"
+  @example """
+      gan> Task.run(Task.race([Task.completed(:first), Task.sleep(60000)]))
+      'first'
+  """
+  @param tasks, "The competing tasks or awaitables."
+  @param_trans tasks, zh_CN: "参与竞速的 task 或可等待对象列表。"
+  @spec race(sequence(term())) :: term()
+  async def race(tasks) do
+    ts = for t <- tasks, do: asyncio.ensure_future(t)
+    {done, _pending} = await asyncio.wait(ts, return_when: asyncio.FIRST_COMPLETED)
+    $builtins.next($builtins.iter(done)).result()
+  end
+
+  @doc """
+  Requests cancellation and returns whether the request took. Unlike a
+  thread, a running coroutine task really is interrupted.
+  """
+  @doc_trans zh_CN: "请求取消并回答请求是否生效。与线程不同,运行中的协程 task 真的会被打断。"
+  @example """
+      gan> Task.run(Task.demo())
+      ([1, 2], True)
+  """
+  @param task, "The task to cancel."
+  @param_trans task, zh_CN: "要取消的 task。"
+  @spec shutdown(term()) :: boolean()
+  def shutdown(task), do: task.cancel()
+
+  @doc """
+  Pauses the coroutine for `ms` milliseconds without blocking the
+  loop.
+  """
+  @doc_trans zh_CN: "让协程暂停 `ms` 毫秒,不阻塞事件循环。"
+  @example """
+      gan> Task.run(Task.sleep(1))
+  """
+  @param ms, "Milliseconds to pause."
+  @param_trans ms, zh_CN: "暂停的毫秒数。"
+  @spec sleep(integer()) :: nil
+  async def sleep(ms), do: await asyncio.sleep(ms / 1000)
+
+  @doc """
+  An awaitable already holding `value`, for APIs that must return one
+  uniformly.
+  """
+  @doc_trans zh_CN: "已持有 `value` 的可等待对象,供需要统一返回可等待对象的 API 使用。"
+  @example """
+      gan> Task.run(Task.completed(:ok))
+      'ok'
+  """
+  @param value, "The value the awaitable holds."
+  @param_trans value, zh_CN: "可等待对象持有的值。"
+  @spec completed(term()) :: term()
+  async def completed(value), do: value
+
+  @doc """
+  The doctests' tour of the coroutine world in one coroutine: spawn
+  two tasks, join them in order, cancel a third before it finishes —
+  `({joined}, {cancelled})`.
+  """
+  @doc_trans zh_CN: "doctest 的协程世界一览,浓缩为一个协程:派生两个 task、按序汇合、在第三个完成前取消它——`({joined}, {cancelled})`。"
+  @example """
+      gan> Task.run(Task.demo())
+      ([1, 2], True)
+  """
+  @spec demo() :: tuple()
+  async def demo() do
+    a = async(completed(1))
+    b = async(completed(2))
+    joined = await all([a, b])
+    c = async(sleep(60000))
+    {joined, shutdown(c)}
+  end
+end

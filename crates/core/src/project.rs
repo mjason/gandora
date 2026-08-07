@@ -621,7 +621,7 @@ pub fn module_symbols(
                         }
                     }
                 }
-                "def" | "defp" | "defmacro" => {
+                "def" | "defp" | "defmacro" | "async def" | "async defp" => {
                     if let Some(head) = c.args.first() {
                         let head_name = def_head_name(head);
                         if let Some(h) = head_name {
@@ -666,7 +666,10 @@ pub fn find_definition(
         for inner in body.as_block() {
             let Term::Call(c) = &inner else { continue };
             let Callee::Name(name) = &c.callee else { continue };
-            if !matches!(name.as_str(), "def" | "defp" | "defmacro") {
+            if !matches!(
+                name.as_str(),
+                "def" | "defp" | "defmacro" | "async def" | "async defp"
+            ) {
                 continue;
             }
             let head_name = c.args.first().and_then(def_head_name);
@@ -760,7 +763,7 @@ pub fn find_references(
                 Term::Call(c) => {
                     match &c.callee {
                         Callee::Name(n)
-                            if matches!(n.as_str(), "def" | "defp" | "defmacro") =>
+                            if matches!(n.as_str(), "def" | "defp" | "defmacro" | "async def" | "async defp") =>
                         {
                             if let Some(head) = c.args.first() {
                                 if def_head_name(head).as_deref() == Some(fun) {
@@ -1000,7 +1003,7 @@ pub fn find_doc(
                         codegen::merge_doc_trans(&file, c, info, "@moduledoc_trans")?;
                     }
                 }
-                "def" | "defp" | "defmacro" => {
+                "def" | "defp" | "defmacro" | "async def" | "async defp" => {
                     let head_name = c.args.first().and_then(def_head_name);
                     if let (Some(f), Some(h)) = (&fun, &head_name) {
                         if *f == h.as_str() {

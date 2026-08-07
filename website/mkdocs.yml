@@ -73,6 +73,7 @@ plugins:
             Macros: 宏
             Sigils & Embedded Languages: Sigil 与嵌入语言
             Python Interop: Python 互操作
+            Concurrency: 并发
             Testing: 测试
             Tooling: 工具链
             The Build Verdict: build 裁决
@@ -94,6 +95,7 @@ nav:
       - Macros: guide/macros.md
       - Sigils & Embedded Languages: guide/sigils.md
       - Python Interop: guide/interop.md
+      - Concurrency: guide/concurrency.md
       - Testing: guide/testing.md
   - Tooling:
       - The Build Verdict: tooling/build.md

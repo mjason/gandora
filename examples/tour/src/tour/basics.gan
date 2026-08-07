@@ -38,9 +38,9 @@ defmodule Tour.Basics do
   @param name, "Spliced into the greeting."
   @spec strings(string()) :: tuple(string(), string(), string())
   def strings(name) do
-    greeting = "Hello, #{name}!"     # interpolation -> f-string
+    greeting = "Hello, #{name}!" # interpolation -> f-string
     upper = greeting.upper() # any Python method, no wrapper
-    joined = "a b c" <> " d"         # <> is string concatenation
+    joined = "a b c" <> " d" # <> is string concatenation
     {greeting, upper, joined}
   end
 

@@ -374,6 +374,27 @@ def fib(n), do: ...
 - **编译时重写**——Elixir 风格的装饰器——是 `defattr :name` 加上 `@on_definition` 宏（GEP-0008）：它看到真实的函数头部，保持零运行时开销，并且可以自身为 Python 侧发出 `@decorate`。教程中的 `@cache` 章节是完整示例。
 - 由 Gandora `fn` 构建的包装器本质上是 lambda——它会丢失 `__name__`/`__doc__`；如果自省很重要，请在 Python 中编写该装饰器。
 
+## 并发（GEP-0029/0030）
+
+`async def` 与 `await` 就是 Python 自己的语法，一比一编译：`async def f(x) do ... end` 发射 `async def f(x):`，`await expr` 发射裸 `await`——无截止线，无包装。`await` 比一切二元运算符结合更紧（`await fetch(u) |> parse()` 管道传递的是 await 后的值），且仅在 async 体内合法——绝不允许出现在 `fn` 内，lambda 无法 await。`main` 保持同步。
+
+`Task` 是 `asyncio` 之上的标准库：
+
+```elixir
+async def fan_out(xs) do
+  ts = for x <- xs, do: Task.async(work(x))   # 派生（ensure_future）
+  await Task.all(ts)                          # 汇合，按输入顺序
+end
+
+def main(), do: IO.puts(Task.run(fan_out([1, 2, 3])))   # rim 入口
+```
+
+- 截止线显式声明并返回裁决：`Task.try_await(t, ms)` → `{:ok, v}` / `{:error, :timeout}`（task 已被取消）/ `{:error, e}`。超时单位是毫秒。
+- 阻塞代码走桥：`Task.blocking(fn -> io() end)` 在工作线程上运行；派生它即可与协程重叠。
+- 有界扇出：`Task.async_stream(xs, fun, max)`——`fun` 返回可等待对象；结果保序。
+- 组合子 `map`/`tap`/`recover` 是惰性可等待对象；`race` 取最先落定者；`shutdown` 真的取消。
+- async 函数的 `@example` 是从 rim 进入的可运行 doctest：`gan> Task.run(M.fun(args))`。
+
 ## 错误处理
 
 `try/rescue/after` 映射到 Python 异常；rescue 子句按异常类匹配：

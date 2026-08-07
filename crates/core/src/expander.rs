@@ -16,8 +16,8 @@ const MAX_STEPS: u64 = 1_000_000;
 
 /// Forms the expander must never treat as macro calls.
 const SPECIAL_FORMS: &[&str] = &[
-    "__block__", "__clauses__", "defmodule", "def", "defp", "defmacro", "alias", "import",
-    "use", "defattr",
+    "__block__", "__clauses__", "defmodule", "def", "defp", "async def", "async defp",
+    "defmacro", "alias", "import", "use", "defattr",
     "require", "pyimport", "quote", "unquote", "unquote_splicing", "var!", "if", "unless",
     "case", "cond", "with", "fn", "->", "when", "=", "|", "|>", "&", "^", "not", "and", "or",
     "+", "-", "*", "/", "//", "==", "!=", "<", ">", "<=", ">=", "++", "<>", "..", "<-",
@@ -365,7 +365,7 @@ impl Expander {
                             values.entry(plain).or_default().push(value.clone());
                             continue;
                         }
-                        "def" | "defp" if hook.is_some() => {
+                        "def" | "defp" | "async def" | "async defp" if hook.is_some() => {
                             let hook_name = hook.clone().unwrap();
                             let key = (hook_name.clone(), 4);
                             let Some(def) = self.macros.get(&key).cloned() else {
@@ -412,7 +412,11 @@ impl Expander {
                     }
                 }
             }
-            if stmt.is_call_named("def") || stmt.is_call_named("defp") {
+            if stmt.is_call_named("def")
+                || stmt.is_call_named("defp")
+                || stmt.is_call_named("async def")
+                || stmt.is_call_named("async defp")
+            {
                 pending.clear();
             }
             let expanded = self.expand_term(&stmt, depth)?;

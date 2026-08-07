@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Translate Gandora Enhancement Proposals with an LLM.
 
-Reads credentials from the repository ``.env`` file (``GAN_API_KEY``,
-``GAN_BASE_URL``, ``GAN_MODEL``) and translates English source GEPs from
+Reads credentials from the repository ``.env`` file (``GAN_API_KEY`` and
+``GAN_MODEL``; ``GAN_BASE_URL`` is optional and defaults to the vendor's own
+endpoint, so a gateway is a one-line override) and translates English GEPs from
 ``geps/`` into ``geps/local/<lang>/`` following GEP-0000's translation policy:
 the translation copies the source front matter, translates ``title`` and
 ``description``, and adds ``language``, ``source``, ``source-revision``, and
@@ -52,8 +53,13 @@ Enhancement Proposal) from English to {language}. Rules:
 """
 
 
+# the vendor's own endpoint; an OpenAI-compatible gateway overrides it
+# by setting GAN_BASE_URL in .env
+DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
+
+
 def load_env(path: Path) -> dict[str, str]:
-    env: dict[str, str] = {}
+    env: dict[str, str] = {"GAN_BASE_URL": DEFAULT_BASE_URL}
     if not path.exists():
         sys.exit(f"error: {path} not found; expected GAN_API_KEY etc. in it")
     for line in path.read_text(encoding="utf-8").splitlines():

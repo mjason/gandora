@@ -69,4 +69,28 @@ defmodule TestFmt do
     got = fmt(src)
     Test.assert_eq(String.contains?(got, "docs stay put"), true)
   end
+
+  # ---- R011: multi-line maps take one shape ----
+
+  def test_multiline_map_explodes_to_one_pair_per_line() do
+    src = "defmodule T do\n  def f(round) do\n    %{\"ok\" => false, \"why\" => \"w\",\n      \"rounds\" => round}\n  end\nend\n"
+    want = "defmodule T do\n  def f(round) do\n    %{\n      \"ok\" => false,\n      \"why\" => \"w\",\n      \"rounds\" => round\n    }\n  end\nend\n"
+    Test.assert_eq(fmt(src), want)
+    Test.assert_eq(fmt(want), want)
+  end
+
+  def test_single_line_map_is_the_authors_call() do
+    src = "defmodule T do\n  def f(), do: %{\"a\" => 1, \"b\" => 2}\nend\n"
+    Test.assert_eq(fmt(src), src)
+  end
+
+  def test_map_holding_a_comment_stays_as_written() do
+    src = "defmodule T do\n  def f(x) do\n    %{\"a\" => 1, # why\n      \"b\" => x}\n  end\nend\n"
+    Test.assert_eq(fmt(src), src)
+  end
+
+  def test_nested_single_line_map_stays_inline() do
+    src = "defmodule T do\n  def f(x) do\n    %{\"o\" => %{\"i\" => 1, \"j\" => 2}, \"x\" => x,\n      \"m\" => 3}\n  end\nend\n"
+    Test.assert_contains(String.split_on(fmt(src), "\n"), "      \"o\" => %{\"i\" => 1, \"j\" => 2},")
+  end
 end

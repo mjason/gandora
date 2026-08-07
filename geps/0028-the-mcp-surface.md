@@ -1,0 +1,200 @@
+---
+gep: 28
+title: The MCP Surface
+description: An MCP server that hands models verified Gandora — every example compiled, judged, and really run before it is returned.
+author: MJ
+status: Draft
+type: Standards Track
+areas:
+  - Tooling
+created: 2026-08-06
+updated: 2026-08-06
+revision: 1
+requires: [15, 25, 26]
+replaces: []
+superseded-by: null
+resolution: null
+translations:
+  zh: local/zh/0028-the-mcp-surface.md
+---
+
+# GEP-0028: The MCP Surface
+
+## Abstract
+
+`gan-mcp` is a Model Context Protocol server, written in Gandora, that
+exposes the toolchain to any MCP client. It carries the answers a model
+needs — documentation, the context pack, the verdict — and one answer
+no previous surface could give: **a complete module that has been
+compiled, judged, and really run**. This GEP fixes the rule the whole
+surface exists to enforce: nothing is returned that has not been run.
+
+## Motivation
+
+GEP-0025 made correction one call and GEP-0026 made discovery one call.
+Both improved what a model *knows*; neither changed what a model
+*ships*. A model still writes a snippet, reads it back, finds it
+plausible, and hands it over — and plausibility is not a verdict. The
+observed failure is not ignorance of syntax but confidence without
+evidence: code that reads correctly, names a function that does not
+exist, and reaches the user anyway.
+
+Gandora is unusually well placed to close this. `@example` is not
+decoration: it compiles to a native Python doctest that `gan test`
+executes (GEP-0007). An example is therefore its own assertion, and a
+module carrying one is a self-verifying artifact. Generating an example
+and testing it are the same act; a surface that skips the second half
+is choosing to.
+
+A second reason the server belongs here rather than in a client: MCP
+derives a tool's `inputSchema` from the function signature, and
+Gandora derives the signature from `@spec` with the description from
+`@doc`/`@param`. The annotation discipline the Advisor already enforces
+is exactly the protocol's metadata. The contract is written once.
+
+## Scope
+
+Covered: the stdio server, its tool surface, the verification pipeline,
+and the composer that turns a requirement into a verified module. Out
+of scope: HTTP transports, MCP sampling, prompts and resources beyond
+the briefing, and publication of the package (the release chain stays
+at five packages until this GEP is Accepted).
+
+## Terminology
+
+**Sandbox project** — a throwaway project holding one module, built and
+discarded per request.
+
+**Atom** — a verified example of one language capability, drawn from a
+source the test suite already runs.
+
+**Composer** — the model-backed path from a requirement to a module.
+
+## Specification
+
+**GEP-0028-R001 (the server):** `gan-mcp` speaks MCP over stdio and is
+itself a Gandora program. `GAN_MCP_ROOT` selects the project its
+queries answer for, defaulting to the working directory.
+
+**GEP-0028-R002 (nothing unrun):** Every code-bearing answer MUST carry
+the verdict that produced it: the diagnostics, the practice
+suggestions, and the result of executing the module's doctests. An
+answer whose module does not reach `ok: true` MUST be returned as a
+failure carrying those findings. Returning unverified code as prose —
+however plausible — is a defect of this surface, not a degraded mode of
+it.
+
+**GEP-0028-R003 (the pipeline):** Verification writes the module into a
+sandbox project at the path its own `defmodule` demands
+(GEP-0001-R013), takes its verdict from `gan lsc check`
+(GEP-0025-R009) rather than any private re-implementation, executes
+the compiled artifact's doctests under a hard timeout, and removes the
+sandbox afterwards. The user's project is never written to.
+
+**GEP-0028-R004 (schemas are not written twice):** Tool inputs are
+derived from `@spec`, descriptions from `@doc` and `@param`. A tool
+function MUST NOT take default arguments, which erase the generated
+signature, and MUST carry a spec precise enough to stand as a public
+contract.
+
+**GEP-0028-R005 (the zero-cost tools):** `gan_doc`, `gan_pack`,
+`gan_check`, and `gan_briefing` forward surfaces that already exist
+(GEP-0015, GEP-0025, GEP-0026) and MUST NOT consult a model. What
+cannot be invented MUST NOT be.
+
+**GEP-0028-R006 (the composer explains and demonstrates):**
+`gan_example` takes one feature, syntax, or capability to demonstrate
+and returns two things: a prose **explanation**, and a **complete
+module** — `defmodule` with `@moduledoc`, and for each public function
+`@doc`, `@param`, `@spec`, and at least one `@example` doctest — that
+passed R002. It MUST NOT return a bare fragment: a fragment cannot be
+compiled, cannot be doctested, and cannot become an atom, so it cannot
+be verified at all. **Every line of code in the answer MUST live in the
+verified module.** Code in the explanation would be an unverified claim
+dressed as a verified one, so the surface strips it.
+
+**GEP-0028-R007 (grounding before generation):** The composer's prompt
+MUST carry the context pack and the atoms relevant to the requirement.
+The model is asked to compose from supplied facts, never to recall the
+language.
+
+**GEP-0028-R008 (the verdict drives the effort):** The composer runs
+with reasoning disabled on its first attempt. A failing verdict — not a
+guess about difficulty — is what raises the effort on the next attempt.
+Rounds are bounded; when the last one fails, the surface returns the
+findings and the closest verified atoms, never the last draft.
+
+**GEP-0028-R009 (atoms are earned):** An atom MUST come from a source
+the test suite runs — a std or tour `@example`, or a composed module
+that passed R002. A green composition MAY be recorded as an atom;
+recording it does not exempt it from re-verification when served.
+
+**GEP-0028-R010 (executing model-written code):** The sandbox runs code
+the server did not write. It MUST execute in a temporary directory
+under a timeout, MUST NOT be reachable from the user's project, and its
+failure MUST surface as a verdict rather than as an exception crossing
+the protocol boundary.
+
+**GEP-0028-R011 (credentials):** Model configuration comes from the
+environment (`GAN_API_KEY`, `GAN_MODEL`, and an optional
+`GAN_BASE_URL` defaulting to the vendor endpoint). Credentials MUST NOT
+be logged, echoed into a verdict, or written into a sandbox.
+
+## Rationale
+
+The surface refuses the split most codegen tools accept — a fast path
+that answers from the model and a slow path that checks. Here the check
+*is* the answer: a verdict of `clean: true` with passing doctests is
+the only thing that distinguishes this server from a model that has
+read the manual. Making that non-negotiable (R002) is what lets an
+agent hand the result straight to a user.
+
+R006 chooses the module over the fragment because the module is the
+smallest unit the toolchain can judge. A fragment is shorter to read
+and impossible to verify; the extra lines are the evidence. Splitting
+the answer in two is the same discipline the language already applies
+to its own documentation: `@doc` is prose, `@example` is executed, and
+nothing is both.
+
+The prompt that drives the composer is itself written in the language's
+prompt syntax — `~p"""` with `<%= %>` splices (GEP-0009-R006) — and it
+carries no hand-written module template. The shape of an answer is
+shown by corpus modules that the test suite compiles and runs, so the
+one piece of code in the pipeline that nobody verified does not exist.
+
+R008 inverts the usual reasoning-budget question. With a ground-truth
+verifier in the loop, an iteration carrying a real diagnostic teaches
+more than deeper deliberation over the same guess — so effort follows
+failure rather than anticipating it.
+
+## Security and Determinism
+
+The sandbox executes generated code, which is the same trust boundary
+`gan run` already crosses on the user's behalf, narrowed: temporary
+directory, hard timeout, no network requirement, removed afterwards. A
+verified answer is reproducible for an unchanged toolchain — the
+verdict and doctest output are facts about the artifact, not about the
+model that drafted it.
+
+## Tooling and AI Usage
+
+An MCP client SHOULD call `gan_briefing` once per session, `gan_doc` or
+`gan_pack` for meaning, and `gan_verify` on every module it intends to
+hand over — including modules it wrote itself. `gan_example` is for
+when the requirement is clear and the shape is not.
+
+## Conformance
+
+Tests MUST cover: a correct module reaching `ok`/`clean` with doctests
+run and passed; a module calling a std function that does not exist
+failing with the artifact diagnostic; a module whose expected doctest
+output is wrong compiling clean yet failing its doctests; module-name
+to sandbox-path derivation including a dotted name; the tool schemas
+derived from `@spec`; every corpus module surviving the same verdict it
+teaches; and the composer returning either an explanation plus a module
+that passed R002, or a failure carrying findings — never an unverified
+draft.
+
+## Change History
+
+- Revision 1, 2026-08-06: Initial version.

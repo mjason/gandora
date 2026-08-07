@@ -1,0 +1,209 @@
+defmodule Sandbox do
+  @moduledoc """
+  The verified-example engine (GEP-0028): a snippet becomes a throwaway
+  project, faces the same verdict a user's `gan build` would give it,
+  and its `@example` doctests are actually executed. Nothing returned
+  from here has gone unrun — that is the whole point of the surface.
+  """
+  @moduledoc_trans zh_CN: "已验证示例引擎(GEP-0028):片段落成一次性项目,接受与用户 `gan build` 同一把裁决尺,`@example` doctest 真跑一遍。此处返回之物皆已运行——这正是这个面存在的理由。"
+
+  pyimport gandora_core, as: core
+  pyimport json
+  pyimport os
+  pyimport pathlib
+  pyimport shutil
+  pyimport subprocess
+  pyimport sys
+  pyimport tempfile
+
+  # the smallest project the toolchain accepts; it borrows a real .venv
+  # so the standard library resolves exactly as it does for the project
+  @config """
+  {"source": ["src"], "outDir": "dist", "targetPython": "3.11"}
+  """
+
+  @doc """
+  The full verdict for one snippet: errors, practice suggestions, and —
+  when the code compiles — the result of really running its doctests.
+  """
+  @doc_trans zh_CN: "一个片段的完整裁决:error、practice 建议,以及——当它能编译时——真跑 doctest 的结果。"
+  @param source, "The Gandora source text of one module."
+  @param root, "The project the snippet is judged for; its toolchain is used."
+  @spec verdict(string(), string()) :: map()
+  def verdict(source, root) do
+    dir = tempfile.mkdtemp(prefix: "gan-mcp-")
+    env = venv(root)
+    try do
+      write_project(dir, source, env)
+      base = check(dir)
+      if Map.get(base, "ok", false) do
+        Map.put(base, "doctests", doctests(dir, source, env))
+      else
+        Map.put(base, "doctests", skipped("the code did not compile"))
+      end
+    after
+      shutil.rmtree(dir, ignore_errors: true)
+    end
+  end
+
+  @doc """
+  The environment a snippet is judged in: the project's own `.venv`
+  when it has one, otherwise the server's. A verdict must be about the
+  toolchain the project actually runs, not the one the server happens
+  to be installed in.
+  """
+  @doc_trans zh_CN: "片段受审所在的环境:项目自带 `.venv` 时用它,否则用服务器的。裁决须关乎项目真正运行的工具链,而非服务器碰巧装在哪。"
+  @param root, "The project root."
+  @spec venv(string()) :: string()
+  def venv(root) do
+    local = os.path.join(root, ".venv")
+    if os.path.isdir(local), do: local, else: sys.prefix
+  end
+
+  @doc "The doctest report for source that carries no `gan>` lines."
+  @doc_trans zh_CN: "源码中没有 `gan>` 行时的 doctest 报告。"
+  @param why, "Why nothing ran."
+  @spec skipped(string()) :: map()
+  @example """
+      gan> Sandbox.skipped("no gan> lines")
+      {'ran': False, 'passed': False, 'why': 'no gan> lines', 'output': ''}
+  """
+  def skipped(why) do
+    %{"ran" => false, "passed" => false, "why" => why, "output" => ""}
+  end
+
+  @doc """
+  The file path a module must live at (GEP-0001-R013): `App.HelloWeb`
+  belongs in `app/hello_web.gan`, and a snippet whose file disagrees
+  fails the verdict for a reason that teaches nothing.
+  """
+  @doc_trans zh_CN: "模块必须落在的文件路径(GEP-0001-R013):`App.HelloWeb` 属于 `app/hello_web.gan`;文件对不上的片段会因一个毫无教益的理由挂在裁决上。"
+  @param name, "The module name, or nil when the source declares none."
+  @spec module_path(string()) :: string()
+  @example """
+      gan> Sandbox.module_path("App.DMagicFactor")
+      'app/d_magic_factor.gan'
+  """
+  def module_path(name) do
+    if is_nil(name) do
+      "example.gan"
+    else
+      path = name |> String.split_on(".") |> Enum.map(&snake/1) |> Enum.join("/")
+      path <> ".gan"
+    end
+  end
+
+  @doc "The module a source declares, or nil when it declares none."
+  @doc_trans zh_CN: "源码声明的模块名;未声明时为 nil。"
+  @param source, "The Gandora source text."
+  @spec module_name(string()) :: string()
+  @example """
+      gan> Sandbox.module_name("defmodule App.Shop do\\nend")
+      'App.Shop'
+  """
+  def module_name(source) do
+    m = ~r/defmodule\s+([A-Z][A-Za-z0-9_.]*)/.match(source)
+    if is_nil(m), do: nil, else: m.group(1)
+  end
+
+  # the compiler's own rule, mirrored: every capital opens a new word
+  defp snake(seg) do
+    chars = for {c, i} <- Enum.with_index(String.codepoints(seg)), do: snake_char(c, i)
+    Enum.join(chars, "")
+  end
+
+  defp snake_char(c, i) do
+    if i > 0 and c == String.upcase(c) and c != String.downcase(c) do
+      "_" <> String.downcase(c)
+    else
+      String.downcase(c)
+    end
+  end
+
+  # a project is two files: the config and the module, at the path its
+  # own name demands
+  defp write_project(dir, source, env) do
+    target = os.path.join(dir, "src", module_path(module_name(source)))
+    os.makedirs(os.path.dirname(target), exist_ok: true)
+    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
+    pathlib.Path(target).write_text(source)
+    # installed packages are found under the project's own .venv
+    # (GEP-0006-R006), so the sandbox borrows one: without it `Enum`
+    # resolves to Python's stdlib `enum` and every std call is reported
+    # missing — a verdict about the sandbox, not about the code
+    try do
+      os.symlink(env, os.path.join(dir, ".venv"))
+    rescue
+      _e -> nil
+    end
+  end
+
+  # the verdict comes from gan-lsc, not from a private re-implementation:
+  # the sandbox must agree with what the user's own `gan build` says
+  defp check(dir) do
+    lsc = tool("gan-lsc")
+    if is_nil(lsc) do
+      %{
+        "ok" => false,
+        "clean" => false,
+        "diagnostics" => [],
+        "suggestions" => [],
+        "why" => "gan-lsc not found — install gandora-lsp"
+      }
+    else
+      r = subprocess.run([lsc, "check", "--root", dir],
+        capture_output: true, text: true, timeout: 180)
+      try do
+        json.loads(r.stdout)
+      rescue
+        _e ->
+          %{
+            "ok" => false,
+            "clean" => false,
+            "diagnostics" => [],
+            "suggestions" => [],
+            "why" => String.trim(r.stderr)
+          }
+      end
+    end
+  end
+
+  # doctests are the run: `@example` compiles to a native Python doctest,
+  # so executing the artifact is executing the example
+  defp doctests(dir, source, env) do
+    if not String.contains?(source, "gan> ") do
+      skipped("no gan> lines in @example")
+    else
+      cache = os.path.join(dir, "dist")
+      try do
+        files =
+          core.build(dir, cache)
+          |> Enum.flat_map(fn m -> List.wrap(Map.get(m, "python")) end)
+        r = subprocess.run([python(env), "-m", "doctest"] ++ files,
+          capture_output: true, text: true, timeout: 120, cwd: cache)
+        %{
+          "ran" => true,
+          "passed" => r.returncode == 0,
+          "why" => "",
+          "output" => String.trim(r.stdout <> r.stderr)
+        }
+      rescue
+        # a sandbox that dies is a verdict, never an exception crossing
+        # the protocol boundary (GEP-0028-R010)
+        e -> skipped("the artifact could not be run: " <> to_string(e))
+      end
+    end
+  end
+
+  # the interpreter of the environment the snippet is judged in
+  defp python(env) do
+    local = os.path.join(env, "bin", "python")
+    if os.path.exists(local), do: local, else: sys.executable
+  end
+
+  # toolchain binaries sit beside the interpreter running this server
+  defp tool(bin) do
+    path = os.path.join(os.path.dirname(sys.executable), bin)
+    if os.path.exists(path), do: path, else: shutil.which(bin)
+  end
+end

@@ -2,10 +2,11 @@ defmodule Fmt do
   @moduledoc """
   gan fmt (GEP-0016): conservative source formatting over the
   gandora_core token stream. Rewrites indentation and horizontal
-  whitespace only — never joins or splits lines — and refuses to
-  write anything whose comments or parsed terms differ from the
-  original (R006).
+  whitespace, and reflows multi-line map literals to one pair per
+  line (R011) — never joins lines — and refuses to write anything
+  whose comments or parsed terms differ from the original (R006).
   """
+  @moduledoc_trans zh_CN: "gan fmt(GEP-0016):基于 gandora_core token 流的保守格式化。重写缩进与水平空白,并把多行 map 字面量重排为一行一对(R011)——从不合并行——凡注释或解析结果有变的重写一律拒绝落盘(R006)。"
 
   pyimport gandora_core, as: core
   pyimport sys
@@ -183,8 +184,112 @@ defmodule Fmt do
     if parsed == :parse_error do
       {:skip, "does not parse"}
     else
-      {:ok, reflow(text)}
+      {:ok, text |> explode_maps() |> reflow()}
     end
+  end
+
+  # ---- multi-line map reflow (R011) ----------------------------------------
+
+  # a `%{` whose span already crosses lines takes the canonical shape:
+  # every top-level pair on its own line, the closer on its own line.
+  # This pass only inserts newlines; `reflow` then owns the indent.
+  defp explode_maps(text) do
+    toks = Enum.reject(core.tokens(text), fn t ->
+      Enum.member?(["eof", "newline"], Map.get(t, "kind"))
+    end)
+    points = toks |> map_spans() |> Enum.flat_map(fn span -> split_points(toks, span) end)
+    if Enum.empty?(points) do
+      text
+    else
+      apply_splits(text, Enum.uniq(points))
+    end
+  end
+
+  # matched (open, close) token indexes of every reflowable %{ literal
+  defp map_spans(toks) do
+    walk = Enum.reduce(Enum.with_index(toks), {[], []}, fn {t, i}, {stack, spans} ->
+      cond do
+        opener_tok?(t) -> {[{t, i}] ++ stack, spans}
+        closer?(t) and not Enum.empty?(stack) ->
+          {opened, j} = Enum.at(stack, 0)
+          {Enum.drop(stack, 1),
+            if tok_is(opened, "op", "%{") do
+              [{j, i}] ++ spans
+            else
+              spans
+            end}
+        true -> {stack, spans}
+      end
+    end)
+    {_stack, spans} = walk
+    Enum.filter(spans, fn {i, j} -> reflowable?(toks, i, j) end)
+  end
+
+  # multi-line, and free of the things a formatter must not relocate:
+  # comments and multi-line string bodies (R011)
+  defp reflowable?(toks, i, j) do
+    open = Enum.at(toks, i)
+    close = Enum.at(toks, j)
+    inside = Enum.slice(toks, i + 1, j - i - 1)
+    Map.get(close, "line") > Map.get(open, "line") and
+      Enum.empty?(Enum.filter(inside, fn t ->
+        Map.get(t, "kind") == "comment" or multiline?(t)
+      end))
+  end
+
+  # where the newlines go: after the opener, after every top-level
+  # comma, and before the closer — each only when not already at a
+  # line start, so the pass is idempotent
+  defp split_points(toks, {i, j}) do
+    open = Enum.at(toks, i)
+    close = Enum.at(toks, j)
+    first = Enum.at(toks, i + 1)
+    head = if Map.get(first, "line") == Map.get(open, "line") and i + 1 < j do
+      [point(first)]
+    else
+      []
+    end
+    tail = if Map.get(Enum.at(toks, j - 1), "line") == Map.get(close, "line") do
+      [point(close)]
+    else
+      []
+    end
+    head ++ comma_points(toks, i, j) ++ tail
+  end
+
+  defp comma_points(toks, i, j) do
+    walk = Enum.reduce(Enum.slice(toks, i + 1, j - i - 1), {1, i + 1, []}, fn t, {depth, k, pts} ->
+      cond do
+        opener_tok?(t) -> {depth + 1, k + 1, pts}
+        closer?(t) -> {depth - 1, k + 1, pts}
+        tok_is(t, "op", ",") and depth == 1 and k + 1 < j and
+          Map.get(Enum.at(toks, k + 1), "line") == Map.get(t, "line") ->
+            {depth, k + 1, [point(Enum.at(toks, k + 1))] ++ pts}
+        true -> {depth, k + 1, pts}
+      end
+    end)
+    elem(walk, 2)
+  end
+
+  defp point(t), do: {Map.get(t, "line"), Map.get(t, "col")}
+
+  # insert a newline before every (line, col), rightmost first
+  defp apply_splits(text, points) do
+    lines = text.split("\n")
+    by_line = Enum.reduce(points, %{}, fn {l, c}, acc ->
+      Map.put(acc, l, Enum.sort(Map.get(acc, l, []) ++ [c]))
+    end)
+    pieces = Enum.map(Enum.with_index(lines), fn {line, idx} ->
+      split_line(line, Enum.reverse(Map.get(by_line, idx + 1, [])))
+    end)
+    Enum.join(pieces, "\n")
+  end
+
+  # cols arrive rightmost-first so earlier columns stay valid
+  defp split_line(line, cols) do
+    Enum.reduce(cols, line, fn c, acc ->
+      String.slice(acc, 0, c - 1).rstrip() <> "\n" <> String.slice(acc, c - 1, $builtins.len(acc))
+    end)
   end
 
   defp reflow(text) do
@@ -536,8 +641,14 @@ defmodule Fmt do
   end
 
   defp synth(op, near) do
-    %{"kind" => "op", "value" => op, "synthetic" => true,
-      "line" => Map.get(near, "line"), "col" => Map.get(near, "end_col"),
-      "end_line" => Map.get(near, "line"), "end_col" => Map.get(near, "end_col")}
+    %{
+      "kind" => "op",
+      "value" => op,
+      "synthetic" => true,
+      "line" => Map.get(near, "line"),
+      "col" => Map.get(near, "end_col"),
+      "end_line" => Map.get(near, "line"),
+      "end_col" => Map.get(near, "end_col")
+    }
   end
 end

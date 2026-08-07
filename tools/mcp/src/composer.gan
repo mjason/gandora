@@ -1,0 +1,455 @@
+defmodule Composer do
+  @moduledoc """
+  The composer (GEP-0028-R006/R007/R008): one requirement in, one
+  **verified module** out. The model never recalls the language — it
+  composes from atoms and the context pack — and never has the last
+  word: the verdict does. A draft that cannot go green is returned as
+  a failure carrying its findings, never as confident prose.
+  """
+  @moduledoc_trans zh_CN: "合成器(GEP-0028-R006/R007/R008):一句需求进,一个**已验证模块**出。模型从不凭记忆复述语言——它依原子与上下文包合成——也从不拥有最终发言权:裁决才有。无法变绿的草稿以失败返回,附上 findings,绝不伪装成自信的散文。"
+
+  pyimport os
+  pyimport pathlib
+  pyimport pydantic_ai
+  pyimport pydantic_ai.models.openai, as: oai
+  pyimport pydantic_ai.providers.deepseek, as: dsp
+
+  # thinking stays off until a verdict says otherwise (R008)
+  @efforts ["none", "low", "low", "low"]
+
+  # the prompt is prose with holes, which is what ~p is for: raw text,
+  # no escaping, `<%= %>` splices (GEP-0009-R006). The shape of an
+  # answer is not described here — it is shown by the verified modules
+  # the prompt carries, because a hand-written template in this string
+  # would be the one piece of code in the pipeline nobody ran
+  @system ~p"""
+  You write Gandora, an Elixir-flavored language that compiles to Python.
+
+  Answer in exactly two parts, in this order and with these markers:
+
+    EXPLANATION:
+    Two to five sentences saying what the feature is and how it reads.
+    Prose only — every line of code you want to show belongs in the
+    module below, because only the module is compiled and run.
+
+    MODULE:
+    One complete module, in the shape of the verified modules shown to
+    you, and nothing else. No fences.
+
+  Rules that are not negotiable:
+  - Every public def carries @doc, @param per parameter, @spec, @example.
+  - @doc is prose only; examples live in @example, never inside @doc.
+  - An @example line is `gan> Module.fun(args)` and the next line is the
+    expected value as a Python repr: 'hi' for a string, ('ok', 21) for a
+    tuple, {'k': 1} for a map, True or False for booleans.
+  - A call whose value is nil prints NOTHING. Write the `gan>` line and
+    then go straight to the next line or the closing quotes — never
+    write nil or None as an expected value; it can only fail.
+  - The example must be true. It is executed, and a wrong expected value
+    fails the answer.
+  - No return, no while: the last expression is the value. Only false
+    and nil are falsy.
+  - Data is maps: %{"k" => v}. Interop is $math.sqrt(x) or pyimport json.
+  - @spec takes abstract parameters and returns concrete: never write
+    list()/map() as a PARAMETER type — use sequence(t), iterable(t),
+    mapping(k, v) there — and return the concrete list(t)/map().
+  - A doctest expression is one simple expression: no assignments, no
+    multi-line setup. Build what you need inline.
+  - There is no Integer or Float module: to_string/1, div/2, rem/2 are
+    built-ins, and parsing is $builtins.int(s) / $builtins.float(s).
+  - A macro's @example is displayed, not executed. If you write a
+    defmacro, also write a plain def in the same module that calls it,
+    and put the runnable @example on that def — otherwise nothing about
+    your module can be proven.
+
+  Rules the compiler keeps having to teach:
+  - @param must name a real parameter. A def whose clauses match patterns
+    (`def area({:rect, w, h})`) has no parameter name to document, so
+    write no @param at all for it.
+  - A tuple TYPE is `tuple(t, t)`, never a tuple literal: the `{:ok, x}`
+    shape is spelled `tuple(atom(), x)` in a @spec (GEP-0017-R002).
+  - A bound variable that goes unused is an ERROR. Prefix it with `_`.
+  - Python exceptions are named through their module:
+    `rescue e in $builtins.ValueError -> ...` (GEP-0014).
+  - Only the standard library and the Python standard library are
+    installed. Never demonstrate numpy, pandas, or requests — the
+    example is really executed and the import will fail.
+
+  Concurrency (GEP-0029/0030):
+  - `async def f(x) do ... end` compiles to Python's async def, and
+    `await expr` to Python's await — bare, no deadline. await is legal
+    only inside an async def body, never inside fn.
+  - Task is the library over asyncio: Task.run(coro) enters the
+    coroutine world from sync code (main stays sync); Task.async(coro)
+    spawns inside an async body; `await Task.all(tasks)` joins in input
+    order; Task.try_await(task, ms) returns ('ok', v) /
+    ('error', 'timeout') / ('error', e) and cancels on timeout;
+    Task.blocking(fn -> work() end) runs a blocking function on a
+    thread. Timeouts are milliseconds.
+  - The runnable @example of an async def goes through the rim:
+    `gan> Task.run(M.fun(args))`. Spawning needs a running loop —
+    never call Task.async at the rim.
+
+  Elixir habits that are errors here:
+  - A type is a call and the module IS the type: String(), never
+    String.t(). Builtins are lowercase calls: string(), integer(),
+    float(), boolean(), map(), term(), list(t), sequence(t).
+  - `~r/re/` is the regular-expression sigil; `~p(...)` is raw prompt
+    text, not a regex.
+  - `fn x -> f(x) end` around a single call is written `&f/1`.
+  """
+
+  @doc """
+  A verified module answering `requirement`, or an honest failure. The
+  returned map carries `ok`, the `module` source, its `verdict`, the
+  `rounds` it took, and the `atoms` it was composed from.
+  """
+  @doc_trans zh_CN: "回应 `requirement` 的已验证模块,或一次诚实的失败。返回的 map 带 `ok`、`module` 源码、其 `verdict`、耗费的 `rounds`,以及所依的 `atoms`。"
+  @param requirement, "What the example must demonstrate."
+  @param root, "The project the atoms and the context pack come from."
+  @spec example(string(), string()) :: map()
+  async def example(requirement, root) do
+    key = api_key(root)
+    if is_nil(key) do
+      %{
+        "ok" => false,
+        "why" => "no GAN_API_KEY in the environment or .env",
+        "explanation" => "",
+        "module" => "",
+        "verdict" => %{},
+        "rounds" => 0,
+        "atoms" => []
+      }
+    else
+      # the three grounding sources are independent — the two that shell
+      # out overlap as tasks (their subprocesses cross on the blocking
+      # bridge) while atom search runs here; every retry round then
+      # reuses the same grounding instead of re-paying it
+      ground_task = Task.async(Task.blocking(fn -> grounding(root) end))
+      cards_task = Task.async(constructs(requirement, root))
+      atoms = Atoms.search(root, requirement, 6)
+      [notes, cards] = await Task.all([ground_task, cards_task])
+      ground = %{"atoms" => atoms, "notes" => notes, "cards" => cards, "root" => root}
+      await attempt(requirement, key, ground, @efforts, "", 0)
+    end
+  end
+
+  @doc """
+  The two halves of an answer: the prose explanation and the module.
+  Code never rides in the prose — only the module is compiled and run,
+  so anything fenced off in the explanation would be an unverified
+  claim wearing the same clothes as a verified one.
+  """
+  @doc_trans zh_CN: "一个回答的两半:散文说明与模块。代码不得混在散文里——只有模块会被编译和运行,说明里围栏起来的代码就是一句未经验证的断言,却穿着已验证之物的衣服。"
+  @param text, "The raw model output."
+  @spec answer(string()) :: tuple()
+  @example """
+      gan> Composer.answer("EXPLANATION:\\nIt doubles.\\nMODULE:\\ndefmodule M do\\nend")
+      ('It doubles.', 'defmodule M do\\nend')
+  """
+  def answer(text) do
+    parts = String.split_on(text, "MODULE:")
+    if Enum.count(parts) > 1 do
+      {prose(Enum.at(parts, 0)), strip_fences(Enum.at(parts, 1))}
+    else
+      {"", strip_fences(text)}
+    end
+  end
+
+  # the explanation, minus its marker and minus any code it smuggled in
+  defp prose(text) do
+    text
+    |> String.trim()
+    |> String.split_on("\n")
+    |> Enum.filter(fn l -> not fenced?(l) end)
+    |> Enum.join("\n")
+    |> String.trim()
+  end
+
+  defp fenced?(line) do
+    trimmed = String.trim(line)
+    String.starts_with?(trimmed, "```") or String.starts_with?(trimmed, "EXPLANATION:")
+  end
+
+  @doc "The module source stripped of the fences a model wraps it in."
+  @doc_trans zh_CN: "剥掉模型习惯套上的代码围栏后的模块源码。"
+  @param text, "The raw model output."
+  @spec strip_fences(string()) :: string()
+  @example """
+      gan> Composer.strip_fences("```gandora\\ndefmodule M do\\nend\\n```")
+      'defmodule M do\\nend'
+  """
+  def strip_fences(text) do
+    text
+    |> String.trim()
+    |> String.split_on("\n")
+    |> Enum.filter(fn l -> not String.starts_with?(String.trim(l), "```") end)
+    |> Enum.join("\n")
+    |> String.trim()
+  end
+
+  @doc "Whether a verdict is green: it compiles, it is idiomatic, it ran."
+  @doc_trans zh_CN: "裁决是否为绿:能编译、够地道、真跑过。"
+  @param verdict, "A Sandbox verdict."
+  @spec green?(mapping(string(), term())) :: boolean()
+  @example """
+      gan> Composer.green?(%{"ok" => true, "clean" => true, "doctests" => %{"passed" => true}})
+      True
+  """
+  def green?(verdict) do
+    Map.get(verdict, "ok", false) and Map.get(verdict, "clean", false) and
+      Map.get(Map.get(verdict, "doctests", %{}), "passed", false)
+  end
+
+  # one attempt per remaining effort level; the verdict decides whether
+  # there is a next one, and what it is told
+  async defp attempt(requirement, key, ground, efforts, findings, round) do
+    atoms = Map.get(ground, "atoms")
+    if Enum.empty?(efforts) do
+      %{
+        "ok" => false,
+        "why" => "no draft reached a clean verdict",
+        "explanation" => "",
+        "module" => "",
+        "verdict" => %{},
+        "rounds" => round,
+        "findings" => findings,
+        "atoms" => atoms
+      }
+    else
+      raw = await ask(prompt(requirement, ground, findings), Enum.at(efforts, 0), key)
+      {prose, draft} = answer(raw)
+      verdict = if String.trim(draft) == "",
+        do: no_draft(),
+        else: await Task.blocking(fn -> Sandbox.verdict(draft, Map.get(ground, "root")) end)
+      left = Enum.drop(efforts, 1)
+      cond do
+        green?(verdict) and String.trim(prose) != "" ->
+          %{
+            "ok" => true,
+            "explanation" => prose,
+            "module" => draft,
+            "verdict" => verdict,
+            "rounds" => round + 1,
+            "atoms" => atoms
+          }
+          # a module that works but forgot to explain itself: ask again while
+          # rounds remain, and keep verified work rather than discard it
+        green?(verdict) and Enum.empty?(left) ->
+          %{
+            "ok" => true,
+            "explanation" => prose,
+            "module" => draft,
+            "verdict" => verdict,
+            "rounds" => round + 1,
+            "atoms" => atoms
+          }
+        green?(verdict) ->
+          attempt(requirement, key, ground, left,
+            "Your module was accepted but your answer had no EXPLANATION: section. Send both parts.",
+            round + 1)
+        true ->
+          attempt(requirement, key, ground, left, report(verdict), round + 1)
+      end
+    end
+  end
+
+  # what the next attempt is told: the facts, not a scolding
+  defp report(verdict) do
+    errors = Enum.map(Map.get(verdict, "diagnostics", []), fn d ->
+      "error: " <> to_string(Map.get(d, "message", ""))
+    end)
+    hints = Enum.map(Map.get(verdict, "suggestions", []), fn s ->
+      "practice: " <> to_string(Map.get(s, "message", ""))
+    end)
+    doctest = Map.get(Map.get(verdict, "doctests", %{}), "output", "")
+    Enum.join(errors ++ hints ++ [doctest], "\n")
+  end
+
+  defp prompt(requirement, ground, findings) do
+    # bound first, spliced second: a name used only inside `<%= %>` is
+    # invisible to the unused-function lint (GEP-0022-R005), and the
+    # binding reads better anyway
+    notes = Map.get(ground, "notes")
+    cards = Map.get(ground, "cards")
+    pieces = Enum.join(Enum.map(Map.get(ground, "atoms"), &atom_block/1), "\n")
+    modules = Enum.join(Enum.map(shown(requirement), &Corpus.block/1), "\n\n")
+    again = retry(findings)
+    ~p"""
+    <%= notes %>
+    <%= cards %>
+    Verified examples of the pieces you may need:
+
+    <%= pieces %>
+
+    <%= modules %>
+
+    Requirement: <%= requirement %>
+    <%= again %>
+    """
+  end
+
+  # the shape always rides along; the syntax the requirement names joins it
+  defp shown(requirement) do
+    [Corpus.baseline()] ++ Corpus.matching(requirement)
+  end
+
+  # what the next attempt is told: the facts, not a scolding
+  defp retry(findings) do
+    if String.trim(findings) == "" do
+      ""
+    else
+      ~p"""
+
+      Your previous answer was rejected by the compiler and the doctest
+      runner. Fix exactly these:
+
+      <%= findings %>
+      """
+    end
+  end
+
+  # a requirement naming a construct gets that construct's card: the
+  # atoms cover the standard library, and nothing else would explain
+  # what `defmacro` or `defstruct` means here
+  @triggers %{
+    "macro" => ["defmacro", "quote", "unquote"],
+    "struct" => ["defstruct", "defattr"],
+    "test" => ["test"],
+    "type" => ["type", "spec"],
+    "json" => ["json", "interop"],
+    "python" => ["pyimport", "interop"],
+    "prompt" => ["prompt"],
+    "template" => ["format"]
+  }
+
+  async defp constructs(requirement, root) do
+    low = String.downcase(requirement)
+    wanted = for {word, names} <- @triggers.items(), String.contains?(low, word), do: names
+    # each card is one gan-lsc subprocess: independent and blocking, so
+    # each crosses on the bridge and they overlap under the bound
+    cards = await Task.async_stream(Enum.uniq(Enum.concat(wanted)),
+      fn n -> Task.blocking(fn -> card(n, root) end) end, 4)
+    kept = Enum.filter(cards, fn c -> c != "" end)
+    if Enum.empty?(kept) do
+      ""
+    else
+      ~p"""
+      The constructs this requirement names:
+      <%= Enum.join(kept, "\n") %>
+      """
+    end
+  end
+
+  defp card(name, root) do
+    info = Intel.doc(name, root)
+    if is_nil(info) do
+      ""
+    else
+      ~p(- <%= name %>: <%= to_string(Map.get(info, "construct", "")) %>)
+    end
+  end
+
+  # the context pack is the other half of the grounding (R007): what the
+  # standard library actually contains, so nothing has to be recalled
+  defp grounding(root) do
+    pack = Intel.pack([], root)
+    if is_nil(pack) do
+      ""
+    else
+      notes = Enum.join(Map.get(Map.get(pack, "language", %{}), "notes", []), "\n")
+      lines = for {mod, names} <- Map.get(pack, "std", %{}).items(),
+        do: "- " <> mod <> ": " <> Enum.join(names, " ")
+      ~p"""
+      Language notes:
+      <%= notes %>
+
+      The standard library — these functions exist, no others:
+      <%= Enum.join(lines, "\n") %>
+      """
+    end
+  end
+
+  defp atom_block(atom) do
+    ~p"""
+    ## <%= Map.get(atom, "target", "") %>
+    <%= Map.get(atom, "spec", "") %>
+    <%= Map.get(atom, "doc", "") %>
+    <%= Map.get(atom, "example", "") %>
+    """
+  end
+
+  # one model call may not stall the whole tool: the request is spawned
+  # as a task and joined with a deadline that returns a verdict and
+  # really cancels (GEP-0029-R004). A timeout or a crash is a round
+  # that produced nothing.
+  @model_timeout 180000
+
+  # one model round-trip: the artifact is the bare await a Python
+  # reviewer would have written by hand
+  async defp request(text, effort, key) do
+    result = await agent_for(effort, key).run(text)
+    result.output
+  end
+
+  async defp ask(text, effort, key) do
+    t = Task.async(request(text, effort, key))
+    case await Task.try_await(t, @model_timeout) do
+      {:ok, out} -> out
+      {:error, _why} -> ""
+    end
+  end
+
+  # one agent per effort level, kept for the process: the async client
+  # under it holds a connection pool, and every request rides the same
+  # shared loop, so retries reuse warm connections
+  @decorate $functools.cache
+  defp agent_for(effort, key) do
+    model = oai.OpenAIResponsesModel(model_name(),
+      provider: dsp.DeepSeekProvider(api_key: key))
+    settings = oai.OpenAIResponsesModelSettings(
+      openai_reasoning_effort: effort, max_tokens: 4000)
+    pydantic_ai.Agent(model, model_settings: settings, instructions: @system)
+  end
+
+  defp no_draft() do
+    %{
+      "ok" => false,
+      "clean" => false,
+      "diagnostics" => [],
+      "suggestions" => [],
+      "why" => "the model call failed or returned nothing",
+      "doctests" => Sandbox.skipped("no draft")
+    }
+  end
+
+  defp model_name() do
+    name = os.getenv("GAN_MODEL")
+    if is_nil(name), do: "deepseek-v4-flash", else: name
+  end
+
+  # the environment first; a repository .env is a developer convenience,
+  # and its value never leaves this function
+  defp api_key(root) do
+    env = os.getenv("GAN_API_KEY")
+    if not is_nil(env) do
+      env
+    else
+      dotenv(os.path.join(root, ".env"))
+    end
+  end
+
+  defp dotenv(path) do
+    if not os.path.exists(path) do
+      nil
+    else
+      lines = String.split_on(pathlib.Path(path).read_text(), "\n")
+      hit = Enum.find(lines, fn l -> String.starts_with?(String.trim(l), "GAN_API_KEY=") end)
+      if is_nil(hit) do
+        nil
+      else
+        String.trim(Enum.at(String.split_on(hit, "="), 1))
+      end
+    end
+  end
+end

@@ -30,8 +30,8 @@ fn print_stmt(term: &Term, level: usize, out: &mut String) {
 }
 
 const BLOCK_FORMS: &[&str] = &[
-    "defmodule", "def", "defp", "defmacro", "if", "unless", "case", "cond", "quote", "with",
-    "for", "fn",
+    "defmodule", "def", "defp", "async def", "async defp", "defmacro", "if", "unless", "case",
+    "cond", "quote", "with", "for", "fn",
 ];
 
 fn is_operator(name: &str) -> bool {
@@ -241,10 +241,11 @@ fn print_call(call: &Call, level: usize, out: &mut String) {
                 print_operand(&call.args[1], level, out, name);
                 return;
             }
-            if (name == "-" || name == "not" || name == "^" || name == "&") && call.args.len() == 1
+            if (name == "-" || name == "not" || name == "^" || name == "&" || name == "await")
+                && call.args.len() == 1
             {
                 out.push_str(name);
-                if name == "not" {
+                if name == "not" || name == "await" {
                     out.push(' ');
                 }
                 let needs_paren = matches!(&call.args[0], Term::Call(c)
