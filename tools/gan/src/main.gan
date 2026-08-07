@@ -414,7 +414,12 @@ defmodule Main do
     (p / "gandora.jsonc").write_text(@gandora_jsonc)
     pyproject = p / "pyproject.toml"
     if pyproject.exists() do
-      IO.puts("kept existing pyproject.toml — add \"gandora-std\" to its dependencies")
+      # the MCP configs below are written either way, but their command
+      # only resolves once the project depends on the toolchain — say
+      # exactly what to add rather than leave dead wiring behind
+      IO.puts("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
+      IO.puts("  dependencies: \"gandora-std\"        (generated code imports it)")
+      IO.puts("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
     else
       pyproject.write_text(pyproject_toml(name))
     end

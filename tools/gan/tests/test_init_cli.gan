@@ -84,6 +84,24 @@ defmodule TestInitCli do
     cleanup(dir)
   end
 
+  # joining a project that already has a pyproject: init keeps it, so the
+  # MCP configs it writes would reference a dependency nobody added —
+  # naming what to add is what keeps the wiring from being dead
+  test "joining a foreign project names the dependencies to add" do
+    tmp = tempfile.mkdtemp(prefix: "gan-join-")
+    pathlib.Path(os.path.join(tmp, "pyproject.toml")).write_text(
+      "[project]\nname = \"foreign\"\nversion = \"0.1.0\"\ndependencies = []\n")
+    out = subprocess.run([gan_bin(), "init", tmp], capture_output: true, text: true)
+    said = out.stdout
+    assert_true(String.contains?(said, "kept existing pyproject.toml"))
+    assert_true(String.contains?(said, "gandora-std"))
+    assert_true(String.contains?(said, "gandora-mcp"))
+    # and the pyproject really was left alone
+    kept = pathlib.Path(os.path.join(tmp, "pyproject.toml")).read_text()
+    assert_true(String.contains?(kept, "name = \"foreign\""))
+    shutil.rmtree(tmp, ignore_errors: true)
+  end
+
   # the scaffold faces the verdict it will be judged by, from birth
   test "the generated entry module carries its annotations" do
     dir = scaffold()

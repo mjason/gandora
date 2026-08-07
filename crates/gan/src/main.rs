@@ -181,12 +181,21 @@ fn cmd_init(args: &[String]) -> Result<(), Diagnostic> {
         "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora project\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={v}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={v}\", \"gandora-mcp>={v}\"]\n",
         v = env!("CARGO_PKG_VERSION")
     );
+    let kept_pyproject = path.join("pyproject.toml").exists();
     write_if_absent(&path.join("pyproject.toml"), &pyproject)?;
     write_mcp_configs(&path)?;
     std::fs::create_dir_all(path.join("src")).map_err(io_err(&path))?;
     write_if_absent(&path.join("src/main.gan"), INIT_MAIN)?;
     println!("Initialized Gandora project in {}", path.display());
     println!("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)");
+    // the configs are written either way, but their command only resolves
+    // once the project depends on the toolchain — say what to add rather
+    // than leave dead wiring behind
+    if kept_pyproject {
+        println!("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:");
+        println!("  dependencies: \"gandora-std\"        (generated code imports it)");
+        println!("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)");
+    }
     println!("Next steps:");
     if path != Path::new(".") {
         println!("  cd {}", path.display());

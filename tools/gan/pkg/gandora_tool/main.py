@@ -358,7 +358,9 @@ def init(path: str) -> None:
     (p / "gandora.jsonc").write_text(gandora_jsonc)
     pyproject = p / "pyproject.toml"
     if _gan_truthy(pyproject.exists()):
-        print("kept existing pyproject.toml — add \"gandora-std\" to its dependencies")
+        print("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
+        print("  dependencies: \"gandora-std\"        (generated code imports it)")
+        print("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
     else:
         pyproject.write_text(_pyproject_toml(name))
     _write_if_absent(p / ".gitignore", gitignore)
