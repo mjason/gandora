@@ -61,7 +61,7 @@ defmodule TestTask do
   end
 
   async defp crash_join() do
-    t = Task.async(Task.map(Task.completed(0), fn v -> 1 / v end))
+    t = Task.completed(0) |> Task.map(fn v -> 1 / v end) |> Task.async()
     await t
   end
 
@@ -81,7 +81,8 @@ defmodule TestTask do
   end
 
   def test_try_await_error_carries_the_exception() do
-    {tag, err} = Task.run(Task.try_await(Task.map(Task.completed("x"), fn v -> $builtins.int(v) end), 1000))
+    parsing = Task.completed("x") |> Task.map(fn v -> $builtins.int(v) end)
+    {tag, err} = Task.run(Task.try_await(parsing, 1000))
     Test.assert_eq(tag, :error)
     Test.assert_true($builtins.isinstance(err, $builtins.ValueError))
   end
@@ -139,13 +140,13 @@ defmodule TestTask do
   end
 
   def test_map_propagates_the_crash_untransformed() do
-    crashed = Task.map(Task.map(Task.completed(0), fn v -> 1 / v end), fn v -> v end)
+    crashed = Task.completed(0) |> Task.map(fn v -> 1 / v end) |> Task.map(fn v -> v end)
     Test.assert_eq(elem(Task.run(Task.try_await(crashed, 1000)), 0), :error)
   end
 
   def test_tap_passes_the_value_through() do
     seen = []
-    v = Task.run(Task.tap(Task.completed(5), fn x -> seen.append(x) end))
+    v = Task.completed(5) |> Task.tap(fn x -> seen.append(x) end) |> Task.run()
     Test.assert_eq(v, 5)
     Test.assert_eq(seen, [5])
   end

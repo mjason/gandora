@@ -95,6 +95,19 @@ defmodule Composer do
   - `~r/re/` is the regular-expression sigil; `~p(...)` is raw prompt
     text, not a regex.
   - `fn x -> f(x) end` around a single call is written `&f/1`.
+
+  House style — the practice pass rejects violations, so a draft that
+  ignores these burns a round:
+  - Data flows left to right: `xs |> Enum.filter(p) |> Enum.sort()`.
+    Three nested calls (`f(g(h(x)))`) is a finding; pipe instead.
+  - A bare `for x <- xs, do: f(x)` is a finding — write
+    `xs |> Enum.map(fn x -> f(x) end)`; use `for` only with a filter,
+    a pattern skip, or `into:` (or an `await` body, which fn cannot hold).
+  - An adjacent Enum.filter |> Enum.map fuses into one `for`.
+  - Host filesystem/process work goes through std File/Path/System
+    (File.read!, Path.join, Path.wildcard, System.cmd, System.get_env)
+    — never $os/$pathlib/$subprocess for what those wrap.
+  - Outcomes at boundaries are verdict tuples {:ok, v} / {:error, why}.
   """
 
   @doc """
@@ -266,8 +279,8 @@ defmodule Composer do
     # binding reads better anyway
     notes = Map.get(ground, "notes")
     cards = Map.get(ground, "cards")
-    pieces = Enum.join(Enum.map(Map.get(ground, "atoms"), &atom_block/1), "\n")
-    modules = Enum.join(Enum.map(shown(requirement), &Corpus.block/1), "\n\n")
+    pieces = ground |> Map.get("atoms") |> Enum.map(&atom_block/1) |> Enum.join("\n")
+    modules = requirement |> shown() |> Enum.map(&Corpus.block/1) |> Enum.join("\n\n")
     again = retry(findings)
     ~p"""
     <%= notes %>
@@ -320,9 +333,10 @@ defmodule Composer do
   async defp constructs(requirement, root) do
     low = String.downcase(requirement)
     wanted = for {word, names} <- Map.to_list(@triggers), String.contains?(low, word), do: names
+    names = wanted |> Enum.concat() |> Enum.uniq()
     # each card is one gan-lsc subprocess: independent and blocking, so
     # each crosses on the bridge and they overlap under the bound
-    cards = await Task.async_stream(Enum.uniq(Enum.concat(wanted)),
+    cards = await Task.async_stream(names,
       fn n -> Task.blocking(fn -> card(n, root) end) end, 4)
     kept = Enum.filter(cards, fn c -> c != "" end)
     if Enum.empty?(kept) do

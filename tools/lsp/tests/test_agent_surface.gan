@@ -9,34 +9,35 @@ defmodule TestAgentSurface do
   use Test
 
   pyimport json
-  pyimport subprocess
   pyimport tempfile
-  pyimport os
-  pyimport pathlib
   pyimport sys
 
   defp lsc_bin() do
-    os.path.join(os.path.dirname(sys.executable), "gan-lsc")
+    sys.executable |> Path.dirname() |> Path.join("gan-lsc")
+  end
+
+  # src/prog.gan is the one file every scenario rewrites
+  defp plant(dir, source) do
+    File.write!(dir |> Path.join("src") |> Path.join("prog.gan"), source)
   end
 
   defp scratch() do
     dir = tempfile.mkdtemp(prefix: "gan-agent-surface-")
-    os.makedirs(os.path.join(dir, "src"), exist_ok: true)
-    pathlib.Path(os.path.join(dir, "gandora.jsonc"))
-    |> (fn p -> p.write_text("{\"source\": [\"src\"], \"outDir\": \"dist\"}") end).()
-    pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-    |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec double(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.double(2)\n      4\n  \"\"\"\n  def double(x), do: x * 2\nend") end).()
-    venv = os.path.dirname(os.path.dirname(sys.executable))
-    if os.path.basename(venv) == ".venv" do
-      os.symlink(venv, os.path.join(dir, ".venv"))
+    File.mkdir_p!(Path.join(dir, "src"))
+    File.write!(Path.join(dir, "gandora.jsonc"),
+      "{\"source\": [\"src\"], \"outDir\": \"dist\"}")
+    plant(dir, "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"d\"\n  @spec double(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.double(2)\n      4\n  \"\"\"\n  def double(x), do: x * 2\nend")
+    venv = sys.executable |> Path.dirname() |> Path.dirname()
+    if Path.basename(venv) == ".venv" do
+      $os.symlink(venv, Path.join(dir, ".venv"))
     end
     dir
   end
 
   defp lsc(args, dir) do
-    r = subprocess.run([lsc_bin()] ++ args ++ ["--root", dir],
-      capture_output: true, text: true, timeout: 120, cwd: dir)
-    json.loads(r.stdout)
+    {out, _status} = System.cmd(lsc_bin(), args ++ ["--root", dir],
+      [cd: dir, timeout: 120000])
+    json.loads(out)
   end
 
   describe "the context pack (GEP-0026-R003)" do
@@ -89,8 +90,7 @@ defmodule TestAgentSurface do
   describe "macro documentation surfaces" do
     test "a documented defmacro compiles and keeps docs separate" do
       dir = scratch()
-      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-      |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"Doubles at compile time.\"\n  defmacro dbl(x) do\n    quote do\n      unquote(x) * 2\n    end\n  end\n  @doc \"d\"\n  @spec f(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.f(3)\n      6\n  \"\"\"\n  def f(y), do: dbl(y)\nend") end).()
+      plant(dir, "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"Doubles at compile time.\"\n  defmacro dbl(x) do\n    quote do\n      unquote(x) * 2\n    end\n  end\n  @doc \"d\"\n  @spec f(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.f(3)\n      6\n  \"\"\"\n  def f(y), do: dbl(y)\nend")
       v = lsc(["check"], dir)
       assert Map.get(v, "ok") == true
       info = lsc(["doc", "Prog.dbl"], dir)
@@ -99,8 +99,7 @@ defmodule TestAgentSurface do
 
     test "a bare lowercase name resolves project-wide before pydoc" do
       dir = scratch()
-      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-      |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"The answer.\"\n  @spec answer() :: integer()\n  @example \"\"\"\n      gan> Prog.answer()\n      42\n  \"\"\"\n  def answer(), do: 42\nend") end).()
+      plant(dir, "defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"The answer.\"\n  @spec answer() :: integer()\n  @example \"\"\"\n      gan> Prog.answer()\n      42\n  \"\"\"\n  def answer(), do: 42\nend")
       info = lsc(["doc", "answer"], dir)
       assert String.contains?(Map.get(info, "label"), "Prog.answer")
     end
@@ -109,8 +108,7 @@ defmodule TestAgentSurface do
   describe "named types (GEP-0027)" do
     test "a generic alias expands in the verdict pipeline" do
       dir = scratch()
-      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-      |> (fn p -> p.write_text("defmodule Prog do\n  @moduledoc \"m\"\n  @type result(t) :: tuple(atom(), t)\n  @doc \"d\"\n  @spec parse(string()) :: result(integer())\n  @example \"\"\"\n      gan> Prog.parse(\"1\")\n      ('ok', 1)\n  \"\"\"\n  def parse(s), do: {:ok, $builtins.int(s)}\nend") end).()
+      plant(dir, "defmodule Prog do\n  @moduledoc \"m\"\n  @type result(t) :: tuple(atom(), t)\n  @doc \"d\"\n  @spec parse(string()) :: result(integer())\n  @example \"\"\"\n      gan> Prog.parse(\"1\")\n      ('ok', 1)\n  \"\"\"\n  def parse(s), do: {:ok, $builtins.int(s)}\nend")
       v = lsc(["check"], dir)
       assert Map.get(v, "ok") == true
       assert Map.get(v, "clean") == true
@@ -118,8 +116,7 @@ defmodule TestAgentSurface do
 
     test "an unknown named type errors with a did-you-mean" do
       dir = scratch()
-      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-      |> (fn p -> p.write_text("defmodule Prog do\n  @type resul(t) :: list(t)\n  @spec f(result(integer())) :: term()\n  def f(_x), do: nil\nend") end).()
+      plant(dir, "defmodule Prog do\n  @type resul(t) :: list(t)\n  @spec f(result(integer())) :: term()\n  def f(_x), do: nil\nend")
       v = lsc(["check"], dir)
       hit = Enum.find(Map.get(v, "diagnostics", []), fn d ->
         String.contains?(Map.get(d, "message"), "did you mean resul()")
@@ -131,8 +128,7 @@ defmodule TestAgentSurface do
   describe "spelling enforcement" do
     test "short sigil names outside the whitelist error" do
       dir = scratch()
-      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-      |> (fn p -> p.write_text("defmodule Prog do\n  def f(), do: ~q(x)\nend") end).()
+      plant(dir, "defmodule Prog do\n  def f(), do: ~q(x)\nend")
       v = lsc(["check"], dir)
       hit = Enum.find(Map.get(v, "diagnostics", []), fn d ->
         String.contains?(Map.get(d, "message"), "~w ~s ~r ~p")
@@ -142,8 +138,7 @@ defmodule TestAgentSurface do
 
     test "a bare dotted type errors with the parenthesized fix" do
       dir = scratch()
-      pathlib.Path(os.path.join(dir, "src", "prog.gan"))
-      |> (fn p -> p.write_text("defmodule Prog do\n  @spec f($math.Pi) :: term()\n  def f(_x), do: nil\nend") end).()
+      plant(dir, "defmodule Prog do\n  @spec f($math.Pi) :: term()\n  def f(_x), do: nil\nend")
       v = lsc(["check"], dir)
       hit = Enum.find(Map.get(v, "diagnostics", []), fn d ->
         String.contains?(Map.get(d, "message"), "$math.Pi()")

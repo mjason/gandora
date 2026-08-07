@@ -34,6 +34,12 @@ elixir_reflexes = {"Integer": "no `Integer` module — `to_string/1`, `rem/2`, `
 
 keywords = ["defmodule", "def", "defp", "defmacro", "defstruct", "case", "cond", "with", "for", "fn", "try", "rescue", "after", "else", "end", "do", "quote", "unquote", "pyimport", "import", "require", "alias", "use", "recur", "when", "true", "false", "nil", "and", "or", "not", "raise", "if", "unless"]
 
+nest_pat = re.compile("[A-Za-z0-9_$.!?]+\\(\\s*[A-Za-z0-9_$.!?]+\\(\\s*[A-Za-z0-9_$.!?]+\\(")
+
+bare_for_pat = re.compile("\\bfor\\s+[a-z_][A-Za-z0-9_]*\\s*<-\\s*[^,\\n]+,\\s*do:(?!.*\\bawait\\b)")
+
+host_shortcuts = [("Path", re.compile("(?<![\\w$])\\$?os\\.path\\.join\\("), "os.path.join -> Path.join/2 (chain segments with |>)"), ("Path", re.compile("(?<![\\w$])\\$?os\\.path\\.(dirname|basename|abspath|isabs|splitext)\\("), "os.path.dirname/basename/abspath/isabs/splitext -> Path.dirname/basename/expand/absolute?/extname"), ("Path", re.compile("\\.rglob\\(|(?<![\\w$])\\$?glob\\.glob\\("), "glob/rglob -> Path.wildcard(pattern) (sorted)"), ("File", re.compile("(?<![\\w$])\\$?os\\.path\\.(exists|isdir)\\("), "os.path.exists/isdir -> File.exists?/File.dir?"), ("File", re.compile("\\.read_text\\(|\\.write_text\\("), "pathlib read_text/write_text -> File.read! (or the {:ok, _}/{:error, _} File.read) / File.write!"), ("File", re.compile("(?<![\\w$])\\$?os\\.getcwd\\("), "os.getcwd -> File.cwd!"), ("File", re.compile("(?<![\\w$])\\$?os\\.listdir\\("), "os.listdir -> File.ls! (sorted)"), ("File", re.compile("(?<![\\w$])\\$?os\\.makedirs\\("), "os.makedirs -> File.mkdir_p!"), ("File", re.compile("(?<![\\w$])\\$?shutil\\.rmtree\\("), "shutil.rmtree -> File.rm_rf!"), ("System", re.compile("(?<![\\w$])\\$?shutil\\.which\\("), "shutil.which -> System.find_executable"), ("System", re.compile("(?<![\\w$])\\$?os\\.getenv\\(|(?<![\\w$])\\$?os\\.environ\\.get\\("), "os.getenv/os.environ.get -> System.get_env"), ("System", re.compile("(?<![\\w$])\\$?subprocess\\.run\\("), "subprocess.run -> System.cmd(bin, args, opts) returning {stdout, status}"), ("System", re.compile("(?<![\\w$])\\$?sys\\.exit\\("), "sys.exit -> System.halt"), ("System", re.compile("(?<![\\w$])\\$?sys\\.argv\\b"), "sys.argv -> System.argv() (program name excluded)")]
+
 
 def analyze(source: str, root: str) -> list[dict]:
     """Every suggestion for one source: cross-language migration hints,
@@ -44,7 +50,7 @@ practice gaps, and member/name did-you-means.
   - source: The Gandora source text.
   - root: Project root for symbol resolution.
 """
-    return _dedupe(_common_mistakes(source) + (_reflex_hints(source, root) + (_exception_hints(source) + (_struct_update_hints(source) + (_practice_hints(source) + _member_suggestions(source, root))))))
+    return _dedupe(_common_mistakes(source) + (_reflex_hints(source, root) + (_exception_hints(source) + (_struct_update_hints(source) + (_practice_hints(source, root) + _member_suggestions(source, root))))))
 
 
 def error_hints(source: str, msg: str, line: int) -> list[dict]:
@@ -125,10 +131,70 @@ def _common_mistakes(source):
     return gandora_std.enum.flat_map(mistakes, _gan_fn1)
 
 
-def _practice_hints(raw):
+def _practice_hints(raw, root):
     source = _mask_literals(raw)
     in_module = gandora_std.string.match_p(source, re.compile("defmodule"))
-    return _coverage_hints(raw, source, in_module) + (_spec_container_hints(source) + (_lone_typevar_hints(source) + (_doc_example_hints(raw) + (_idiom_hints(source) + _pyimport_hints(source)))))
+    return _coverage_hints(raw, source, in_module) + (_spec_container_hints(source) + (_lone_typevar_hints(source) + (_doc_example_hints(raw) + (_idiom_hints(source) + (_pipeline_hints(source, root) + (_host_shortcut_hints(source) + _pyimport_hints(source)))))))
+
+
+def _pipeline_hints(raw, root):
+    source = re.sub("(?m)^\\s*@(spec|type|opaque)[^\\n]*", "", raw)
+    nest = gandora_std.enum.map(gandora_std.enum.take(_nest_sites(source), 1), lambda line: _hint("practice", line, "`f(g(h(x)))` reads inside out — pipe the data through: `x |> h() |> g() |> f()`. Subject-first arguments make every std call pipe-ready (docs/practices.md)."))
+    try:
+        _gan_tmp2 = core.symbols("Enum", root)
+    except Exception as _e__gan1:
+        _gan_tmp2 = []
+    if _gan_truthy(_gan_or((bare_for_pat.search(source) is None), lambda: gandora_std.enum.empty_p(_gan_tmp2))):
+        _gan_tmp1 = []
+    else:
+        _gan_tmp1 = [_hint("practice", _line_of(source, bare_for_pat), "a bare `for x <- xs, do: f(x)` is `xs |> Enum.map(fn x -> f(x) end)` — `for` earns its place with a filter, a pattern skip, or `into:` (GEP-0020). (`await` in the body is the exception: `fn` cannot hold it.)")]
+    bare = _gan_tmp1
+    return nest + bare
+
+
+def _nest_sites(source):
+    lines = source.split("\n")
+    return [source.count("\n", 0, m.start()) + 1 for m in builtins.list(nest_pat.finditer(source)) if not (_gan_truthy(gandora_std.string.contains_p(m.group(0), "assert"))) if not (_gan_truthy(gandora_std.string.contains_p(m.group(0), "safe("))) if not (_gan_truthy(_assertion_line_p(lines, source.count("\n", 0, m.start()))))]
+
+
+def _assertion_line_p(lines, idx):
+    raw = gandora_std.enum.at(lines, idx)
+    if (raw is None):
+        _gan_tmp3 = ""
+    else:
+        _gan_tmp3 = gandora_std.string.trim(raw)
+    line = _gan_tmp3
+    return _gan_or(gandora_std.string.starts_with_p(line, "assert"), lambda: gandora_std.string.starts_with_p(line, "refute"))
+
+
+def _host_shortcut_hints(source):
+    mod = _module_of(source)
+    _gan_tmp4 = [(_line_of(source, pattern), advice) for _gan_for5 in host_shortcuts if isinstance(_gan_for5, tuple) and len(_gan_for5) == 3 for (owner, pattern, advice,) in [(_gan_for5[0], _gan_for5[1], _gan_for5[2],)] if owner != mod if not ((pattern.search(source) is None))]
+    found = _gan_tmp4
+    if _gan_truthy(gandora_std.enum.empty_p(found)):
+        return []
+    else:
+        def _gan_fn2(*_gan_args):
+            match _gan_args:
+                case ((line, _a) as _gan_t6,) if isinstance(_gan_t6, tuple):
+                    return line
+            raise GanMatchError("no clause of _gan_fn2/1 matched " + repr(_gan_args))
+        first = gandora_std.enum.min(gandora_std.enum.map(found, _gan_fn2))
+        def _gan_fn3(*_gan_args):
+            match _gan_args:
+                case ((_l, a) as _gan_t7,) if isinstance(_gan_t7, tuple):
+                    return a
+            raise GanMatchError("no clause of _gan_fn3/1 matched " + repr(_gan_args))
+        advices = gandora_std.enum.join(gandora_std.enum.map(found, _gan_fn3), "; ")
+        return [_hint("practice", first, "host interop the stdlib already wraps (GEP-0010-R011): " + (advices + "."))]
+
+
+def _module_of(source):
+    m = re.compile("defmodule\\s+([A-Za-z0-9_.]+)").match(source)
+    if (m is None):
+        return ""
+    else:
+        return m.group(1)
 
 
 def _coverage_hints(raw, source, in_module):
@@ -140,28 +206,28 @@ def _coverage_hints(raw, source, in_module):
         specs = re.compile("(?m)^\\s*@spec ([a-z_][A-Za-z0-9_]*[?!]?)").findall(source)
         docs = _count_attr_blocks(source, "@doc")
         no_spec = gandora_std.enum.filter(heads, lambda h, *, specs=specs: not (_gan_truthy(gandora_std.enum.member_p(specs, h))))
-        _gan_fstr1 = gandora_std.enum.join(no_spec, ", ")
-        gaps = [(not (_gan_truthy(gandora_std.enum.empty_p(no_spec))), f"@spec on: {_gan_fstr1}"), (docs < gandora_std.enum.count(heads), f"@doc on {gandora_std.enum.count(heads) - docs} public def(s)"), (not (_gan_truthy(gandora_std.string.contains_p(source, "@moduledoc"))), "@moduledoc")]
-        _gan_tmp2 = [label for _gan_for3 in gaps if isinstance(_gan_for3, tuple) and len(_gan_for3) == 2 for (gap, label,) in [(_gan_for3[0], _gan_for3[1],)] if _gan_truthy(gap)]
-        missing = _gan_tmp2
+        _gan_fstr8 = gandora_std.enum.join(no_spec, ", ")
+        gaps = [(not (_gan_truthy(gandora_std.enum.empty_p(no_spec))), f"@spec on: {_gan_fstr8}"), (docs < gandora_std.enum.count(heads), f"@doc on {gandora_std.enum.count(heads) - docs} public def(s)"), (not (_gan_truthy(gandora_std.string.contains_p(source, "@moduledoc"))), "@moduledoc")]
+        _gan_tmp9 = [label for _gan_for10 in gaps if isinstance(_gan_for10, tuple) and len(_gan_for10) == 2 for (gap, label,) in [(_gan_for10[0], _gan_for10[1],)] if _gan_truthy(gap)]
+        missing = _gan_tmp9
         script_only = heads == ["main"]
         if ((gandora_std.enum.count(heads) > 0) and not (_gan_truthy(script_only))) and not (_gan_truthy(gandora_std.string.contains_p(raw, "@example"))):
             subject = gandora_std.enum.at(gandora_std.enum.filter(heads, lambda h: h != "main") + heads, 0)
-            _gan_tmp4 = [_hint("practice", _line_of(source, re.compile("(?m)^\\s*(?:async )?def " + re.escape(subject))), f"No @example doctests — add one right above `def {subject}`:\n@example \"\"\"\n    gan> {subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {{:ok, 21}} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007).")]
+            _gan_tmp11 = [_hint("practice", _line_of(source, re.compile("(?m)^\\s*(?:async )?def " + re.escape(subject))), f"No @example doctests — add one right above `def {subject}`:\n@example \"\"\"\n    gan> {subject}(...)\n    expected_value\n\"\"\"\n(fill in real arguments; expected output is the Python repr — {{:ok, 21}} prints as ('ok', 21), \"hi\" as 'hi'; `gan test` runs it) (GEP-0007).")]
         else:
-            _gan_tmp4 = []
-        example_hint = _gan_tmp4
+            _gan_tmp11 = []
+        example_hint = _gan_tmp11
         if _gan_truthy(gandora_std.enum.empty_p(missing)):
-            _gan_tmp5 = []
+            _gan_tmp12 = []
         else:
             if _gan_truthy(gandora_std.enum.empty_p(no_spec)):
-                _gan_tmp6 = re.compile("(?m)^\\s*(?:async )?def ")
+                _gan_tmp13 = re.compile("(?m)^\\s*(?:async )?def ")
             else:
-                _gan_tmp6 = re.compile("(?m)^\\s*(?:async )?def " + re.escape(gandora_std.enum.at(no_spec, 0)))
-            first = _gan_tmp6
-            _gan_fstr7 = gandora_std.enum.join(missing, "; ")
-            _gan_tmp5 = [_hint("practice", _line_of(source, first), f"Annotation coverage: missing {_gan_fstr7} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md).")]
-        head_hint = _gan_tmp5
+                _gan_tmp13 = re.compile("(?m)^\\s*(?:async )?def " + re.escape(gandora_std.enum.at(no_spec, 0)))
+            first = _gan_tmp13
+            _gan_fstr14 = gandora_std.enum.join(missing, "; ")
+            _gan_tmp12 = [_hint("practice", _line_of(source, first), f"Annotation coverage: missing {_gan_fstr14} — e.g. @doc \"What it does.\" then @spec name(integer()) :: integer() above the def; a printing entry is @spec main() :: nil; unsure of a type? read the cheat sheet: gan lsc doc spec (docs/syntax.md).")]
+        head_hint = _gan_tmp12
         return head_hint + example_hint
 
 
@@ -180,51 +246,51 @@ def _doc_example_hints(raw):
 
 def _lone_typevar_hints(source):
     specs = re.compile("(?m)^\\s*@spec\\s+([a-z_][A-Za-z0-9_]*[?!]?)\\((.*?)::\\s*([a-z]{1,2})\\s*$").findall(source)
-    def _gan_fn2(*_gan_args, source=source):
+    def _gan_fn4(*_gan_args, source=source):
         match _gan_args:
-            case ((name, params, ret) as _gan_t8,) if isinstance(_gan_t8, tuple):
+            case ((name, params, ret) as _gan_t15,) if isinstance(_gan_t15, tuple):
                 seen = re.compile(f"(?<![A-Za-z0-9_$.]){ret}(?![A-Za-z0-9_(])").findall(params)
                 if _gan_truthy(gandora_std.enum.empty_p(seen)):
                     return [_hint("practice", _line_of(source, re.compile("(?m)^\\s*@spec\\s+" + re.escape(name))), f"the return of @spec {name} is the lone type variable `{ret}` — it constrains nothing; write term(), or use the variable in a parameter too (GEP-0027).")]
                 else:
                     return []
-        raise GanMatchError("no clause of _gan_fn2/1 matched " + repr(_gan_args))
-    return gandora_std.enum.flat_map(specs, _gan_fn2)
+        raise GanMatchError("no clause of _gan_fn4/1 matched " + repr(_gan_args))
+    return gandora_std.enum.flat_map(specs, _gan_fn4)
 
 
 def _spec_container_hints(source):
-    def _gan_fn3(*_gan_args):
+    def _gan_fn5(*_gan_args):
         match _gan_args:
-            case ((name, _) as _gan_t9,) if isinstance(_gan_t9, tuple):
+            case ((name, _) as _gan_t16,) if isinstance(_gan_t16, tuple):
                 return name
-        raise GanMatchError("no clause of _gan_fn3/1 matched " + repr(_gan_args))
-    offenders = gandora_std.enum.uniq(gandora_std.enum.map(re.compile("(?m)^\\s*@spec\\s+([a-z_][A-Za-z0-9_]*[?!]?)\\(([^)]*(?:list|map)\\()").findall(source), _gan_fn3))
+        raise GanMatchError("no clause of _gan_fn5/1 matched " + repr(_gan_args))
+    offenders = gandora_std.enum.uniq(gandora_std.enum.map(re.compile("(?m)^\\s*@spec\\s+([a-z_][A-Za-z0-9_]*[?!]?)\\(([^)]*(?:list|map)\\()").findall(source), _gan_fn5))
     if _gan_truthy(gandora_std.enum.empty_p(offenders)):
         return []
     else:
         first = re.compile("(?m)^\\s*@spec\\s+" + re.escape(gandora_std.enum.at(offenders, 0)))
-        _gan_fstr10 = gandora_std.enum.join(offenders, ", ")
-        return [_hint("practice", _line_of(source, first), f"Concrete `list()`/`map()` in parameter position of @spec {_gan_fstr10} — accept `sequence(t)`/`iterable(t)`/`mapping(k, v)`, return concrete (\"abstract in, concrete out\", docs/syntax.md).")]
+        _gan_fstr17 = gandora_std.enum.join(offenders, ", ")
+        return [_hint("practice", _line_of(source, first), f"Concrete `list()`/`map()` in parameter position of @spec {_gan_fstr17} — accept `sequence(t)`/`iterable(t)`/`mapping(k, v)`, return concrete (\"abstract in, concrete out\", docs/syntax.md).")]
 
 
 def _idiom_hints(source):
     checks = [(re.compile("fn (\\w+) -> ((?:[A-Z][A-Za-z0-9_.]*\\.)?[a-z_][A-Za-z0-9_]*[?!]?)\\(\\1\\) end"), "`fn x -> f(x) end` wraps a single call — the capture `&f/1` says the same thing."), (re.compile("Enum\\.count\\([^)]*\\)\\s*==\\s*0|length\\([^)]*\\)\\s*==\\s*0"), "`... == 0` on a count — `Enum.empty?(xs)` reads better."), (re.compile("\\|>\\s*Enum\\.filter\\((?:(?!Enum\\.)[\\s\\S]){0,120}?\\|>\\s*Enum\\.map\\("), "A filter-then-map pipeline fuses: `for x <- xs, cond, do: expr` is one pass and one line (GEP-0020). (map-then-filter has no `for` spelling — keep piping those.)"), (re.compile(", do: true, else: false"), "`if cond, do: true, else: false` is just the condition (wrap with a boolean-shaped guard if needed).")]
-    def _gan_fn4(*_gan_args, source=source):
+    def _gan_fn6(*_gan_args, source=source):
         match _gan_args:
-            case ((pattern, advice) as _gan_t11,) if isinstance(_gan_t11, tuple):
+            case ((pattern, advice) as _gan_t18,) if isinstance(_gan_t18, tuple):
                 if (pattern.search(source) is None):
                     return []
                 else:
                     return [_hint("practice", _line_of(source, pattern), advice)]
-        raise GanMatchError("no clause of _gan_fn4/1 matched " + repr(_gan_args))
-    hits = gandora_std.enum.flat_map(checks, _gan_fn4)
+        raise GanMatchError("no clause of _gan_fn6/1 matched " + repr(_gan_args))
+    hits = gandora_std.enum.flat_map(checks, _gan_fn6)
     bare_pat = re.compile("rescue\\s*\\n\\s*[a-z][A-Za-z0-9_]* ->")
     rescue_only_bare = _gan_and(gandora_std.string.match_p(source, bare_pat), lambda: not (_gan_truthy(gandora_std.string.match_p(source, re.compile("rescue[\\s\\S]{0,200}? in ")))))
     if _gan_truthy(rescue_only_bare):
-        _gan_tmp12 = [_hint("practice", _line_of(source, bare_pat), "A bare `rescue e ->` catches every Exception — rescue specific types first: `e in $builtins.ValueError -> ...` (GEP-0014).")]
+        _gan_tmp19 = [_hint("practice", _line_of(source, bare_pat), "A bare `rescue e ->` catches every Exception — rescue specific types first: `e in $builtins.ValueError -> ...` (GEP-0014).")]
     else:
-        _gan_tmp12 = []
-    bare_hint = _gan_tmp12
+        _gan_tmp19 = []
+    bare_hint = _gan_tmp19
     return hits + bare_hint
 
 
@@ -232,32 +298,32 @@ def _pyimport_hints(source):
     value_source = gandora_std.enum.join(gandora_std.enum.filter(source.split("\n"), lambda l: not (_gan_truthy(gandora_std.string.match_p(l, re.compile("^\\s*@spec "))))), "\n")
     refs = re.compile("\\$([a-z_][a-z0-9_]*)").findall(value_source)
     counts = gandora_std.enum.reduce(refs, {}, lambda m, acc: gandora_std.map.put(acc, m, gandora_std.map.get(acc, m, 0) + 1))
-    return [_hint("practice", _line_of(source, re.compile("\\$" + m)), f"`${m}` appears {n} times — declare `pyimport {m}` once and use the bare name; a dotted chain imports as `pyimport {m}.sub, as: s` (GEP-0003 rev 6).") for _gan_for13 in gandora_std.map.to_list(counts) if isinstance(_gan_for13, tuple) and len(_gan_for13) == 2 for (m, n,) in [(_gan_for13[0], _gan_for13[1],)] if (n >= 3) and not (_gan_truthy(gandora_std.enum.member_p(["builtins", "python"], m)))]
+    return [_hint("practice", _line_of(source, re.compile("\\$" + m)), f"`${m}` appears {n} times — declare `pyimport {m}` once and use the bare name; a dotted chain imports as `pyimport {m}.sub, as: s` (GEP-0003 rev 6).") for _gan_for20 in gandora_std.map.to_list(counts) if isinstance(_gan_for20, tuple) and len(_gan_for20) == 2 for (m, n,) in [(_gan_for20[0], _gan_for20[1],)] if (n >= 3) and not (_gan_truthy(gandora_std.enum.member_p(["builtins", "python"], m)))]
 
 
 def _error_suggestions(source, msg, line):
     from_msg = re.compile("'([A-Za-z_][A-Za-z0-9_.!?]*)'").findall(str(msg))
     if (line is None) or (line == 0):
-        _gan_tmp14 = re.compile("[A-Za-z_][A-Za-z0-9_]*").findall(source)
+        _gan_tmp21 = re.compile("[A-Za-z_][A-Za-z0-9_]*").findall(source)
     else:
         l = gandora_std.enum.at(source.split("\n"), line - 1)
         if (l is None):
-            _gan_tmp14 = []
+            _gan_tmp21 = []
         else:
-            _gan_tmp14 = re.compile("[A-Za-z_][A-Za-z0-9_]*").findall(l)
-    at_line = _gan_tmp14
-    def _gan_fn5(word, *, line=line):
+            _gan_tmp21 = re.compile("[A-Za-z_][A-Za-z0-9_]*").findall(l)
+    at_line = _gan_tmp21
+    def _gan_fn7(word, *, line=line):
         near = difflib.get_close_matches(word, keywords, n=1, cutoff=0.8)
         if _gan_truthy(_gan_or(gandora_std.enum.empty_p(near), lambda: gandora_std.enum.member_p(keywords, word))):
             return []
         else:
             return [_hint("did_you_mean", line, f"`{word}` — did you mean `{gandora_std.enum.at(near, 0)}`?")]
-    return gandora_std.enum.flat_map(gandora_std.enum.reject(gandora_std.enum.uniq(from_msg + at_line), lambda word, *, source=source: gandora_std.string.contains_p(source, "@" + word)), _gan_fn5)
+    return gandora_std.enum.flat_map(gandora_std.enum.reject(gandora_std.enum.uniq(from_msg + at_line), lambda word, *, source=source: gandora_std.string.contains_p(source, "@" + word)), _gan_fn7)
 
 
 def _reflex_hints(raw, root):
     source = _mask_literals(raw)
-    return [_hint("migration", _line_of(source, re.compile("\\b" + (mod + "\\.[a-z_]"))), f"`{mod}.` — {advice} (GEP-0003).") for _gan_for15 in gandora_std.map.to_list(elixir_reflexes) if isinstance(_gan_for15, tuple) and len(_gan_for15) == 2 for (mod, advice,) in [(_gan_for15[0], _gan_for15[1],)] if not ((re.compile("\\b" + (mod + "\\.[a-z_]")).search(source) is None)) if _gan_truthy(gandora_std.enum.empty_p(_module_functions(mod, root)))]
+    return [_hint("migration", _line_of(source, re.compile("\\b" + (mod + "\\.[a-z_]"))), f"`{mod}.` — {advice} (GEP-0003).") for _gan_for22 in gandora_std.map.to_list(elixir_reflexes) if isinstance(_gan_for22, tuple) and len(_gan_for22) == 2 for (mod, advice,) in [(_gan_for22[0], _gan_for22[1],)] if not ((re.compile("\\b" + (mod + "\\.[a-z_]")).search(source) is None)) if _gan_truthy(gandora_std.enum.empty_p(_module_functions(mod, root)))]
 
 
 def _struct_update_hints(raw):
@@ -282,9 +348,9 @@ def _exception_hints(raw):
 def _member_suggestions(raw, root):
     source = re.sub("(?m)^\\s*@(spec|type|opaque)[^\\n]*", "", _mask_literals(raw))
     calls = re.compile("\\b([A-Z][A-Za-z0-9_.]*)\\.([a-z_][A-Za-z0-9_]*[?!]?)\\(").findall(source)
-    def _gan_fn6(*_gan_args, root=root, source=source):
+    def _gan_fn8(*_gan_args, root=root, source=source):
         match _gan_args:
-            case ((mod, fun) as _gan_t16,) if isinstance(_gan_t16, tuple):
+            case ((mod, fun) as _gan_t23,) if isinstance(_gan_t23, tuple):
                 names = _module_functions(mod, root)
                 if fun == "t":
                     return []
@@ -295,22 +361,22 @@ def _member_suggestions(raw, root):
                 else:
                     near = difflib.get_close_matches(fun, names, n=3, cutoff=0.6)
                     if _gan_truthy(gandora_std.enum.empty_p(near)):
-                        _gan_tmp17 = f"no close match; see `gan lsc symbols {mod}`"
+                        _gan_tmp24 = f"no close match; see `gan lsc symbols {mod}`"
                     else:
-                        _gan_fstr18 = gandora_std.enum.join(gandora_std.enum.map(near, lambda n, *, mod=mod: f"`{mod}.{n}`"), " / ")
-                        _gan_tmp17 = f"did you mean {_gan_fstr18}?"
-                    guess = _gan_tmp17
+                        _gan_fstr25 = gandora_std.enum.join(gandora_std.enum.map(near, lambda n, *, mod=mod: f"`{mod}.{n}`"), " / ")
+                        _gan_tmp24 = f"did you mean {_gan_fstr25}?"
+                    guess = _gan_tmp24
                     return [_hint("did_you_mean", _line_of(source, re.compile(re.escape(f"{mod}.{fun}("))), f"`{mod}.{fun}` is not a function of {mod} — {guess}")]
-        raise GanMatchError("no clause of _gan_fn6/1 matched " + repr(_gan_args))
-    return gandora_std.enum.flat_map(gandora_std.enum.uniq(calls), _gan_fn6)
+        raise GanMatchError("no clause of _gan_fn8/1 matched " + repr(_gan_args))
+    return gandora_std.enum.flat_map(gandora_std.enum.uniq(calls), _gan_fn8)
 
 
 def _module_functions(mod, root):
     try:
-        _gan_tmp19 = core.symbols(mod, root)
-    except Exception as _e__gan1:
-        _gan_tmp19 = []
-    names = gandora_std.enum.map(_gan_tmp19, lambda s: gandora_std.map.get(s, "name"))
+        _gan_tmp26 = core.symbols(mod, root)
+    except Exception as _e__gan2:
+        _gan_tmp26 = []
+    names = gandora_std.enum.map(_gan_tmp26, lambda s: gandora_std.map.get(s, "name"))
     if _gan_truthy(gandora_std.enum.empty_p(names)):
         return _std_functions(mod)
     else:
@@ -338,8 +404,8 @@ def _lint_suggestions(source, d):
         if _gan_truthy(gandora_std.enum.empty_p(near)):
             return []
         else:
-            _gan_fstr20 = gandora_std.enum.join(gandora_std.enum.map(near, lambda n: f"`{n}`"), " / ")
-            return [_hint("did_you_mean", gandora_std.map.get(d, "line"), f"`{word}` — did you mean {_gan_fstr20}?")]
+            _gan_fstr27 = gandora_std.enum.join(gandora_std.enum.map(near, lambda n: f"`{n}`"), " / ")
+            return [_hint("did_you_mean", gandora_std.map.get(d, "line"), f"`{word}` — did you mean {_gan_fstr27}?")]
 
 
 def lint_hints(source: str, diags: collections.abc.Sequence[collections.abc.Mapping]) -> list[dict]:
@@ -363,30 +429,30 @@ doctests is one line, not sixteen.
   - suggestions: Per-file suggestion maps (may carry "path").
 """
     counts = gandora_std.enum.frequencies(gandora_std.enum.map(suggestions, lambda s: gandora_std.map.get(s, "message")))
-    def _gan_fn7(s, *, counts=counts):
+    def _gan_fn9(s, *, counts=counts):
         others = gandora_std.map.get(counts, gandora_std.map.get(s, "message"), 1) - 1
         if others > 0:
-            _gan_fstr21 = gandora_std.map.get(s, "message")
-            return gandora_std.map.put(s, "message", f"{_gan_fstr21} (also in {others} other file(s))")
+            _gan_fstr28 = gandora_std.map.get(s, "message")
+            return gandora_std.map.put(s, "message", f"{_gan_fstr28} (also in {others} other file(s))")
         else:
             return s
-    return gandora_std.enum.map(_dedupe(suggestions), _gan_fn7)
+    return gandora_std.enum.map(_dedupe(suggestions), _gan_fn9)
 
 
 def _dedupe(suggestions: collections.abc.Sequence[collections.abc.Mapping]) -> list[dict]:
-    def _gan_fn8(*_gan_args):
+    def _gan_fn10(*_gan_args):
         match _gan_args:
-            case (s, (acc, seen) as _gan_t22,) if isinstance(_gan_t22, tuple):
+            case (s, (acc, seen) as _gan_t29,) if isinstance(_gan_t29, tuple):
                 msg = gandora_std.map.get(s, "message")
                 if _gan_truthy(gandora_std.enum.member_p(seen, msg)):
                     return (acc, seen)
                 else:
                     return (acc + [s], seen + [msg])
-        raise GanMatchError("no clause of _gan_fn8/2 matched " + repr(_gan_args))
-    _gan_val23 = gandora_std.enum.reduce(suggestions, ([], []), _gan_fn8)
-    match _gan_val23:
-        case (out, _) as _gan_t24 if isinstance(_gan_t24, tuple):
+        raise GanMatchError("no clause of _gan_fn10/2 matched " + repr(_gan_args))
+    _gan_val30 = gandora_std.enum.reduce(suggestions, ([], []), _gan_fn10)
+    match _gan_val30:
+        case (out, _) as _gan_t31 if isinstance(_gan_t31, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val23))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val30))
     return out

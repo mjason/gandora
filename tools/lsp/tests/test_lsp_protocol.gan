@@ -12,12 +12,10 @@ defmodule TestLspProtocol do
   pyimport json
   pyimport subprocess
   pyimport tempfile
-  pyimport os
-  pyimport pathlib
   pyimport sys
 
   defp lsp_bin() do
-    $os.path.join($os.path.dirname(sys.executable), "gan-lsp")
+    sys.executable |> Path.dirname() |> Path.join("gan-lsp")
   end
 
   defp send_msg(proc, msg) do
@@ -41,7 +39,7 @@ defmodule TestLspProtocol do
     line = Enum.find(headers.split("\r\n"), fn l ->
       String.starts_with?(l.lower(), "content-length")
     end)
-    length = $builtins.int(Enum.at(line.split(":"), 1).strip())
+    length = line.split(":") |> Enum.at(1) |> String.trim() |> $builtins.int()
     json.loads(proc.stdout.read(length))
   end
 
@@ -68,10 +66,10 @@ defmodule TestLspProtocol do
   # a full scripted session against a scratch project; returns results map
   defp session() do
     root = tempfile.mkdtemp(prefix: "gan-lspconf-")
-    os.makedirs(os.path.join(root, "src"), exist_ok: true)
-    pathlib.Path(os.path.join(root, "gandora.jsonc"))
-    |> (fn p -> p.write_text("{\"source\": [\"src\"], \"outDir\": \"dist\"}") end).()
-    uri = "file://" <> os.path.join(root, "src", "main.gan")
+    File.mkdir_p!(Path.join(root, "src"))
+    File.write!(Path.join(root, "gandora.jsonc"),
+      "{\"source\": [\"src\"], \"outDir\": \"dist\"}")
+    uri = "file://" <> (root |> Path.join("src") |> Path.join("main.gan"))
     proc = subprocess.Popen([lsp_bin()], stdin: subprocess.PIPE,
       stdout: subprocess.PIPE, stderr: subprocess.PIPE, cwd: root)
     {proc, root, uri}
@@ -135,7 +133,7 @@ defmodule TestLspProtocol do
     assert Enum.count(diags) >= 1
 
     good = "defmodule Main do\n  def down(0), do: :done\n  def down(n), do: down(n - 1)\nend\n"
-    pathlib.Path(String.replace(uri, "file://", "")).write_text(good)
+    File.write!(String.replace(uri, "file://", ""), good)
     change_doc(proc, uri, 2, good)
     _ = wait_diags(proc)
 
@@ -150,7 +148,7 @@ defmodule TestLspProtocol do
       }
     })
     hover = wait_id(proc, 2)
-    value = Map.get(Map.get(Map.get(hover, "result"), "contents"), "value")
+    value = hover |> Map.get("result") |> Map.get("contents") |> Map.get("value")
     assert String.contains?(value, "while")
     assert String.contains?(value, "constant stack")
 

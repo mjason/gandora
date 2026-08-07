@@ -13,7 +13,7 @@ defmodule Tour.Numpy do
       gan> norm([3.0, 4.0])
       5.0
   """
-  def norm(xs), do: $builtins.float(np.linalg.norm(np.array(xs)))
+  def norm(xs), do: xs |> np.array() |> np.linalg.norm() |> $builtins.float()
 
   @doc "numpy without wrappers: arrays, broadcasting, reductions."
   @spec demo() :: nil

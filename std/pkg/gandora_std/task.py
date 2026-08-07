@@ -13,6 +13,7 @@ import asyncio
 import builtins
 import collections.abc
 import time
+import gandora_std.enum
 
 
 class GanMatchError(Exception):
@@ -141,13 +142,12 @@ one; the bound is a semaphore, visible in the artifact.
 """
     while True:
         sem = asyncio.Semaphore(max_concurrency)
-        _gan_tmp0 = [asyncio.ensure_future(_throttle(sem, fun, x)) for x in xs]
-        ts = _gan_tmp0
+        ts = gandora_std.enum.map(xs, lambda x, *, fun=fun, sem=sem: asyncio.ensure_future(_throttle(sem, fun, x)))
         return [(await t) for t in ts]
 
 
 async def _throttle(sem, fun, x):
-    _gan_tmp1 = (await sem.acquire())
+    _gan_tmp0 = (await sem.acquire())
     try:
         return (await fun(x))
     finally:
@@ -184,7 +184,7 @@ through — a probe on the wire, after Gleam's `tap`.
     5
 """
     v = (await task)
-    _gan_tmp2 = fun(v)
+    _gan_tmp1 = fun(v)
     return v
 
 
@@ -219,14 +219,14 @@ closes.
     >>> run(race([completed("first"), sleep(60000)]))
     'first'
 """
-    _gan_tmp3 = [asyncio.ensure_future(t) for t in tasks]
-    ts = _gan_tmp3
-    _gan_val4 = (await asyncio.wait(ts, return_when=asyncio.FIRST_COMPLETED))
-    match _gan_val4:
-        case (done, _pending) as _gan_t5 if isinstance(_gan_t5, tuple):
+    _gan_tmp2 = [asyncio.ensure_future(t) for t in tasks]
+    ts = _gan_tmp2
+    _gan_val3 = (await asyncio.wait(ts, return_when=asyncio.FIRST_COMPLETED))
+    match _gan_val3:
+        case (done, _pending) as _gan_t4 if isinstance(_gan_t4, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val4))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val3))
     return builtins.next(builtins.iter(done)).result()
 
 

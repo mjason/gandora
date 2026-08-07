@@ -8,8 +8,8 @@ type: Standards Track
 areas:
   - Tooling
 created: 2026-08-04
-updated: 2026-08-04
-revision: 3
+updated: 2026-08-07
+revision: 4
 requires: [12, 13, 22]
 replaces: [23]
 superseded-by: null
@@ -175,6 +175,21 @@ nested-paren sigil masking; and cross-file consolidation with line
 anchors.
 
 ## Change History
+
+- Revision 4, 2026-08-07: The practice pass gains the pipeline taste,
+  and it is written down: three adjacent nested calls (`f(g(h(x)))`)
+  suggest a `|>` pipeline (assertion lines and macro-guarded
+  expressions such as `safe/2` exempt; `@spec`/`@type` lines excluded
+  — types are calls by design); a bare single-variable
+  `for x <- xs, do: f(x)` suggests `Enum.map` when the project
+  resolves the stdlib (`for` keeps filter/pattern-skip/`into:`/await
+  bodies); the existing map+filter chain rule is corrected to fire
+  only on adjacent filter-then-map (map-then-filter has no `for`
+  spelling); host interop that GEP-0010-R011 wraps gets one
+  consolidated per-file hint pointing at `Path`/`File`/`System`
+  (the wrapper module itself exempt). The rules' long form is
+  docs/practices.md; `gan lsc doc practices` serves the digest, and
+  the `gan agent` briefing and gan-mcp composer prompt carry it.
 
 - Revision 1, 2026-08-04: Initial version — supersedes GEP-0023.
 - Revision 3, 2026-08-04: R008 artifact verification (ty resolution

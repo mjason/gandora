@@ -129,7 +129,8 @@ defmodule Sandbox do
   # a project is two files: the config and the module, at the path its
   # own name demands
   defp write_project(dir, source, env) do
-    target = Path.join(dir, "src") |> Path.join(module_path(module_name(source)))
+    relative = source |> module_name() |> module_path()
+    target = dir |> Path.join("src") |> Path.join(relative)
     File.mkdir_p!(Path.dirname(target))
     File.write!(Path.join(dir, "gandora.jsonc"), @config)
     File.write!(target, source)

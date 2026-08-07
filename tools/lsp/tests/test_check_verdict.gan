@@ -9,10 +9,7 @@ defmodule TestCheckVerdict do
   use Test
 
   pyimport json
-  pyimport subprocess
   pyimport tempfile
-  pyimport os
-  pyimport pathlib
   pyimport sys
 
   @config "{\"source\": [\"src\"], \"outDir\": \"dist\", \"targetPython\": \"3.11\"}"
@@ -28,33 +25,33 @@ defmodule TestCheckVerdict do
         gan> Prog.double_all([1, 2])
         [2, 4]
     \"\"\"
-    def double_all(xs), do: for x <- xs, do: x * 2
+    def double_all(xs), do: Enum.map(xs, fn x -> x * 2 end)
   end
   """
 
   defp lsc_bin() do
-    $os.path.join($os.path.dirname(sys.executable), "gan-lsc")
+    sys.executable |> Path.dirname() |> Path.join("gan-lsc")
   end
 
   # Given a source, When checked in a throwaway project,
   # Then {verdict-map, exit-code}
   defp check(source) do
     dir = tempfile.mkdtemp(prefix: "gan-bdd-")
-    os.makedirs(os.path.join(dir, "src"), exist_ok: true)
-    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
-    pathlib.Path(os.path.join(dir, "src", "prog.gan")).write_text(source)
+    File.mkdir_p!(Path.join(dir, "src"))
+    File.write!(Path.join(dir, "gandora.jsonc"), @config)
+    File.write!(dir |> Path.join("src") |> Path.join("prog.gan"), source)
     link_venv(dir)
-    r = subprocess.run([lsc_bin(), "check", "--root", dir],
-      capture_output: true, text: true, timeout: 120, cwd: dir)
-    {json.loads(r.stdout), r.returncode}
+    {out, status} = System.cmd(lsc_bin(), ["check", "--root", dir],
+      [cd: dir, timeout: 120000])
+    {json.loads(out), status}
   end
 
   # a real project has a venv with gandora-std — mirror that so std
   # resolution and artifact verification (R008) behave as in the field
   defp link_venv(dir) do
-    venv = os.path.dirname(os.path.dirname(sys.executable))
-    if os.path.basename(venv) == ".venv" do
-      os.symlink(venv, os.path.join(dir, ".venv"))
+    venv = sys.executable |> Path.dirname() |> Path.dirname()
+    if Path.basename(venv) == ".venv" do
+      $os.symlink(venv, Path.join(dir, ".venv"))
     end
   end
 
@@ -280,17 +277,17 @@ defmodule TestCheckVerdict do
   # multi-file scratch project: [{relpath, source}] -> {verdict, exit}
   defp check_files(files) do
     dir = tempfile.mkdtemp(prefix: "gan-bdd-")
-    os.makedirs(os.path.join(dir, "src"), exist_ok: true)
-    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
+    File.mkdir_p!(Path.join(dir, "src"))
+    File.write!(Path.join(dir, "gandora.jsonc"), @config)
     Enum.each(files, fn {rel, source} ->
-      p = pathlib.Path(os.path.join(dir, rel))
-      p.parent.mkdir(parents: true, exist_ok: true)
-      p.write_text(source)
+      target = Path.join(dir, rel)
+      File.mkdir_p!(Path.dirname(target))
+      File.write!(target, source)
     end)
     link_venv(dir)
-    r = subprocess.run([lsc_bin(), "check", "--root", dir],
-      capture_output: true, text: true, timeout: 120, cwd: dir)
-    {json.loads(r.stdout), r.returncode}
+    {out, status} = System.cmd(lsc_bin(), ["check", "--root", dir],
+      [cd: dir, timeout: 120000])
+    {json.loads(out), status}
   end
 
   describe "trust line (GEP-0025-R005)" do
@@ -408,12 +405,13 @@ defmodule TestCheckVerdict do
 
     test "non-UTF8 bytes are a JSON error" do
       dir = tempfile.mkdtemp(prefix: "gan-bdd-")
-      os.makedirs(os.path.join(dir, "src"), exist_ok: true)
-      pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
-      pathlib.Path(os.path.join(dir, "src", "prog.gan")).write_bytes($builtins.bytes([0, 255, 1]))
-      r = subprocess.run([lsc_bin(), "check", "--root", dir],
-        capture_output: true, text: true, timeout: 120, cwd: dir)
-      v = json.loads(r.stdout)
+      File.mkdir_p!(Path.join(dir, "src"))
+      File.write!(Path.join(dir, "gandora.jsonc"), @config)
+      prog = dir |> Path.join("src") |> Path.join("prog.gan")
+      _n = $pathlib.Path(prog).write_bytes($builtins.bytes([0, 255, 1]))
+      {out, _status} = System.cmd(lsc_bin(), ["check", "--root", dir],
+        [cd: dir, timeout: 120000])
+      v = json.loads(out)
       assert is_map(v)
     end
 

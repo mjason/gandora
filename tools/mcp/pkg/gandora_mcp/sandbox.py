@@ -133,7 +133,8 @@ def _snake_char(c, i):
 
 
 def _write_project(dir, source, env):
-    target = gandora_std.path.join(gandora_std.path.join(dir, "src"), module_path(module_name(source)))
+    relative = module_path(module_name(source))
+    target = gandora_std.path.join(gandora_std.path.join(dir, "src"), relative)
     gandora_std.file.mkdir_p_bang(gandora_std.path.dirname(target))
     gandora_std.file.write_bang(gandora_std.path.join(dir, "gandora.jsonc"), config)
     gandora_std.file.write_bang(target, source)

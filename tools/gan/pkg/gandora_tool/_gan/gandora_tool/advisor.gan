@@ -75,7 +75,7 @@ defmodule Advisor do
   def analyze(source, root) do
     dedupe(common_mistakes(source) ++ reflex_hints(source, root) ++
         exception_hints(source) ++ struct_update_hints(source) ++
-        practice_hints(source) ++
+        practice_hints(source, root) ++
         member_suggestions(source, root))
   end
 
@@ -112,8 +112,9 @@ defmodule Advisor do
   # paren sigil bodies ($python(...)) nest parens — mask with a
   # balanced scan, not a regex, so trailing args never leak
   defp mask_paren_sigils(source) do
-    starts = Enum.map($builtins.list(re.finditer("(?:~[a-zA-Z]+|\\$python)\\(", source)),
-      fn m -> $python(<%= m %>.end()) end)
+    starts = re.finditer("(?:~[a-zA-Z]+|\\$python)\\(", source)
+    |> $builtins.list()
+    |> Enum.map(fn m -> $python(<%= m %>.end()) end)
     Enum.reduce(starts, source, fn start, acc ->
       stop = balance_from(acc, start, 1)
       cut(acc, 0, start) <> re.sub("\\S", " ", cut(acc, start, stop)) <>
@@ -157,7 +158,7 @@ defmodule Advisor do
   # compiler warnings. AI rarely misspells — it gets lazy: annotation
   # coverage, container choice, and idiom shortcuts are where verdicts
   # earn their keep (GEP-0023-R004).
-  defp practice_hints(raw) do
+  defp practice_hints(raw, root) do
     source = mask_literals(raw)
     in_module = String.match?(source, ~r/defmodule/)
     coverage_hints(raw, source, in_module) ++
@@ -165,7 +166,104 @@ defmodule Advisor do
       lone_typevar_hints(source) ++
       doc_example_hints(raw) ++
       idiom_hints(source) ++
+      pipeline_hints(source, root) ++
+      host_shortcut_hints(source) ++
       pyimport_hints(source)
+  end
+
+  # ---- the pipeline taste (docs/practices.md) ------------------------------
+
+  # three adjacent call openers = a first-argument nest three deep;
+  # assert wrappers are exempt — `assert_eq(f(g(x)), want)` is the
+  # universal test idiom, not a readability failure
+  @nest_pat ~r/[A-Za-z0-9_$.!?]+\(\s*[A-Za-z0-9_$.!?]+\(\s*[A-Za-z0-9_$.!?]+\(/
+
+  # one plain-variable generator, an inline body, no filter: Enum.map
+  # wearing a comprehension. `await` in the body is the exception — fn
+  # cannot hold an await, so the comprehension is its only spelling.
+  @bare_for_pat ~r/\bfor\s+[a-z_][A-Za-z0-9_]*\s*<-\s*[^,\n]+,\s*do:(?!.*\bawait\b)/
+
+  defp pipeline_hints(raw, root) do
+    # a @spec/@type line nests calls by design — types are calls
+    # (GEP-0017); only value code is scanned
+    source = re.sub("(?m)^\\s*@(spec|type|opaque)[^\\n]*", "", raw)
+    nest = source
+    |> nest_sites()
+    |> Enum.take(1)
+    |> Enum.map(fn line ->
+      hint("practice", line,
+        "`f(g(h(x)))` reads inside out — pipe the data through: `x |> h() |> g() |> f()`. Subject-first arguments make every std call pipe-ready (docs/practices.md).")
+    end)
+    # a project that does not resolve the stdlib (tour-style, no Enum
+    # in its own environment) keeps `for`: a hint may only recommend
+    # what would actually compile here — so ask the project, not the
+    # library this tool happens to ship with
+    bare = if is_nil(@bare_for_pat.search(source)) or
+      Enum.empty?(safe(core.symbols("Enum", root), [])) do
+        []
+      else
+        [hint("practice", line_of(source, @bare_for_pat),
+          "a bare `for x <- xs, do: f(x)` is `xs |> Enum.map(fn x -> f(x) end)` — `for` earns its place with a filter, a pattern skip, or `into:` (GEP-0020). (`await` in the body is the exception: `fn` cannot hold it.)")]
+      end
+    nest ++ bare
+  end
+
+  # the 1-based lines of nested-call sites; assertion lines are the
+  # test idiom, and `safe(expr, _)` must hold its expression unevaluated
+  defp nest_sites(source) do
+    lines = source.split("\n")
+    for m <- $builtins.list(@nest_pat.finditer(source)),
+      not String.contains?(m.group(0), "assert"),
+      not String.contains?(m.group(0), "safe("),
+      not assertion_line?(lines, source.count("\n", 0, m.start())),
+      do: source.count("\n", 0, m.start()) + 1
+  end
+
+  defp assertion_line?(lines, idx) do
+    raw = Enum.at(lines, idx)
+    line = if is_nil(raw), do: "", else: String.trim(raw)
+    String.starts_with?(line, "assert") or String.starts_with?(line, "refute")
+  end
+
+  # host interop the stdlib wraps (GEP-0010-R011): one consolidated
+  # hint per file. The wrapper module itself is exempt — Path/File/
+  # System are exactly where that interop belongs.
+  @host_shortcuts [
+    {"Path", ~r/(?<![\w$])\$?os\.path\.join\(/, "os.path.join -> Path.join/2 (chain segments with |>)"},
+    {"Path", ~r/(?<![\w$])\$?os\.path\.(dirname|basename|abspath|isabs|splitext)\(/, "os.path.dirname/basename/abspath/isabs/splitext -> Path.dirname/basename/expand/absolute?/extname"},
+    {"Path", ~r/\.rglob\(|(?<![\w$])\$?glob\.glob\(/, "glob/rglob -> Path.wildcard(pattern) (sorted)"},
+    {"File", ~r/(?<![\w$])\$?os\.path\.(exists|isdir)\(/, "os.path.exists/isdir -> File.exists?/File.dir?"},
+    {"File", ~r/\.read_text\(|\.write_text\(/, "pathlib read_text/write_text -> File.read! (or the {:ok, _}/{:error, _} File.read) / File.write!"},
+    {"File", ~r/(?<![\w$])\$?os\.getcwd\(/, "os.getcwd -> File.cwd!"},
+    {"File", ~r/(?<![\w$])\$?os\.listdir\(/, "os.listdir -> File.ls! (sorted)"},
+    {"File", ~r/(?<![\w$])\$?os\.makedirs\(/, "os.makedirs -> File.mkdir_p!"},
+    {"File", ~r/(?<![\w$])\$?shutil\.rmtree\(/, "shutil.rmtree -> File.rm_rf!"},
+    {"System", ~r/(?<![\w$])\$?shutil\.which\(/, "shutil.which -> System.find_executable"},
+    {"System", ~r/(?<![\w$])\$?os\.getenv\(|(?<![\w$])\$?os\.environ\.get\(/, "os.getenv/os.environ.get -> System.get_env"},
+    {"System", ~r/(?<![\w$])\$?subprocess\.run\(/, "subprocess.run -> System.cmd(bin, args, opts) returning {stdout, status}"},
+    {"System", ~r/(?<![\w$])\$?sys\.exit\(/, "sys.exit -> System.halt"},
+    {"System", ~r/(?<![\w$])\$?sys\.argv\b/, "sys.argv -> System.argv() (program name excluded)"}
+  ]
+
+  defp host_shortcut_hints(source) do
+    mod = module_of(source)
+    found = for {owner, pattern, advice} <- @host_shortcuts,
+      owner != mod,
+      not is_nil(pattern.search(source)),
+      do: {line_of(source, pattern), advice}
+    if Enum.empty?(found) do
+      []
+    else
+      first = found |> Enum.map(fn {line, _a} -> line end) |> Enum.min()
+      advices = found |> Enum.map(fn {_l, a} -> a end) |> Enum.join("; ")
+      [hint("practice", first,
+        "host interop the stdlib already wraps (GEP-0010-R011): " <> advices <> ".")]
+    end
+  end
+
+  defp module_of(source) do
+    m = ~r/defmodule\s+([A-Za-z0-9_.]+)/.match(source)
+    if is_nil(m), do: "", else: m.group(1)
   end
 
   # one consolidated annotation-coverage report, not one nag per def

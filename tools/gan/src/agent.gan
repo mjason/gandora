@@ -26,6 +26,24 @@ defmodule Agent do
     for/Enum or tail recursion); only false/nil are falsy; prompts are
     `~p(raw text)`; data is maps `%{"k" => v}`; interop is `$math.sqrt(x)`
     or `pyimport json`; doctest expected output is the Python repr.
+
+  House style (the practice pass enforces these; long form:
+  docs/practices.md, digest: `gan lsc doc practices`):
+  - Data flows left to right: `xs |> Enum.filter(p) |> Enum.sort()` —
+    never `f(g(h(x)))`; every std call takes its subject first.
+  - A bare `for x <- xs, do: f(x)` is `Enum.map` — `for` earns its
+    place with a filter, a pattern skip, or `into:` (the one exception
+    is `await` in the body, which `fn` cannot hold).
+  - `&f/1` over `fn x -> f(x) end`.
+  - Outcomes are verdict tuples `{:ok, v}` / `{:error, why}`; guard
+    failure-means-no-answer queries with `safe(expr, fallback)`
+    (`import Safe`, from gandora-tool).
+  - Host work goes through std `File`/`Path`/`System`
+    (`File.read!`, `Path.wildcard`, `System.cmd`), not
+    `$os`/`$pathlib`/`$subprocess`.
+  - Repeated shape becomes a data table + Enum; compile-time
+    repetition becomes a `defmacro` whose expansion is what you would
+    have written by hand.
   """
 
   @doc "Prints the briefing; `--json` emits the raw context pack instead."

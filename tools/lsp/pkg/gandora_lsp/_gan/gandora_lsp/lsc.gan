@@ -67,13 +67,13 @@ defmodule Lsc do
       ["version" | _] ->
         emit(%{"version" => core.version()})
       ["diagnostics", file | _] ->
-        emit(core.diagnostics(read(file), file, root))
+        file |> read() |> core.diagnostics(file, root) |> emit()
       ["ast", file | _] ->
-        emit(core.parse(read(file), file))
+        file |> read() |> core.parse(file) |> emit()
       ["expand", file | _] ->
-        emit(core.expand(read(file), file, root))
+        file |> read() |> core.expand(file, root) |> emit()
       ["compile", file | _] ->
-        IO.puts(core.compile_string(read(file), file, root))
+        file |> read() |> core.compile_string(file, root) |> IO.puts()
       ["resolve", module | _] ->
         emit(core.resolve(root, module))
       ["doc", target | rest] ->

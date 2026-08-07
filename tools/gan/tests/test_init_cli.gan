@@ -9,34 +9,34 @@ defmodule TestInitCli do
 
   use Test
 
-  pyimport subprocess
   pyimport tempfile
   pyimport json
-  pyimport os
-  pyimport pathlib
-  pyimport shutil
   pyimport sys
 
   defp gan_bin() do
-    os.path.join(os.path.dirname(sys.executable), "gan")
+    sys.executable |> Path.dirname() |> Path.join("gan")
   end
 
   defp scaffold() do
     tmp = tempfile.mkdtemp(prefix: "gan-init-")
-    target = os.path.join(tmp, "proj")
-    subprocess.run([gan_bin(), "init", target], capture_output: true, text: true)
+    target = Path.join(tmp, "proj")
+    _r = System.cmd(gan_bin(), ["init", target], [stderr_to_stdout: true])
     target
   end
 
-  defp read(dir, name), do: pathlib.Path(os.path.join(dir, name)).read_text()
+  defp read(dir, name), do: File.read!(Path.join(dir, name))
 
-  defp cleanup(dir), do: shutil.rmtree(os.path.dirname(dir), ignore_errors: true)
+  # nil, not :ok — a test function must return None for pytest
+  defp cleanup(dir) do
+    _ok = File.rm_rf!(Path.dirname(dir))
+    nil
+  end
 
   # Claude Code reads `.mcp.json` at the project root (project scope)
   test "the claude code config names the pathless server command" do
     dir = scaffold()
     conf = json.loads(read(dir, ".mcp.json"))
-    server = Map.get(Map.get(conf, "mcpServers"), "gandora")
+    server = conf |> Map.get("mcpServers") |> Map.get("gandora")
     assert_eq(Map.get(server, "command"), "uv")
     assert_eq(Map.get(server, "args"), ["run", "gan", "mcp"])
     assert_eq(Map.get(server, "type"), "stdio")
@@ -47,7 +47,7 @@ defmodule TestInitCli do
   test "the opencode config declares a local server, enabled" do
     dir = scaffold()
     conf = json.loads(read(dir, "opencode.json"))
-    server = Map.get(Map.get(conf, "mcp"), "gandora")
+    server = conf |> Map.get("mcp") |> Map.get("gandora")
     assert_eq(Map.get(server, "type"), "local")
     assert_eq(Map.get(server, "command"), ["uv", "run", "gan", "mcp"])
     assert_true(Map.get(server, "enabled"))
@@ -89,24 +89,24 @@ defmodule TestInitCli do
   # naming what to add is what keeps the wiring from being dead
   test "joining a foreign project names the dependencies to add" do
     tmp = tempfile.mkdtemp(prefix: "gan-join-")
-    pathlib.Path(os.path.join(tmp, "pyproject.toml")).write_text(
+    File.write!(Path.join(tmp, "pyproject.toml"),
       "[project]\nname = \"foreign\"\nversion = \"0.1.0\"\ndependencies = []\n")
-    out = subprocess.run([gan_bin(), "init", tmp], capture_output: true, text: true)
-    said = out.stdout
+    {said, _status} = System.cmd(gan_bin(), ["init", tmp], [stderr_to_stdout: true])
     assert_true(String.contains?(said, "kept existing pyproject.toml"))
     assert_true(String.contains?(said, "gandora-std"))
     assert_true(String.contains?(said, "gandora-mcp"))
     # and the pyproject really was left alone
-    kept = pathlib.Path(os.path.join(tmp, "pyproject.toml")).read_text()
+    kept = read(tmp, "pyproject.toml")
     assert_true(String.contains?(kept, "name = \"foreign\""))
-    shutil.rmtree(tmp, ignore_errors: true)
+    _ok = File.rm_rf!(tmp)
+    nil
   end
 
   # init now owns both shapes (GEP-0013-R002): ganc carries no scaffold
   test "the package scaffold lays out a publishable project" do
     tmp = tempfile.mkdtemp(prefix: "gan-pkg-")
-    target = os.path.join(tmp, "acme-demo")
-    subprocess.run([gan_bin(), "init", "--package", target], capture_output: true, text: true)
+    target = Path.join(tmp, "acme-demo")
+    _r = System.cmd(gan_bin(), ["init", "--package", target], [stderr_to_stdout: true])
     # jsonc carries comments, so this one is read as text
     conf = read(target, "gandora.jsonc")
     assert_true(String.contains?(conf, "\"outDir\": \"pkg\""))
@@ -118,20 +118,22 @@ defmodule TestInitCli do
     assert_true(String.contains?(core, "@example \"\"\""))
     assert_true(String.contains?(core, "\#{name}"))
     # a package wires the agents too
-    assert_true(pathlib.Path(os.path.join(target, ".mcp.json")).exists())
-    shutil.rmtree(tmp, ignore_errors: true)
+    assert_true(File.exists?(Path.join(target, ".mcp.json")))
+    _ok = File.rm_rf!(tmp)
+    nil
   end
 
   # re-running is how an existing project acquires new scaffold files —
   # it must never refuse and never overwrite (GEP-0013-R002)
   test "re-running init fills gaps without touching what is there" do
     dir = scaffold()
-    pathlib.Path(os.path.join(dir, "src", "main.gan")).write_text("defmodule Main do\n  def main(), do: nil\nend\n")
-    os.remove(os.path.join(dir, ".mcp.json"))
-    out = subprocess.run([gan_bin(), "init", dir], capture_output: true, text: true)
-    assert_eq(out.returncode, 0)
+    File.write!(dir |> Path.join("src") |> Path.join("main.gan"),
+      "defmodule Main do\n  def main(), do: nil\nend\n")
+    File.rm_rf!(Path.join(dir, ".mcp.json"))
+    {_out, status} = System.cmd(gan_bin(), ["init", dir], [stderr_to_stdout: true])
+    assert_eq(status, 0)
     # the gap is filled...
-    assert_true(pathlib.Path(os.path.join(dir, ".mcp.json")).exists())
+    assert_true(File.exists?(Path.join(dir, ".mcp.json")))
     # ...and the file the user edited is untouched
     assert_true(String.contains?(read(dir, "src/main.gan"), "def main(), do: nil"))
     cleanup(dir)

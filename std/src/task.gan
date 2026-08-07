@@ -148,7 +148,7 @@ defmodule Task do
   @spec async_stream(sequence(term()), fun(), integer()) :: list(term())
   async def async_stream(xs, fun, max_concurrency \\ 8) do
     sem = asyncio.Semaphore(max_concurrency)
-    ts = for x <- xs, do: asyncio.ensure_future(throttle(sem, fun, x))
+    ts = Enum.map(xs, fn x -> asyncio.ensure_future(throttle(sem, fun, x)) end)
     for t <- ts, do: await t
   end
 

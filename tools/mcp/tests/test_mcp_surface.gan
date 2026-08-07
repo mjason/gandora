@@ -9,8 +9,6 @@ defmodule TestMcpSurface do
 
   use Test
 
-  pyimport os
-
   @good """
   defmodule Greeter do
     @moduledoc "A greeting."
@@ -57,7 +55,7 @@ defmodule TestMcpSurface do
   """
 
   test "a working module reaches a green verdict and its doctests run" do
-    v = Sandbox.verdict(@good, os.getcwd())
+    v = Sandbox.verdict(@good, File.cwd!())
     assert_true(Map.get(v, "ok"))
     assert_true(Map.get(v, "clean"))
     assert_true(Map.get(Map.get(v, "doctests"), "ran"))
@@ -65,13 +63,13 @@ defmodule TestMcpSurface do
   end
 
   test "calling a function the standard library lacks fails the verdict" do
-    v = Sandbox.verdict(@missing, os.getcwd())
+    v = Sandbox.verdict(@missing, File.cwd!())
     assert_false(Map.get(v, "ok"))
     assert_false(Map.get(Map.get(v, "doctests"), "ran"))
   end
 
   test "a wrong expected value compiles clean and still fails" do
-    v = Sandbox.verdict(@wishful, os.getcwd())
+    v = Sandbox.verdict(@wishful, File.cwd!())
     assert_true(Map.get(v, "ok"))
     assert_true(Map.get(Map.get(v, "doctests"), "ran"))
     assert_false(Map.get(Map.get(v, "doctests"), "passed"))
@@ -84,7 +82,7 @@ defmodule TestMcpSurface do
   end
 
   test "every atom carries the example that proves it" do
-    atoms = Atoms.catalog(os.getcwd())
+    atoms = Atoms.catalog(File.cwd!())
     assert_true(Enum.count(atoms) > 20)
     assert_true(Enum.empty?(Enum.filter(atoms, fn a -> Map.get(a, "example") == "" end)))
   end
@@ -99,8 +97,9 @@ defmodule TestMcpSurface do
   test "every construct atom survives the verdict it teaches" do
     # the corpus proves Task (GEP-0029), and Task fans the corpus out:
     # every atom's sandbox verdict crosses the blocking bridge, bounded
-    root = os.getcwd()
-    verdicts = Task.run(Task.async_stream(Corpus.all(),
+    root = File.cwd!()
+    corpus = Corpus.all()
+    verdicts = Task.run(Task.async_stream(corpus,
       fn a -> Task.blocking(fn -> Sandbox.verdict(Map.get(a, "module"), root) end) end, 4))
     Enum.each(verdicts, fn v ->
       assert_true(Map.get(v, "ok"))

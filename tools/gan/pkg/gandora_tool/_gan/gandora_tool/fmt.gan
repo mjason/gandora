@@ -10,7 +10,6 @@ defmodule Fmt do
 
   pyimport gandora_core, as: core
   pyimport sys
-  pyimport pathlib
 
   # ---- entry ---------------------------------------------------------------
 
@@ -28,20 +27,20 @@ defmodule Fmt do
       files = collect_files(paths)
       if Enum.empty?(files) do
         IO.puts("gan fmt: no .gan files found")
-        sys.exit(1)
+        System.halt(1)
       end
       results = Enum.map(files, fn f -> format_file(f, check or diff) end)
       changed = Enum.filter(results, fn {_, status} -> status == :changed end)
       errors = Enum.filter(results, fn {_, status} -> status == :error end)
       cond do
         not Enum.empty?(errors) ->
-          sys.exit(2)
+          System.halt(2)
         diff ->
           Enum.each(changed, fn {f, _} -> print_diff(f) end)
-          if not Enum.empty?(changed), do: sys.exit(1)
+          if not Enum.empty?(changed), do: System.halt(1)
         check and not Enum.empty?(changed) ->
           Enum.each(changed, fn {f, _} -> IO.puts("would reformat #{f}") end)
-          sys.exit(1)
+          System.halt(1)
         true ->
           IO.puts("#{Enum.count(changed)} file(s) reformatted, #{Enum.count(files)} checked")
       end
@@ -57,7 +56,7 @@ defmodule Fmt do
         if new != text and verify(text, new) != :ok do
           sys.stderr.write("gan fmt: verification failed; input left as-is\n")
           sys.stdout.write(text)
-          sys.exit(2)
+          System.halt(2)
         else
           sys.stdout.write(new)
           nil
@@ -65,14 +64,14 @@ defmodule Fmt do
       _ ->
         sys.stderr.write("gan fmt: cannot parse input\n")
         sys.stdout.write(text)
-        sys.exit(2)
+        System.halt(2)
     end
   end
 
   # unified diff of what --diff would change, nothing rewritten
   # (GEP-0016-R010)
   defp print_diff(file) do
-    text = pathlib.Path(file).read_text()
+    text = File.read!(file)
     case format_text(text) do
       {:ok, new} ->
         lines = $difflib.unified_diff(
@@ -93,10 +92,8 @@ defmodule Fmt do
       paths
     end
     Enum.flat_map(roots, fn p ->
-      path = pathlib.Path(p)
       cond do
-        path.is_dir() ->
-          Enum.sort(Enum.map($builtins.list(path.rglob("*.gan")), &to_string/1))
+        File.dir?(p) -> Path.wildcard(p |> Path.join("**") |> Path.join("*.gan"))
         String.ends_with?(p, ".gan") -> [p]
         true -> []
       end
@@ -104,7 +101,7 @@ defmodule Fmt do
   end
 
   defp format_file(file, check) do
-    text = pathlib.Path(file).read_text()
+    text = File.read!(file)
     case format_text(text) do
       {:ok, new} ->
         cond do
@@ -113,7 +110,7 @@ defmodule Fmt do
           true ->
             case verify(text, new) do
               :ok ->
-                pathlib.Path(file).write_text(new)
+                File.write!(file, new)
                 IO.puts("reformatted #{file}")
                 {file, :changed}
               {:error, why} ->
@@ -161,7 +158,7 @@ defmodule Fmt do
       $builtins.isinstance(t, $builtins.tuple) and $builtins.len(t) == 3 ->
         {strip_meta(elem(t, 0)), strip_meta(elem(t, 2))}
       $builtins.isinstance(t, $builtins.tuple) ->
-        $builtins.tuple(Enum.map($builtins.list(t), &strip_meta/1))
+        t |> $builtins.list() |> Enum.map(&strip_meta/1) |> $builtins.tuple()
       $builtins.isinstance(t, $builtins.list) ->
         Enum.map(t, &strip_meta/1)
       true -> t
@@ -378,11 +375,8 @@ defmodule Fmt do
   defp interior_lines(toks) do
     Enum.reduce(toks, %{}, fn t, acc ->
       if multiline?(t) do
-        Enum.reduce(
-          $builtins.list($builtins.range(Map.get(t, "line") + 1, Map.get(t, "end_line") + 1)),
-          acc,
-          fn l, a -> Map.put(a, l, Map.get(t, "line")) end
-        )
+        interior = $builtins.range(Map.get(t, "line") + 1, Map.get(t, "end_line") + 1)
+        Enum.reduce(interior, acc, fn l, a -> Map.put(a, l, Map.get(t, "line")) end)
       else
         acc
       end
