@@ -39,6 +39,12 @@ gitignore = "__pycache__/\n*.py[oc]\ndist/\n.gandora/\n.venv/\n"
 
 hello_gan = "defmodule Main do\n  @moduledoc \"Your project's entry point — `gan run src/main.gan`.\"\n\n  @doc \"Prints a greeting.\"\n  @spec main() :: nil\n  def main() do\n    IO.puts(\"Hello from Gandora!\")\n  end\nend\n"
 
+mcp_claude = "{\n  \"mcpServers\": {\n    \"gandora\": {\n      \"type\": \"stdio\",\n      \"command\": \"uv\",\n      \"args\": [\"run\", \"gan\", \"mcp\"]\n    }\n  }\n}\n"
+
+mcp_codex = "# Codex reads this for a trusted project; `codex mcp list` shows it.\n[mcp_servers.gandora]\ncommand = \"uv\"\nargs = [\"run\", \"gan\", \"mcp\"]\n"
+
+mcp_opencode = "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"mcp\": {\n    \"gandora\": {\n      \"type\": \"local\",\n      \"command\": [\"uv\", \"run\", \"gan\", \"mcp\"],\n      \"enabled\": true\n    }\n  }\n}\n"
+
 
 def main() -> None:
     """The task-runner entry: one command per invocation (GEP-0013)."""
@@ -313,7 +319,22 @@ def _eval_line(code, ns):
 
 
 def _pyproject_toml(name):
-    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\"]\n"
+    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
+
+
+def write_mcp_configs(p: object) -> None:
+    """Writes the project-level MCP configuration each agent reads on its own
+(GEP-0028-R012): `.mcp.json` for Claude Code, `.codex/config.toml` for
+Codex, `opencode.json` for opencode. Never overwrites what is there.
+
+## Parameters
+
+  - p: The project directory.
+"""
+    _write_if_absent(p / ".mcp.json", mcp_claude)
+    _write_if_absent(p / "opencode.json", mcp_opencode)
+    (p / ".codex").mkdir(parents=True, exist_ok=True)
+    return _write_if_absent((p / ".codex") / "config.toml", mcp_codex)
 
 
 def init(path: str) -> None:
@@ -343,7 +364,9 @@ def init(path: str) -> None:
     _write_if_absent(p / ".gitignore", gitignore)
     _write_if_absent(p / ".python-version", "3.11\n")
     _write_if_absent((p / "src") / "main.gan", hello_gan)
-    return print(f"Initialized Gandora project in {path}")
+    write_mcp_configs(p)
+    print(f"Initialized Gandora project in {path}")
+    return print("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
 
 
 def _write_if_absent(file, content):

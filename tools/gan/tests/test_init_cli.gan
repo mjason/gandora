@@ -1,0 +1,96 @@
+defmodule TestInitCli do
+  @moduledoc """
+  The `gan init` scaffold contract (GEP-0028-R012): the project-level
+  MCP configuration each agent reads on its own, in the shape that
+  agent documents, plus the standing promise that a fresh project is
+  born passing its own verdict.
+  """
+  @moduledoc_trans zh_CN: "`gan init` 脚手架契约(GEP-0028-R012):每个 agent 各自读取的项目级 MCP 配置,形状依各自文档而定;外加一条长期承诺——新项目一出生就通过自己的裁决。"
+
+  use Test
+
+  pyimport subprocess
+  pyimport tempfile
+  pyimport json
+  pyimport os
+  pyimport pathlib
+  pyimport shutil
+  pyimport sys
+
+  defp gan_bin() do
+    os.path.join(os.path.dirname(sys.executable), "gan")
+  end
+
+  defp scaffold() do
+    tmp = tempfile.mkdtemp(prefix: "gan-init-")
+    target = os.path.join(tmp, "proj")
+    subprocess.run([gan_bin(), "init", target], capture_output: true, text: true)
+    target
+  end
+
+  defp read(dir, name), do: pathlib.Path(os.path.join(dir, name)).read_text()
+
+  defp cleanup(dir), do: shutil.rmtree(os.path.dirname(dir), ignore_errors: true)
+
+  # Claude Code reads `.mcp.json` at the project root (project scope)
+  test "the claude code config names the pathless server command" do
+    dir = scaffold()
+    conf = json.loads(read(dir, ".mcp.json"))
+    server = Map.get(Map.get(conf, "mcpServers"), "gandora")
+    assert_eq(Map.get(server, "command"), "uv")
+    assert_eq(Map.get(server, "args"), ["run", "gan", "mcp"])
+    assert_eq(Map.get(server, "type"), "stdio")
+    cleanup(dir)
+  end
+
+  # opencode reads `opencode.json` at the project root
+  test "the opencode config declares a local server, enabled" do
+    dir = scaffold()
+    conf = json.loads(read(dir, "opencode.json"))
+    server = Map.get(Map.get(conf, "mcp"), "gandora")
+    assert_eq(Map.get(server, "type"), "local")
+    assert_eq(Map.get(server, "command"), ["uv", "run", "gan", "mcp"])
+    assert_true(Map.get(server, "enabled"))
+    cleanup(dir)
+  end
+
+  # Codex reads `.codex/config.toml` for a trusted project
+  test "the codex config declares the server under mcp_servers" do
+    dir = scaffold()
+    text = read(dir, ".codex/config.toml")
+    assert_true(String.contains?(text, "[mcp_servers.gandora]"))
+    assert_true(String.contains?(text, "command = \"uv\""))
+    assert_true(String.contains?(text, "args = [\"run\", \"gan\", \"mcp\"]"))
+    cleanup(dir)
+  end
+
+  # the command carries no paths on purpose: a checked-in config has to
+  # work for everyone who clones, on any machine (GEP-0028-R012)
+  test "no config carries an absolute path or a cwd" do
+    dir = scaffold()
+    Enum.each([".mcp.json", "opencode.json", ".codex/config.toml"], fn name ->
+      text = read(dir, name)
+      assert_false(String.contains?(text, dir))
+      assert_false(String.contains?(text, "cwd"))
+    end)
+    cleanup(dir)
+  end
+
+  # gan-mcp must resolve from the project's own .venv, so it is a dev
+  # dependency of every project the scaffold creates (GEP-0013-R003)
+  test "gan-mcp is a dev dependency of the new project" do
+    dir = scaffold()
+    assert_true(String.contains?(read(dir, "pyproject.toml"), "gandora-mcp>="))
+    cleanup(dir)
+  end
+
+  # the scaffold faces the verdict it will be judged by, from birth
+  test "the generated entry module carries its annotations" do
+    dir = scaffold()
+    main = read(dir, "src/main.gan")
+    Enum.each(["@moduledoc", "@doc", "@spec main() :: nil"], fn ann ->
+      assert_true(String.contains?(main, ann))
+    end)
+    cleanup(dir)
+  end
+end

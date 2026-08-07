@@ -108,7 +108,11 @@ gan run src/main.gan
 
 `gan init` creates a `uv`-compatible project: `pyproject.toml` owns Python
 metadata and dependencies, `gandora.jsonc` owns the compiler configuration,
-and sources live under `src/`. `gan run` compiles into `.gandora/cache/` and
+and sources live under `src/`. It also wires the MCP surface for the agents
+that read a project-level file — `.mcp.json` (Claude Code),
+`.codex/config.toml` (Codex), `opencode.json` (opencode) — each declaring
+the same pathless command, `uv run gan mcp`, so the checked-in config works
+for everyone who clones ([GEP-0028](geps/0028-the-mcp-surface.md)). `gan run` compiles into `.gandora/cache/` and
 executes with `.venv/bin/python`, `uv run python`, or `python3` — whichever
 is available first.
 

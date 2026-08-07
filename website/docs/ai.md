@@ -102,3 +102,25 @@ gan lsc pack Enum       # one module's full docs in one call
 gan lsc doc with for spec --brief   # many cards, one line each
 gan lsc compile f.gan   # what the Python will be
 ```
+
+## The MCP surface
+
+`gan init` wires an MCP server into the project for the agents that read a
+project-level file — `.mcp.json` (Claude Code), `.codex/config.toml`
+(Codex), `opencode.json` (opencode). All three declare the same command,
+`uv run gan mcp`, with no path and no `cwd`: commit them and they work for
+everyone who clones.
+
+Through it an agent asks the toolchain rather than its own memory:
+
+| tool | what it answers |
+| --- | --- |
+| `gan_example` | a complete module for this requirement — returned only after it compiled and its doctests really ran |
+| `gan_verify` | does this module compile, is it idiomatic, do its doctests pass? |
+| `gan_doc` / `gan_pack` | what a name means; the one-call context pack |
+| `gan_check` / `gan_briefing` | the project verdict; the session briefing |
+
+Only `gan_example` consults a model; the rest forward facts and cannot
+invent anything. The rule the surface enforces is the one above: nothing is
+returned that has not been run
+([GEP-0028](https://github.com/mjason/gandora/blob/main/geps/0028-the-mcp-surface.md)).

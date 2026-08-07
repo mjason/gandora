@@ -327,6 +327,45 @@ defmodule Main do
   end
   """
 
+  # The MCP surface, wired for the agents that read a project-level file
+  # (GEP-0028-R012). One command everywhere, and it carries no paths:
+  # `uv run` resolves this project's environment from wherever the client
+  # launches it, `gan` finds gan-mcp in that .venv/bin (GEP-0013-R003),
+  # and the server walks up to the nearest gandora.jsonc. Check them in.
+  # (~jsonc as in @gandora_jsonc: these are a config file's literal text,
+  # not data being built — the content is strict JSON, comment-free.)
+  @mcp_claude ~jsonc"""
+  {
+    "mcpServers": {
+      "gandora": {
+        "type": "stdio",
+        "command": "uv",
+        "args": ["run", "gan", "mcp"]
+      }
+    }
+  }
+  """
+
+  @mcp_codex ~toml"""
+  # Codex reads this for a trusted project; `codex mcp list` shows it.
+  [mcp_servers.gandora]
+  command = "uv"
+  args = ["run", "gan", "mcp"]
+  """
+
+  @mcp_opencode ~jsonc"""
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+      "gandora": {
+        "type": "local",
+        "command": ["uv", "run", "gan", "mcp"],
+        "enabled": true
+      }
+    }
+  }
+  """
+
   defp pyproject_toml(name) do
     ~toml"""
     [project]
@@ -336,8 +375,22 @@ defmodule Main do
     dependencies = ["gandora-std>=<%= core.version() %>"]
 
     [dependency-groups]
-    dev = ["gandora-tool[dev]>=<%= core.version() %>"]
+    dev = ["gandora-tool[dev]>=<%= core.version() %>", "gandora-mcp>=<%= core.version() %>"]
     """
+  end
+
+  @doc """
+  Writes the project-level MCP configuration each agent reads on its own
+  (GEP-0028-R012): `.mcp.json` for Claude Code, `.codex/config.toml` for
+  Codex, `opencode.json` for opencode. Never overwrites what is there.
+  """
+  @param p, "The project directory."
+  @spec write_mcp_configs(term()) :: nil
+  def write_mcp_configs(p) do
+    write_if_absent(p / ".mcp.json", @mcp_claude)
+    write_if_absent(p / "opencode.json", @mcp_opencode)
+    (p / ".codex").mkdir(parents: true, exist_ok: true)
+    write_if_absent(p / ".codex" / "config.toml", @mcp_codex)
   end
 
   @doc "Creates a new project (or fills an existing directory) in place."
@@ -368,7 +421,9 @@ defmodule Main do
     write_if_absent(p / ".gitignore", @gitignore)
     write_if_absent(p / ".python-version", "3.11\n")
     write_if_absent(p / "src" / "main.gan", @hello_gan)
+    write_mcp_configs(p)
     IO.puts("Initialized Gandora project in #{path}")
+    IO.puts("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
   end
 
   defp write_if_absent(file, content) do

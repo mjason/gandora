@@ -1,9 +1,8 @@
 # gan-mcp
 
-The Gandora MCP surface, written in Gandora. **Not published** — it
-builds and runs from this checkout, and stays out of
-`.github/workflows/release.yml` until GEP-0028 settles its shape. The
-five released packages remain five.
+The Gandora MCP surface, written in Gandora — released on PyPI in
+lockstep with the rest of the toolchain, and installed as a
+development dependency of the project it serves.
 
 ## Why it exists
 
@@ -88,15 +87,25 @@ Install it the way every other `gan` plugin is installed — as a dev
 dependency of the project it serves:
 
 ```sh
-uv add --dev gandora-mcp     # once published; for now: uv add --dev --editable path/to/tools/mcp
+uv add --dev gandora-mcp     # `gan init` already writes it into the dev group
 gan mcp                      # resolves gan-mcp from ./.venv/bin first, then PATH (GEP-0013-R003)
 ```
 
-The client config then holds no paths at all — check it into the
-repository and it works for everyone:
+`gan init` writes the config for each agent that reads a project-level
+file, in the shape and location that agent documents (GEP-0028-R012) —
+so a new project is wired before it is first opened:
+
+| agent | file |
+| --- | --- |
+| Claude Code | `.mcp.json` (project scope; approve it on first run) |
+| Codex | `.codex/config.toml` (read for a trusted project) |
+| opencode | `opencode.json` |
+
+All three declare the same command, and it holds no paths at all —
+check them into the repository and they work for everyone:
 
 ```json
-{ "mcpServers": { "gandora": { "command": "uv", "args": ["run", "gan", "mcp"] } } }
+{ "mcpServers": { "gandora": { "type": "stdio", "command": "uv", "args": ["run", "gan", "mcp"] } } }
 ```
 
 No `cwd`, no absolute path, no environment. `uv run` resolves the

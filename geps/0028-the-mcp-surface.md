@@ -3,14 +3,14 @@ gep: 28
 title: The MCP Surface
 description: An MCP server that hands models verified Gandora — every example compiled, judged, and really run before it is returned.
 author: MJ
-status: Draft
+status: Accepted
 type: Standards Track
 areas:
   - Tooling
 created: 2026-08-06
-updated: 2026-08-06
-revision: 1
-requires: [15, 25, 26]
+updated: 2026-08-07
+revision: 2
+requires: [13, 15, 25, 26]
 replaces: []
 superseded-by: null
 resolution: null
@@ -55,10 +55,10 @@ is exactly the protocol's metadata. The contract is written once.
 ## Scope
 
 Covered: the stdio server, its tool surface, the verification pipeline,
-and the composer that turns a requirement into a verified module. Out
-of scope: HTTP transports, MCP sampling, prompts and resources beyond
-the briefing, and publication of the package (the release chain stays
-at five packages until this GEP is Accepted).
+the composer that turns a requirement into a verified module, and the
+project-level configuration that wires it into the agents that read
+one. Out of scope: HTTP transports, MCP sampling, and prompts and
+resources beyond the briefing.
 
 ## Terminology
 
@@ -140,6 +140,22 @@ environment (`GAN_API_KEY`, `GAN_MODEL`, and an optional
 `GAN_BASE_URL` defaulting to the vendor endpoint). Credentials MUST NOT
 be logged, echoed into a verdict, or written into a sandbox.
 
+**GEP-0028-R012 (the project owns the wiring):** `gan init` MUST write
+the project-level MCP configuration each agent reads on its own, in
+that agent's documented shape and location — `.mcp.json` for Claude
+Code, `.codex/config.toml` for Codex, `opencode.json` for opencode —
+and MUST NOT overwrite one that exists. Every such file declares the
+same pathless command, `uv run gan mcp`: no `cwd`, no absolute path,
+no environment. `uv run` resolves the project environment from
+wherever the client launches, `gan` finds `gan-mcp` in that project's
+`.venv/bin` (GEP-0013-R003), and the server discovers the project by
+walking up to the nearest `gandora.jsonc`. `gandora-mcp` is therefore
+a development dependency of every scaffolded project. These files are
+meant to be committed: checked in, the wiring works for everyone who
+clones, and the verdicts they produce are the project's own, judged
+inside its own environment rather than by whatever toolchain happens
+to be installed system-wide.
+
 ## Rationale
 
 The surface refuses the split most codegen tools accept — a fast path
@@ -197,4 +213,9 @@ draft.
 
 ## Change History
 
+- Revision 2, 2026-08-07: Accepted. `gandora-mcp` joins the release
+  chain as the sixth published package, and R012 makes `gan init`
+  write the project-level MCP configuration for Claude Code, Codex,
+  and opencode — one pathless command, checked in, working for
+  everyone who clones.
 - Revision 1, 2026-08-06: Initial version.

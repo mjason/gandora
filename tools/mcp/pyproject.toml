@@ -1,6 +1,3 @@
-# NOT PUBLISHED YET — this project builds and runs from the checkout,
-# but it is deliberately absent from .github/workflows/release.yml until
-# GEP-0028 settles its shape. The five released packages stay five.
 [project]
 name = "gandora-mcp"
 version = "0.18.8"

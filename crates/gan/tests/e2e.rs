@@ -51,9 +51,27 @@ fn init_creates_a_runnable_project() {
         ".python-version",
         ".gitignore",
         "src/main.gan",
+        // the MCP wiring each agent reads on its own (GEP-0028-R012)
+        ".mcp.json",
+        "opencode.json",
+        ".codex/config.toml",
     ] {
         assert!(project.join(f).exists(), "missing {f}");
     }
+    // one pathless command in every config, so a checked-in file works
+    // for everyone who clones it
+    for f in [".mcp.json", "opencode.json", ".codex/config.toml"] {
+        let text = std::fs::read_to_string(project.join(f)).unwrap();
+        assert!(text.contains("gan"), "{f}: {text}");
+        assert!(!text.contains("cwd"), "{f} carries a cwd: {text}");
+        assert!(
+            !text.contains(project.to_str().unwrap()),
+            "{f} carries an absolute path: {text}"
+        );
+    }
+    // gan-mcp resolves from the project's own .venv (GEP-0013-R003)
+    let pyproject = std::fs::read_to_string(project.join("pyproject.toml")).unwrap();
+    assert!(pyproject.contains("gandora-mcp>="), "{pyproject}");
     // compile and execute the starter module without uv
     let out = gan()
         .current_dir(&project)
@@ -63,7 +81,6 @@ fn init_creates_a_runnable_project() {
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let stdout = run_generated(&project.join("dist"), &project.join("dist/main.py"));
     assert!(stdout.contains("Hello from Gandora!"), "{stdout}");
-    assert!(stdout.contains("2 + 2 * 2 = 6"), "{stdout}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

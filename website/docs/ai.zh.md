@@ -82,3 +82,23 @@ gan lsc pack Enum       # 单个模块的完整文档，一次调用
 gan lsc doc with for spec --brief   # 多张卡片，每行一条
 gan lsc compile f.gan   # Python 生成的代码是什么
 ```
+
+## MCP 接口
+
+`gan init` 会为每个读取项目级配置文件的 agent 接好 MCP 服务器——
+`.mcp.json`（Claude Code）、`.codex/config.toml`（Codex）、
+`opencode.json`（opencode）。三份都声明同一条命令 `uv run gan mcp`，
+不含路径也不含 `cwd`：提交它们，克隆仓库的每个人都能直接用。
+
+借由它，agent 问的是工具链，而不是自己的记忆：
+
+| 工具 | 回答什么 |
+| --- | --- |
+| `gan_example` | 针对该需求的完整模块——须已编译、doctest 真跑过才返回 |
+| `gan_verify` | 这个模块能否编译、是否地道、doctest 是否通过？ |
+| `gan_doc` / `gan_pack` | 一个名字是什么意思；一次调用的上下文包 |
+| `gan_check` / `gan_briefing` | 项目裁决；会话简报 |
+
+只有 `gan_example` 会咨询模型，其余都在转发事实，无从编造。这套接口
+坚持的正是上文那条规则：不返回任何未曾运行过的东西
+（[GEP-0028](https://github.com/mjason/gandora/blob/main/geps/0028-the-mcp-surface.md)）。
