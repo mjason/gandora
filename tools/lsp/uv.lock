@@ -40,10 +40,10 @@ source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lang"
-version = "0.18.8"
+version = "0.19.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/12/6b267f65b446d7c2b0eb22ce263a834c4170201e68e408172818f83139f3/gandora_lang-0.18.8-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:81b66c832a29cde6b858a665255c9b362b458c4e88f808be7d3186a81fa062db", size = 754814, upload-time = "2026-08-06T05:48:43.753Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/27/91dd678764eeb1c966353e933a9ebf479b27f0225dea43b2554262f1dc7b/gandora_lang-0.19.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:19a700aa2345e8f6392ef9c67de1b541e26db2a8dac3f16bee2e40620c1018cd", size = 757730, upload-time = "2026-08-07T11:52:40.245Z" },
 ]
 
 [[package]]
@@ -99,8 +99,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
-    { name = "gandora-lang", specifier = ">=0.18.0" },
-    { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.4.1" },
+    { name = "gandora-lang", specifier = ">=0.19.0" },
+    { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.19.0" },
     { name = "gandora-std", directory = "../../std" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "ty", specifier = ">=0.0.60" },

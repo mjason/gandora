@@ -40,24 +40,26 @@ source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lang"
-version = "0.18.8"
+version = "0.19.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/12/6b267f65b446d7c2b0eb22ce263a834c4170201e68e408172818f83139f3/gandora_lang-0.18.8-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:81b66c832a29cde6b858a665255c9b362b458c4e88f808be7d3186a81fa062db", size = 754814, upload-time = "2026-08-06T05:48:43.753Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/27/91dd678764eeb1c966353e933a9ebf479b27f0225dea43b2554262f1dc7b/gandora_lang-0.19.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:19a700aa2345e8f6392ef9c67de1b541e26db2a8dac3f16bee2e40620c1018cd", size = 757730, upload-time = "2026-08-07T11:52:40.245Z" },
 ]
 
 [[package]]
 name = "gandora-lsp"
-version = "0.4.1"
+version = "0.19.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gandora-core" },
     { name = "gandora-std" },
+    { name = "gandora-tool" },
+    { name = "jedi" },
     { name = "pygls" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/91/12/423aeada80c3ada132153a5f1e78d7ec0c85ed221b0bcd12bec0a5923f1e/gandora_lsp-0.4.1.tar.gz", hash = "sha256:38963c1923062f7ce53ce846b5eae7cc56a55a6282c46441fd5f2ea80975617c", size = 5071, upload-time = "2026-08-02T12:21:19.074Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/9d/43d563a89b7ee78ad14d20ac03b0c239856208773da163d82bcd654dbeb3/gandora_lsp-0.19.0.tar.gz", hash = "sha256:efa6b6166df1b57ba92024c84ef53acb90b1b5842724016e8e2091fb40c4db40", size = 50660, upload-time = "2026-08-07T11:52:51.414Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/db/db7a83fbf3f31ac0c88b257aa8773a19f5cbcb951a4dbe859881148c10d7/gandora_lsp-0.4.1-py3-none-any.whl", hash = "sha256:6dbd440cf0e53492968e7ea19e4ee348f7e18f68975b97e83bd4aa6c9faa4bb8", size = 7522, upload-time = "2026-08-02T12:21:18.105Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/69/752511e6d9f70d93e70abc3d660dbff412692a3d0e28edb26aca70c67a22/gandora_lsp-0.19.0-py3-none-any.whl", hash = "sha256:148abbc67dfc7e5e10db93b91cf13077251d8c7f0f0ed89ef576b16ccea8e3dc", size = 41026, upload-time = "2026-08-07T11:52:50.169Z" },
 ]
 
 [[package]]
@@ -95,8 +97,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "gandora-core", directory = "../../crates/core-py" },
-    { name = "gandora-lang", specifier = ">=0.18.0" },
-    { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.4.1" },
+    { name = "gandora-lang", specifier = ">=0.19.0" },
+    { name = "gandora-lsp", marker = "extra == 'dev'", specifier = ">=0.19.0" },
     { name = "gandora-std", directory = "../../std" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "ty", specifier = ">=0.0.60" },
@@ -113,6 +115,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
+]
+
+[[package]]
+name = "jedi"
+version = "0.20.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parso" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/b7/a3635f6a2d7cf5b5dd98064fc1d5fbbafcb25477bcea204a3a92145d158b/jedi-0.20.0.tar.gz", hash = "sha256:c3f4ccbd276696f4b19c54618d4fb18f9fc24b0aef02acf704b23f487daa1011", size = 3119416, upload-time = "2026-05-01T23:38:47.814Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/93/242e2eab5fe682ffcb8b0084bde703a41d51e17ee0f3a31ff0d9d813620a/jedi-0.20.0-py2.py3-none-any.whl", hash = "sha256:7bdd9c2634f56713299976f4cbd59cb3fa92165cc5e05ea811fb253480728b67", size = 4884812, upload-time = "2026-05-01T23:38:43.919Z" },
 ]
 
 [[package]]
@@ -135,6 +149,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661", size = 228134, upload-time = "2026-04-24T20:15:23.917Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e", size = 100195, upload-time = "2026-04-24T20:15:22.081Z" },
+]
+
+[[package]]
+name = "parso"
+version = "0.8.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/4b/90c937815137d43ce71ba043cd3566221e9df6b9c805f24b5d138c9d40a7/parso-0.8.7.tar.gz", hash = "sha256:eaaac4c9fdd5e9e8852dc778d2d7405897ec510f2a298071453e5e3a07914bb1", size = 401824, upload-time = "2026-05-01T23:13:02.138Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/5d/8268b644392ee874ee82a635cd0df1773de230bde356c38de28e298392cc/parso-0.8.7-py2.py3-none-any.whl", hash = "sha256:a8926eb2a1b915486941fdbd31e86a4baf88fe8c210f25f2f35ecec5b574ca1c", size = 107025, upload-time = "2026-05-01T23:12:58.867Z" },
 ]
 
 [[package]]
