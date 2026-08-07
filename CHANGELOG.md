@@ -1,5 +1,52 @@
 # Changelog
 
+## v0.19.0 — 2026-08-07
+
+**The coroutine world, spoken natively — and a sixth package that hands
+models verified code.**
+
+- **`async def` and `await` are language syntax** (GEP-0030 rev 4),
+  compiled one-to-one to Python's own: `async def f(x) do ... end`
+  emits `async def f(x):`, and `await expr` emits a bare `await` — no
+  deadline, no wrapper. `await` binds tighter than every binary
+  operator and is a compile error outside an async body or inside a
+  `fn` closure. This replaces the `@async true` annotation, whose
+  contextual recompilation gave one source line two meanings and hid a
+  5-second deadline inside what looked like a plain join. The
+  displayed-not-run doctest exception is withdrawn: an `@example` on an
+  async function runs again, written through `Task.run`.
+- **`Task` is now the library over `asyncio`** (GEP-0029 rev 5), not a
+  thread pool imitating one. `run` enters the coroutine world from the
+  synchronous rim, `async` spawns, `blocking` bridges blocking work,
+  and `try_await(t, ms)` returns `{:ok, v}` / `{:error, :timeout}` /
+  `{:error, e}` — cancelling for real on timeout, which threads never
+  could. `from_async` and its hidden background event loop are gone;
+  threads remain only as the `blocking` edge. Following Gleam: each
+  world gets a thin library over its own native model, and neither
+  simulates the other.
+- **`gan-mcp` ships as the sixth package** (GEP-0028, now Accepted): an
+  MCP server written in Gandora that returns nothing it has not run.
+  `gan_example` composes a complete module and returns it only after it
+  compiled, passed the practice pass, and had its doctests execute;
+  `gan_verify`, `gan_doc`, `gan_pack`, `gan_check`, and `gan_briefing`
+  forward facts and consult no model. Tool schemas are not written
+  twice — `@spec` becomes the signature, the signature becomes the MCP
+  `inputSchema`.
+- **`gan init` wires it up** (GEP-0028-R012): the scaffold writes
+  `.mcp.json` (Claude Code), `.codex/config.toml` (Codex), and
+  `opencode.json` (opencode), each declaring the same pathless command
+  `uv run gan mcp` — no `cwd`, no absolute path. Commit them and the
+  wiring works for everyone who clones, with verdicts judged inside the
+  project's own environment.
+- **The formatter reflows multi-line map literals** (GEP-0016-R011):
+  one key-value pair per line, closing brace on its own.
+- Fixes: `(A or B) and C` no longer loses its grouping in the generated
+  Python; `crates/core-py` declares `cache-keys`, so a Rust change
+  invalidates uv's cached build instead of silently serving a stale
+  compiler; the `ganc init` template gained the `@doc`/`@spec` its
+  `gan init` counterpart already had, so a fresh project's first build
+  is green rather than "almost".
+
 ## v0.18.8 — 2026-08-06
 
 **Attributes are data; do blocks reach qualified calls.** Three fixes

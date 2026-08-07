@@ -1,14 +1,14 @@
 [project]
 name = "gandora-mcp"
-version = "0.18.8"
+version = "0.19.0"
 description = "gan-mcp — the Gandora MCP surface, written in Gandora (GEP-0028)"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
-    "gandora-core>=0.18.8",
-    "gandora-std>=0.18.8",
-    "gandora-tool>=0.18.8",
-    "gandora-lsp>=0.18.8",
+    "gandora-core>=0.19.0",
+    "gandora-std>=0.19.0",
+    "gandora-tool>=0.19.0",
+    "gandora-lsp>=0.19.0",
     "mcp>=2",
     "pydantic-ai-slim[openai]>=2",
 ]
