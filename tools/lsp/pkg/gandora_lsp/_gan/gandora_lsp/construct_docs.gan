@@ -43,7 +43,8 @@ defmodule ConstructDocs do
     "example" => "@example \"\"\" / four-space-indented gan> call / expected output (Python repr) / \"\"\" — its own attribute above the def, NEVER prose inside @doc; gan test runs every one on defs, on defmacro it is displayed in docs (GEP-0007).",
     "python" => "Python interop: `$math.sqrt(2.0)` imports and calls inline; `pyimport numpy, as: np` then `np.array(...)` for repeated use; `$(PIL.Image).open(f)` locks an explicit module boundary; trailing keywords become kwargs: `$json.dumps(data, indent: 2)` (GEP-0003).",
     "interop" => "Python interop: `$math.sqrt(2.0)` imports and calls inline; `pyimport numpy, as: np` then bare `np...` for repeated use; `$(...)` locks the module boundary; keyword args become kwargs (GEP-0003).",
-    "test" => "Official tests: tests/*.gan modules whose test_* functions use Test.assert_eq / assert_true / assert_nil / assert_raises / assert_contains; `gan test` compiles them with the project and runs pytest (GEP-0024)."
+    "test" => "Official tests: tests/*.gan modules whose test_* functions use Test.assert_eq / assert_true / assert_nil / assert_raises / assert_contains; `gan test` compiles them with the project and runs pytest (GEP-0024).",
+    "practices" => "The house style (docs/practices.md, `gan agent` carries the digest): data flows left to right — `xs |> Enum.filter(p) |> Enum.sort()`, never f(g(h(x))); a bare `for x <- xs, do: f(x)` is Enum.map — `for` earns its place with a filter, a pattern skip, or `into:`; `&f/1` over `fn x -> f(x) end`; host work goes through std File/Path/System, not $os/$pathlib/$subprocess; outcomes are verdict tuples {:ok, v} / {:error, why}; repeated shape becomes a data table + Enum, or a defmacro when it repeats at compile time."
   }
 
   @doc "The one-line card for a language construct, or nil."
@@ -51,11 +52,7 @@ defmodule ConstructDocs do
   @spec card(string()) :: string() | nil
   def card(token) do
     hit = Map.get(@cards, token)
-    if is_nil(hit) do
-      Map.get(@cards, token.lower())
-    else
-      hit
-    end
+    if is_nil(hit), do: Map.get(@cards, String.downcase(token)), else: hit
   end
 
   @doc "Every construct that has a card — the index the pack ships."
@@ -64,5 +61,5 @@ defmodule ConstructDocs do
       gan> "for" in ConstructDocs.names()
       True
   """
-  def names(), do: Enum.sort($builtins.list(@cards.keys()))
+  def names(), do: @cards |> Map.keys() |> Enum.sort()
 end

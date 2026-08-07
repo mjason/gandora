@@ -40,16 +40,16 @@ defmodule Atoms do
   @param k, "How many atoms to return."
   @spec search(string(), string(), integer()) :: list(map())
   def search(root, query, k) do
-    words = for w <- keywords(query), do: stem(w)
+    words = query |> keywords() |> Enum.map(&stem/1)
     all = catalog(root)
-    scored = for a <- all, do: {score(a, words), a}
-    top =
-      scored
+    hits =
+      all
+      |> Enum.map(fn a -> {score(a, words), a} end)
       |> Enum.filter(fn {s, _a} -> s > 0 end)
       |> Enum.sort_by(fn {s, _a} -> s end)
       |> Enum.reverse()
       |> Enum.take(k)
-    hits = for {_s, a} <- top, do: a
+      |> Enum.map(fn {_s, a} -> a end)
     pad(hits, all, k)
   end
 
@@ -102,9 +102,9 @@ defmodule Atoms do
       4
   """
   def score(atom, words) do
-    name = for w <- name_words(Map.get(atom, "target", "")), do: stem(w)
-    prose = for w <- keywords(Map.get(atom, "doc", "")), do: stem(w)
-    Enum.sum(for w <- words, do: hit(name, prose, stem(w)))
+    name = atom |> Map.get("target", "") |> name_words() |> Enum.map(&stem/1)
+    prose = atom |> Map.get("doc", "") |> keywords() |> Enum.map(&stem/1)
+    words |> Enum.map(fn w -> hit(name, prose, stem(w)) end) |> Enum.sum()
   end
 
   defp hit(name, prose, stem) do

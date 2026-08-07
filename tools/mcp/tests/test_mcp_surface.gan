@@ -90,7 +90,7 @@ defmodule TestMcpSurface do
   end
 
   test "the tool table names the composer and the verifier" do
-    names = Enum.map(Main.tools(), fn {n, _d} -> n end)
+    names = Enum.map(Main.tools(), fn {n, _f, _d} -> n end)
     assert_contains(names, "gan_example")
     assert_contains(names, "gan_verify")
     assert_eq(Enum.count(names), 6)

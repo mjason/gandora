@@ -8,12 +8,14 @@ import gandora_core as core
 import importlib.metadata
 import os
 import pathlib
-import shutil
 import subprocess
 import sys
 import gandora_std.enum
+import gandora_std.file
 import gandora_std.map
+import gandora_std.path
 import gandora_std.string
+import gandora_std.system
 import gandora_tool.advisor
 import gandora_tool.agent
 import gandora_tool.fmt
@@ -50,12 +52,12 @@ package_jsonc = "{\n  // Gandora package project (GEP-0006): `gan build` also em
 
 def main() -> None:
     """The task-runner entry: one command per invocation (GEP-0013)."""
-    args = gandora_std.enum.drop(builtins.list(sys.argv), 1)
+    args = gandora_std.system.argv()
     _gan_case0 = args
     match _gan_case0:
         case [] as _gan_l1 if isinstance(_gan_l1, list):
             print(usage)
-            return sys.exit(2)
+            return gandora_std.system.halt(2)
         case ["version", *_] as _gan_l2 if isinstance(_gan_l2, list):
             return version()
         case ["build", *rest] as _gan_l3 if isinstance(_gan_l3, list):
@@ -88,16 +90,16 @@ def main() -> None:
 def _die_usage(msg):
     print("gan: " + msg)
     print(usage)
-    return sys.exit(2)
+    return gandora_std.system.halt(2)
 
 
 def _root():
-    return os.getcwd()
+    return gandora_std.file.cwd_bang()
 
 
 def _project_python():
-    venv = _root() + "/.venv/bin/python"
-    if _gan_truthy(os.path.exists(venv)):
+    venv = gandora_std.path.join(_root(), ".venv/bin/python")
+    if _gan_truthy(gandora_std.file.exists_p(venv)):
         return venv
     else:
         return sys.executable
@@ -128,7 +130,7 @@ error stops before artifacts are written.
     while True:
         if not (_gan_truthy(_run_check(True, strict))):
             print(_paint("build aborted: errors in the verdict", "1;31"))
-            sys.exit(1)
+            gandora_std.system.halt(1)
         try:
             modules = core.build(_root())
             return print(_paint("✓", "1;32") + f" compiled {gandora_std.enum.count(modules)} module(s)")
@@ -141,7 +143,7 @@ def _run_check(with_suggestions=True, strict=False):
         diags = core.check(_root())
         errors0 = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
         if _gan_truthy(gandora_std.enum.empty_p(errors0)):
-            cache = _root() + "/.gandora/cache"
+            cache = gandora_std.path.join(_root(), ".gandora/cache")
             try:
                 modules = core.build(_root(), cache)
                 _gan_tmp15 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
@@ -159,10 +161,14 @@ def _run_check(with_suggestions=True, strict=False):
             _gan_tmp16 = []
         sources = _gan_tmp16
         def _gan_fn0(path, *, diags=diags):
-            try:
-                _gan_tmp17 = pathlib.Path(path).read_text()
-            except Exception as _e:
-                _gan_tmp17 = ""
+            _gan_case18 = gandora_std.file.read(path)
+            match _gan_case18:
+                case ("ok", t) as _gan_t19 if isinstance(_gan_t19, tuple):
+                    _gan_tmp17 = t
+                case ("error", _why) as _gan_t20 if isinstance(_gan_t20, tuple):
+                    _gan_tmp17 = ""
+                case _:
+                    raise GanMatchError("no case clause matched: " + repr(_gan_case18))
             text = _gan_tmp17
             per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
             return gandora_std.enum.map(gandora_tool.advisor.analyze(text, _root()) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
@@ -175,7 +181,7 @@ def _run_check(with_suggestions=True, strict=False):
 
 
 def _color_p():
-    return _gan_and(sys.stdout.isatty(), lambda: (os.environ.get("NO_COLOR") is None))
+    return _gan_and(sys.stdout.isatty(), lambda: (gandora_std.system.get_env("NO_COLOR") is None))
 
 
 def _paint(text, code):
@@ -187,21 +193,21 @@ def _paint(text, code):
 
 
 def _print_finding(kind, path, line, message):
-    _gan_val18 = gandora_std.map.get(labels, kind, (kind, "1"))
-    match _gan_val18:
-        case (label, code) as _gan_t19 if isinstance(_gan_t19, tuple):
+    _gan_val21 = gandora_std.map.get(labels, kind, (kind, "1"))
+    match _gan_val21:
+        case (label, code) as _gan_t22 if isinstance(_gan_t22, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val18))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val21))
     if line > 0:
-        _gan_tmp20 = f":{line}"
+        _gan_tmp23 = f":{line}"
     else:
-        _gan_tmp20 = ""
-    at = _gan_tmp20
+        _gan_tmp23 = ""
+    at = _gan_tmp23
     rel = gandora_std.string.replace(str(path), _root() + "/", "")
     print("")
-    _gan_fstr21 = _paint(rel + at, "2")
-    print(f"{_paint(label, code)} {_gan_fstr21}")
+    _gan_fstr24 = _paint(rel + at, "2")
+    print(f"{_paint(label, code)} {_gan_fstr24}")
     return gandora_std.enum.each(message.split("\n"), lambda l: print("  " + l))
 
 
@@ -225,13 +231,12 @@ def _plural(n, word):
 
 def _collect_files(roots):
     def _gan_fn1(r):
-        p = pathlib.Path(r)
-        if not (_gan_truthy(p.is_dir())):
+        if not (_gan_truthy(gandora_std.file.dir_p(r))):
             return []
         elif r == "tests":
-            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(p.glob("*.gan")), str))
+            return gandora_std.path.wildcard(gandora_std.path.join(r, "*.gan"))
         else:
-            return gandora_std.enum.sort(gandora_std.enum.map(builtins.list(p.rglob("*.gan")), str))
+            return gandora_std.path.wildcard(gandora_std.path.join(gandora_std.path.join(r, "**"), "*.gan"))
     return gandora_std.enum.flat_map(roots, _gan_fn1)
 
 
@@ -245,22 +250,22 @@ def run(file: str, args: list[str]) -> None:
 """
     if not (_gan_truthy(_run_check(False))):
         print("run aborted: check failed")
-        sys.exit(1)
-    cache = _root() + "/.gandora/cache"
+        gandora_std.system.halt(1)
+    cache = gandora_std.path.join(_root(), ".gandora/cache")
     try:
         modules = core.build(_root(), cache)
         abs = str(pathlib.Path(file).resolve())
         target = gandora_std.enum.find(modules, lambda m, *, abs=abs: gandora_std.map.get(m, "source") == abs)
         if (target is None):
             print(f"gan: {file} is not a module of this project")
-            return sys.exit(1)
+            return gandora_std.system.halt(1)
         elif (gandora_std.map.get(target, "python") is None):
-            _gan_fstr22 = gandora_std.map.get(target, "module")
-            print(f"gan: {_gan_fstr22} defines only macros; nothing to run")
-            return sys.exit(1)
+            _gan_fstr26 = gandora_std.map.get(target, "module")
+            print(f"gan: {_gan_fstr26} defines only macros; nothing to run")
+            return gandora_std.system.halt(1)
         else:
             code = subprocess.call([_project_python(), "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
-            return sys.exit(code)
+            return gandora_std.system.halt(code)
     except core.CompileError as e:
         return _compile_error(e)
 
@@ -286,12 +291,12 @@ def repl() -> None:
 def _repl_walk(ns):
     while True:
         try:
-            _gan_tmp23 = builtins.input("gan> ")
+            _gan_tmp27 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp23 = "eof"
+            _gan_tmp27 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp23 = "eof"
-        line = _gan_tmp23
+            _gan_tmp27 = "eof"
+        line = _gan_tmp27
         if line == "eof":
             return "ok"
         elif gandora_std.string.trim(line) == "":
@@ -322,7 +327,7 @@ def _pyproject_toml(name):
     return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
 
 
-def write_mcp_configs(p: object) -> None:
+def write_mcp_configs(p: str) -> None:
     """Writes the project-level MCP configuration each agent reads on its own
 (GEP-0028-R012): `.mcp.json` for Claude Code, `.codex/config.toml` for
 Codex, `opencode.json` for opencode. Never overwrites what is there.
@@ -331,19 +336,19 @@ Codex, `opencode.json` for opencode. Never overwrites what is there.
 
   - p: The project directory.
 """
-    _write_if_absent(p / ".mcp.json", mcp_claude)
-    _write_if_absent(p / "opencode.json", mcp_opencode)
-    (p / ".codex").mkdir(parents=True, exist_ok=True)
-    return _write_if_absent((p / ".codex") / "config.toml", mcp_codex)
+    _write_if_absent(gandora_std.path.join(p, ".mcp.json"), mcp_claude)
+    _write_if_absent(gandora_std.path.join(p, "opencode.json"), mcp_opencode)
+    gandora_std.file.mkdir_p_bang(gandora_std.path.join(p, ".codex"))
+    return _write_if_absent(gandora_std.path.join(gandora_std.path.join(p, ".codex"), "config.toml"), mcp_codex)
 
 
 def _init_cmd(args):
     paths = gandora_std.enum.filter(args, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
     if _gan_truthy(gandora_std.enum.empty_p(paths)):
-        _gan_tmp24 = "."
+        _gan_tmp28 = "."
     else:
-        _gan_tmp24 = gandora_std.enum.at(paths, 0)
-    path = _gan_tmp24
+        _gan_tmp28 = gandora_std.enum.at(paths, 0)
+    path = _gan_tmp28
     if _gan_truthy(gandora_std.enum.member_p(args, "--package")):
         if _gan_truthy(gandora_std.enum.empty_p(paths)):
             return _die_usage("init --package requires a package name")
@@ -365,32 +370,31 @@ would write, it writes only when absent.
 
   - path: Where to create the project.
 """
-    p = pathlib.Path(path)
-    if _gan_truthy(_gan_and(p.exists(), lambda: not (_gan_truthy(p.is_dir())))):
+    if _gan_truthy(_gan_and(gandora_std.file.exists_p(path), lambda: not (_gan_truthy(gandora_std.file.dir_p(path))))):
         print(f"gan: {path} is a file")
-        sys.exit(1)
-    (p / "src").mkdir(parents=True, exist_ok=True)
-    name = str(p.resolve().name)
-    _write_if_absent(p / "gandora.jsonc", gandora_jsonc)
-    pyproject = p / "pyproject.toml"
-    if _gan_truthy(pyproject.exists()):
-        if not (_gan_truthy(gandora_std.string.contains_p(pyproject.read_text(), "gandora-mcp"))):
+        gandora_std.system.halt(1)
+    gandora_std.file.mkdir_p_bang(gandora_std.path.join(path, "src"))
+    name = gandora_std.path.basename(gandora_std.path.expand(path))
+    _write_if_absent(gandora_std.path.join(path, "gandora.jsonc"), gandora_jsonc)
+    pyproject = gandora_std.path.join(path, "pyproject.toml")
+    if _gan_truthy(gandora_std.file.exists_p(pyproject)):
+        if not (_gan_truthy(gandora_std.string.contains_p(gandora_std.file.read_bang(pyproject), "gandora-mcp"))):
             print("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
             print("  dependencies: \"gandora-std\"        (generated code imports it)")
             print("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
     else:
-        pyproject.write_text(_pyproject_toml(name))
-    _write_if_absent(p / ".gitignore", gitignore)
-    _write_if_absent(p / ".python-version", "3.11\n")
-    _write_if_absent((p / "src") / "main.gan", hello_gan)
-    write_mcp_configs(p)
+        gandora_std.file.write_bang(pyproject, _pyproject_toml(name))
+    _write_if_absent(gandora_std.path.join(path, ".gitignore"), gitignore)
+    _write_if_absent(gandora_std.path.join(path, ".python-version"), "3.11\n")
+    _write_if_absent(gandora_std.path.join(gandora_std.path.join(path, "src"), "main.gan"), hello_gan)
+    write_mcp_configs(path)
     print(f"Initialized Gandora project in {path}")
     return print("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
 
 
 def _write_if_absent(file, content):
-    if not (_gan_truthy(file.exists())):
-        return file.write_text(content)
+    if not (_gan_truthy(gandora_std.file.exists_p(file))):
+        return gandora_std.file.write_bang(file, content)
     else:
         return None
 
@@ -413,20 +417,20 @@ def init_package(path: str) -> None:
 
   - path: The package directory to create; its name is the distribution name.
 """
-    p = pathlib.Path(path)
-    if _gan_truthy(p.exists()):
+    if _gan_truthy(gandora_std.file.exists_p(path)):
         print(f"gan: {path} already exists")
-        sys.exit(1)
-    dist_name = str(p.resolve().name)
+        gandora_std.system.halt(1)
+    dist_name = gandora_std.path.basename(gandora_std.path.expand(path))
     py_pkg = gandora_std.string.replace(dist_name, "-", "_")
     module = camelize(py_pkg)
-    ((p / "src") / py_pkg).mkdir(parents=True, exist_ok=True)
-    (p / "gandora.jsonc").write_text(package_jsonc)
-    (p / "pyproject.toml").write_text(_package_pyproject(dist_name, py_pkg))
-    (p / ".gitignore").write_text(gitignore + "pkg/\n")
-    (p / ".python-version").write_text("3.11\n")
-    (((p / "src") / py_pkg) / "core.gan").write_text(_package_starter(module, dist_name))
-    write_mcp_configs(p)
+    src = gandora_std.path.join(gandora_std.path.join(path, "src"), py_pkg)
+    gandora_std.file.mkdir_p_bang(src)
+    gandora_std.file.write_bang(gandora_std.path.join(path, "gandora.jsonc"), package_jsonc)
+    gandora_std.file.write_bang(gandora_std.path.join(path, "pyproject.toml"), _package_pyproject(dist_name, py_pkg))
+    gandora_std.file.write_bang(gandora_std.path.join(path, ".gitignore"), gitignore + "pkg/\n")
+    gandora_std.file.write_bang(gandora_std.path.join(path, ".python-version"), "3.11\n")
+    gandora_std.file.write_bang(gandora_std.path.join(src, "core.gan"), _package_starter(module, dist_name))
+    write_mcp_configs(path)
     print(f"Initialized Gandora package {dist_name} in {path}")
     print("Publish with:")
     print(f"  cd {path}")
@@ -443,8 +447,8 @@ def camelize(name: str) -> str:
     >>> camelize("gan_coin")
     'GanCoin'
 """
-    _gan_tmp25 = [gandora_std.string.capitalize(part) for part in gandora_std.string.split_on(name, "_") if part != ""]
-    parts = _gan_tmp25
+    _gan_tmp29 = [gandora_std.string.capitalize(part) for part in gandora_std.string.split_on(name, "_") if part != ""]
+    parts = _gan_tmp29
     return gandora_std.enum.join(parts, "")
 
 
@@ -462,37 +466,36 @@ def plugin_name(cmd: str) -> str:
 
 
 def _find_plugin(cmd):
-    venv_bin = _root() + "/.venv/bin"
-    local = shutil.which(plugin_name(cmd), path=venv_bin)
-    if (local is None):
-        return shutil.which(plugin_name(cmd))
-    else:
+    local = gandora_std.path.join(gandora_std.path.join(_root(), ".venv/bin"), plugin_name(cmd))
+    if _gan_truthy(gandora_std.file.exists_p(local)):
         return local
+    else:
+        return gandora_std.system.find_executable(plugin_name(cmd))
 
 
 def _delegate(cmd, rest):
     plugin = _find_plugin(cmd)
     ganc = _ganc_bin()
     if not ((plugin is None)):
-        return sys.exit(subprocess.call([plugin] + rest))
+        return gandora_std.system.halt(subprocess.call([plugin] + rest))
     elif not ((ganc is None)):
-        return sys.exit(subprocess.call([ganc, cmd] + rest))
+        return gandora_std.system.halt(subprocess.call([ganc, cmd] + rest))
     else:
         return _die_usage(f"unknown command '{cmd}' (no gan-{cmd} plugin, no ganc)")
 
 
 def _ganc_bin():
-    local = os.path.join(os.path.dirname(sys.executable), "ganc")
-    if _gan_truthy(os.path.exists(local)):
+    local = gandora_std.path.join(gandora_std.path.dirname(sys.executable), "ganc")
+    if _gan_truthy(gandora_std.file.exists_p(local)):
         return local
     else:
-        return shutil.which("ganc")
+        return gandora_std.system.find_executable("ganc")
 
 
 def _compile_error(e):
     args = builtins.list(e.args)
     print(f"{gandora_std.enum.at(args, 1)}:{gandora_std.enum.at(args, 2)}:{gandora_std.enum.at(args, 3)}: error: {gandora_std.enum.at(args, 0)}")
-    return sys.exit(1)
+    return gandora_std.system.halt(1)
 
 
 if __name__ == "__main__":

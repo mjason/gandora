@@ -5,18 +5,19 @@ intelligence as one JSON value per query, for AI agents and shells.
 import builtins
 import gandora_core as core
 import json
-import os
-import pathlib
 import re
-import sys
 import gandora_lsp.construct_docs
 import gandora_lsp.context_pack
 import gandora_lsp.py_intel
 import gandora_std.enum
+import gandora_std.file
 import gandora_std.map
+import gandora_std.path
 import gandora_std.string
+import gandora_std.system
 import gandora_tool.advisor
 import gandora_tool.verifier
+from gandora_tool.safe import *
 
 
 def _gan_truthy(value):
@@ -33,8 +34,7 @@ usage = "gan lsc <query> — one JSON value on stdout\n\nQueries (each accepts -
 
 def main() -> None:
     """Entry: parses --root, dispatches one query, emits one JSON value."""
-    args = gandora_std.enum.drop(builtins.list(sys.argv), 1)
-    _gan_val0 = _take_root(args)
+    _gan_val0 = _take_root(gandora_std.system.argv())
     match _gan_val0:
         case (root, args) as _gan_t1 if isinstance(_gan_t1, tuple):
             pass
@@ -45,10 +45,14 @@ def main() -> None:
     except core.CompileError as e:
         parts = builtins.list(e.args)
         _emit({"error": gandora_std.enum.at(parts, 0), "path": gandora_std.enum.at(parts, 1), "line": gandora_std.enum.at(parts, 2), "col": gandora_std.enum.at(parts, 3)})
-        return sys.exit(1)
+        return gandora_std.system.halt(1)
     except Exception as e:
         _emit({"error": f"{builtins.type(e).__name__}: {str(e)}"})
-        return sys.exit(2)
+        return gandora_std.system.halt(2)
+
+
+def _positional(args):
+    return gandora_std.enum.filter(args, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
 
 
 def _dispatch(args, root):
@@ -68,7 +72,7 @@ def _dispatch(args, root):
             return _emit(core.resolve(root, module))
         case ["doc", target, *rest] as _gan_l9 if isinstance(_gan_l9, list):
             brief = gandora_std.enum.member_p(rest, "--brief")
-            targets = [target] + gandora_std.enum.filter(rest, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
+            targets = [target] + _positional(rest)
             results = gandora_std.enum.map(targets, lambda t, *, brief=brief, root=root: _doc_one(t, root, brief))
             if gandora_std.enum.count(targets) == 1:
                 return _emit(gandora_std.enum.at(results, 0))
@@ -77,78 +81,74 @@ def _dispatch(args, root):
         case ["definition", target, *_] as _gan_l10 if isinstance(_gan_l10, list):
             return _emit(core.definition(target, root))
         case ["symbols", module, *rest] as _gan_l11 if isinstance(_gan_l11, list):
-            mods = [module] + gandora_std.enum.filter(rest, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
+            mods = [module] + _positional(rest)
             if gandora_std.enum.count(mods) == 1:
                 return _emit(core.symbols(module, root))
             else:
-                _gan_tmp12 = [(m, core.symbols(m, root)) for m in mods]
-                pairs = _gan_tmp12
-                return _emit(gandora_std.map.new(pairs))
-        case ["pack", *rest] as _gan_l13 if isinstance(_gan_l13, list):
-            deep = gandora_std.enum.filter(rest, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
-            return _emit(gandora_lsp.context_pack.build(root, deep))
-        case ["references", target, *_] as _gan_l14 if isinstance(_gan_l14, list):
+                return _emit(gandora_std.map.new(gandora_std.enum.map(mods, lambda m, *, root=root: (m, core.symbols(m, root)))))
+        case ["pack", *rest] as _gan_l12 if isinstance(_gan_l12, list):
+            return _emit(gandora_lsp.context_pack.build(root, _positional(rest)))
+        case ["references", target, *_] as _gan_l13 if isinstance(_gan_l13, list):
             return _emit(core.references(target, root))
-        case ["wsymbols", query, *_] as _gan_l15 if isinstance(_gan_l15, list):
+        case ["wsymbols", query, *_] as _gan_l14 if isinstance(_gan_l14, list):
             return _emit(core.wsymbols(query, root))
-        case ["wsymbols"] as _gan_l16 if isinstance(_gan_l16, list):
+        case ["wsymbols"] as _gan_l15 if isinstance(_gan_l15, list):
             return _emit(core.wsymbols("", root))
-        case ["check", *rest] as _gan_l17 if isinstance(_gan_l17, list):
+        case ["check", *rest] as _gan_l16 if isinstance(_gan_l16, list):
             diags = core.check(root)
             errors0 = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
             if _gan_truthy(gandora_std.enum.empty_p(errors0)):
-                cache = os.path.join(root, ".gandora", "cache")
+                cache = gandora_std.path.join(root, ".gandora/cache")
                 try:
-                    modules = core.build(root, cache)
-                    _gan_tmp19 = gandora_tool.verifier.verify(root, cache, modules, gandora_std.enum.member_p(rest, "--strict"))
-                except Exception as _e:
-                    _gan_tmp19 = []
-                verification = _gan_tmp19
-                _gan_tmp18 = diags + verification
+                    _gan_tmp18 = gandora_tool.verifier.verify(root, cache, core.build(root, cache), gandora_std.enum.member_p(rest, "--strict"))
+                except Exception as _e__gan1:
+                    _gan_tmp18 = []
+                verification = _gan_tmp18
+                _gan_tmp17 = diags + verification
             else:
-                _gan_tmp18 = diags
-            diags = _gan_tmp18
+                _gan_tmp17 = diags
+            diags = _gan_tmp17
             try:
-                _gan_tmp20 = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda sym: gandora_std.map.get(sym, "path")))
-            except Exception as _e:
-                _gan_tmp20 = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("src/**/*.gan")), str)
-            files = _gan_tmp20
-            test_files = gandora_std.enum.map(builtins.list(pathlib.Path(root).glob("tests/*.gan")), str)
+                _gan_tmp19 = gandora_std.enum.uniq(gandora_std.enum.map(core.wsymbols("", root), lambda sym: gandora_std.map.get(sym, "path")))
+            except Exception as _e__gan2:
+                _gan_tmp19 = gandora_std.path.wildcard(gandora_std.path.join(root, "src/**/*.gan"))
+            files = _gan_tmp19
+            test_files = gandora_std.path.wildcard(gandora_std.path.join(root, "tests/*.gan"))
             def _gan_fn0(path, *, diags=diags, root=root):
                 try:
-                    _gan_tmp21 = _read(path)
-                except Exception as _e:
-                    _gan_tmp21 = ""
-                text = _gan_tmp21
+                    _gan_tmp20 = _read(path)
+                except Exception as _e__gan3:
+                    _gan_tmp20 = ""
+                text = _gan_tmp20
                 per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
                 return gandora_std.enum.map(gandora_tool.advisor.analyze(text, root) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
             suggestions = gandora_tool.advisor.consolidate(gandora_std.enum.flat_map(gandora_std.enum.uniq(files + test_files), _gan_fn0))
             errors = gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error")
             _emit({"ok": gandora_std.enum.empty_p(errors), "clean": _gan_and(_gan_and(gandora_std.enum.empty_p(errors), lambda: gandora_std.enum.empty_p(diags)), lambda: gandora_std.enum.empty_p(suggestions)), "diagnostics": diags, "suggestions": suggestions})
             if not (_gan_truthy(gandora_std.enum.empty_p(errors))):
-                return sys.exit(1)
+                return gandora_std.system.halt(1)
             else:
                 return None
-        case ["pydoc", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
+        case ["pydoc", chain, *_] as _gan_l21 if isinstance(_gan_l21, list):
             return _emit(gandora_lsp.py_intel.hover_markdown(root, import_line(chain), chain))
-        case ["pycomplete", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
+        case ["pycomplete", chain, *_] as _gan_l22 if isinstance(_gan_l22, list):
             return _emit(gandora_lsp.py_intel.complete(root, import_line(chain), chain))
-        case ["pygoto", chain, *_] as _gan_l24 if isinstance(_gan_l24, list):
+        case ["pygoto", chain, *_] as _gan_l23 if isinstance(_gan_l23, list):
             return _emit(gandora_lsp.py_intel.goto(root, import_line(chain), chain))
-        case ["pysig", chain, *_] as _gan_l25 if isinstance(_gan_l25, list):
+        case ["pysig", chain, *_] as _gan_l24 if isinstance(_gan_l24, list):
             return _emit(gandora_lsp.py_intel.signatures(root, import_line(chain), chain))
         case _:
             print(usage)
-            return sys.exit(2)
+            return gandora_std.system.halt(2)
 
 
 def _doc_one(target, root, brief):
     info = core.doc(target, root)
     if (info is None):
-        _gan_tmp26 = _symbol_stub(target, root)
+        _gan_tmp25 = _symbol_stub(target, root)
     else:
-        _gan_tmp26 = info
-    info = _gan_tmp26
+        _gan_tmp25 = info
+    info = _gan_tmp25
     card = gandora_lsp.construct_docs.card(target)
     if _gan_truthy(_gan_and(not ((info is None)), lambda: brief)):
         return _brief_doc(target, info)
@@ -178,39 +178,39 @@ def _symbol_stub(target, root):
         mod = gandora_std.enum.at(parts, 0)
         name = gandora_std.enum.at(parts, 1)
         try:
-            _gan_tmp27 = core.symbols(mod, root)
-        except Exception as _e:
-            _gan_tmp27 = []
-        syms = _gan_tmp27
+            _gan_tmp26 = core.symbols(mod, root)
+        except Exception as _e__gan4:
+            _gan_tmp26 = []
+        syms = _gan_tmp26
         hit = gandora_std.enum.find(syms, lambda s, *, name=name: gandora_std.map.get(s, "name") == name)
         if (hit is None):
             return None
         else:
-            _gan_fstr28 = gandora_std.map.get(hit, "kind")
-            return {"label": target, "kind": gandora_std.map.get(hit, "kind"), "head": gandora_std.map.get(hit, "head"), "entries": {"default": f"(undocumented — add @doc above the {_gan_fstr28})"}}
+            _gan_fstr27 = gandora_std.map.get(hit, "kind")
+            return {"label": target, "kind": gandora_std.map.get(hit, "kind"), "head": gandora_std.map.get(hit, "head"), "entries": {"default": f"(undocumented — add @doc above the {_gan_fstr27})"}}
 
 
 def _project_doc(name, root):
     try:
-        _gan_tmp29 = core.wsymbols(name, root)
-    except Exception as _e:
-        _gan_tmp29 = []
-    syms = _gan_tmp29
+        _gan_tmp28 = core.wsymbols(name, root)
+    except Exception as _e__gan5:
+        _gan_tmp28 = []
+    syms = _gan_tmp28
     hit = gandora_std.enum.find(syms, lambda s, *, name=name: gandora_std.map.get(s, "name") == name)
     if (hit is None):
         return None
     else:
-        _gan_fstr30 = gandora_std.map.get(hit, "module")
-        return core.doc(f"{_gan_fstr30}.{name}", root)
+        _gan_fstr29 = gandora_std.map.get(hit, "module")
+        return core.doc(f"{_gan_fstr29}.{name}", root)
 
 
 def _brief_doc(target, info):
     specs = gandora_std.map.get(info, "specs", [])
     if _gan_truthy(gandora_std.enum.empty_p(specs)):
-        _gan_tmp31 = target
+        _gan_tmp30 = target
     else:
-        _gan_tmp31 = gandora_std.enum.at(specs, 0)
-    head = _gan_tmp31
+        _gan_tmp30 = gandora_std.enum.at(specs, 0)
+    head = _gan_tmp30
     prose = gandora_std.map.get(gandora_std.map.get(info, "entries", {}), "default", "")
     summary = gandora_std.enum.at(prose.split("\n"), 0)
     return {"label": target, "head": head, "summary": summary}
@@ -230,17 +230,17 @@ def import_line(chain: str) -> str:
 
 
 def _take_root(args):
-    _gan_case32 = gandora_std.enum.find_index(args, lambda a: a == "--root")
-    match _gan_case32:
+    _gan_case31 = gandora_std.enum.find_index(args, lambda a: a == "--root")
+    match _gan_case31:
         case None:
-            return (os.getcwd(), args)
+            return (gandora_std.file.cwd_bang(), args)
         case i:
             root = gandora_std.enum.at(args, i + 1)
             return (root, gandora_std.enum.take(args, i) + gandora_std.enum.drop(args, i + 2))
 
 
 def _read(file):
-    return pathlib.Path(file).read_text()
+    return gandora_std.file.read_bang(file)
 
 
 def _emit(value):

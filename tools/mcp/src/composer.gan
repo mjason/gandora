@@ -8,8 +8,6 @@ defmodule Composer do
   """
   @moduledoc_trans zh_CN: "合成器(GEP-0028-R006/R007/R008):一句需求进,一个**已验证模块**出。模型从不凭记忆复述语言——它依原子与上下文包合成——也从不拥有最终发言权:裁决才有。无法变绿的草稿以失败返回,附上 findings,绝不伪装成自信的散文。"
 
-  pyimport os
-  pyimport pathlib
   pyimport pydantic_ai
   pyimport pydantic_ai.models.openai, as: oai
   pyimport pydantic_ai.providers.deepseek, as: dsp
@@ -111,15 +109,7 @@ defmodule Composer do
   async def example(requirement, root) do
     key = api_key(root)
     if is_nil(key) do
-      %{
-        "ok" => false,
-        "why" => "no GAN_API_KEY in the environment or .env",
-        "explanation" => "",
-        "module" => "",
-        "verdict" => %{},
-        "rounds" => 0,
-        "atoms" => []
-      }
+      failure("no GAN_API_KEY in the environment or .env", 0, [])
     else
       # the three grounding sources are independent — the two that shell
       # out overlap as tasks (their subprocesses cross on the blocking
@@ -206,16 +196,8 @@ defmodule Composer do
   async defp attempt(requirement, key, ground, efforts, findings, round) do
     atoms = Map.get(ground, "atoms")
     if Enum.empty?(efforts) do
-      %{
-        "ok" => false,
-        "why" => "no draft reached a clean verdict",
-        "explanation" => "",
-        "module" => "",
-        "verdict" => %{},
-        "rounds" => round,
-        "findings" => findings,
-        "atoms" => atoms
-      }
+      failure("no draft reached a clean verdict", round, atoms)
+      |> Map.put("findings", findings)
     else
       raw = await ask(prompt(requirement, ground, findings), Enum.at(efforts, 0), key)
       {prose, draft} = answer(raw)
@@ -224,26 +206,11 @@ defmodule Composer do
         else: await Task.blocking(fn -> Sandbox.verdict(draft, Map.get(ground, "root")) end)
       left = Enum.drop(efforts, 1)
       cond do
-        green?(verdict) and String.trim(prose) != "" ->
-          %{
-            "ok" => true,
-            "explanation" => prose,
-            "module" => draft,
-            "verdict" => verdict,
-            "rounds" => round + 1,
-            "atoms" => atoms
-          }
-          # a module that works but forgot to explain itself: ask again while
-          # rounds remain, and keep verified work rather than discard it
-        green?(verdict) and Enum.empty?(left) ->
-          %{
-            "ok" => true,
-            "explanation" => prose,
-            "module" => draft,
-            "verdict" => verdict,
-            "rounds" => round + 1,
-            "atoms" => atoms
-          }
+        # a module that works but forgot to explain itself: ask again
+        # while rounds remain, and keep verified work rather than
+        # discard it on the last one
+        green?(verdict) and (String.trim(prose) != "" or Enum.empty?(left)) ->
+          success(prose, draft, verdict, round + 1, atoms)
         green?(verdict) ->
           attempt(requirement, key, ground, left,
             "Your module was accepted but your answer had no EXPLANATION: section. Send both parts.",
@@ -254,16 +221,43 @@ defmodule Composer do
     end
   end
 
+  # the two shapes an answer can take — built in one place so a new
+  # field can never reach one arm and miss the other
+  defp success(prose, draft, verdict, rounds, atoms) do
+    %{
+      "ok" => true,
+      "explanation" => prose,
+      "module" => draft,
+      "verdict" => verdict,
+      "rounds" => rounds,
+      "atoms" => atoms
+    }
+  end
+
+  defp failure(why, rounds, atoms) do
+    %{
+      "ok" => false,
+      "why" => why,
+      "explanation" => "",
+      "module" => "",
+      "verdict" => %{},
+      "rounds" => rounds,
+      "atoms" => atoms
+    }
+  end
+
   # what the next attempt is told: the facts, not a scolding
   defp report(verdict) do
-    errors = Enum.map(Map.get(verdict, "diagnostics", []), fn d ->
-      "error: " <> to_string(Map.get(d, "message", ""))
-    end)
-    hints = Enum.map(Map.get(verdict, "suggestions", []), fn s ->
-      "practice: " <> to_string(Map.get(s, "message", ""))
-    end)
-    doctest = Map.get(Map.get(verdict, "doctests", %{}), "output", "")
+    errors = verdict |> findings("diagnostics", "error")
+    hints = verdict |> findings("suggestions", "practice")
+    doctest = verdict |> Map.get("doctests", %{}) |> Map.get("output", "")
     Enum.join(errors ++ hints ++ [doctest], "\n")
+  end
+
+  defp findings(verdict, key, label) do
+    verdict
+    |> Map.get(key, [])
+    |> Enum.map(fn f -> label <> ": " <> to_string(Map.get(f, "message", "")) end)
   end
 
   defp prompt(requirement, ground, findings) do
@@ -325,7 +319,7 @@ defmodule Composer do
 
   async defp constructs(requirement, root) do
     low = String.downcase(requirement)
-    wanted = for {word, names} <- @triggers.items(), String.contains?(low, word), do: names
+    wanted = for {word, names} <- Map.to_list(@triggers), String.contains?(low, word), do: names
     # each card is one gan-lsc subprocess: independent and blocking, so
     # each crosses on the bridge and they overlap under the bound
     cards = await Task.async_stream(Enum.uniq(Enum.concat(wanted)),
@@ -357,9 +351,12 @@ defmodule Composer do
     if is_nil(pack) do
       ""
     else
-      notes = Enum.join(Map.get(Map.get(pack, "language", %{}), "notes", []), "\n")
-      lines = for {mod, names} <- Map.get(pack, "std", %{}).items(),
-        do: "- " <> mod <> ": " <> Enum.join(names, " ")
+      notes = pack |> Map.get("language", %{}) |> Map.get("notes", []) |> Enum.join("\n")
+      lines =
+        pack
+        |> Map.get("std", %{})
+        |> Map.to_list()
+        |> Enum.map(fn {mod, names} -> "- " <> mod <> ": " <> Enum.join(names, " ") end)
       ~p"""
       Language notes:
       <%= notes %>
@@ -423,33 +420,35 @@ defmodule Composer do
     }
   end
 
-  defp model_name() do
-    name = os.getenv("GAN_MODEL")
-    if is_nil(name), do: "deepseek-v4-flash", else: name
-  end
+  defp model_name(), do: System.get_env("GAN_MODEL", "deepseek-v4-flash")
 
   # the environment first; a repository .env is a developer convenience,
   # and its value never leaves this function
   defp api_key(root) do
-    env = os.getenv("GAN_API_KEY")
+    env = System.get_env("GAN_API_KEY")
     if not is_nil(env) do
       env
     else
-      dotenv(os.path.join(root, ".env"))
+      root |> Path.join(".env") |> dotenv()
     end
   end
 
   defp dotenv(path) do
-    if not os.path.exists(path) do
+    case File.read(path) do
+      {:error, _why} -> nil
+      {:ok, text} ->
+        text
+        |> String.split_on("\n")
+        |> Enum.find(fn l -> l |> String.trim() |> String.starts_with?("GAN_API_KEY=") end)
+        |> key_value()
+    end
+  end
+
+  defp key_value(line) do
+    if is_nil(line) do
       nil
     else
-      lines = String.split_on(pathlib.Path(path).read_text(), "\n")
-      hit = Enum.find(lines, fn l -> String.starts_with?(String.trim(l), "GAN_API_KEY=") end)
-      if is_nil(hit) do
-        nil
-      else
-        String.trim(Enum.at(String.split_on(hit, "="), 1))
-      end
+      line |> String.split_on("=") |> Enum.at(1) |> String.trim()
     end
   end
 end

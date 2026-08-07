@@ -11,7 +11,6 @@ defmodule Main do
 
   pyimport mcp.server.mcpserver, as: ms
   pyimport gandora_core, as: core
-  pyimport os
 
   @instructions """
   Gandora is an Elixir-flavored language compiling to readable Python.
@@ -82,8 +81,11 @@ defmodule Main do
   @spec gan_briefing() :: string()
   def gan_briefing(), do: Intel.briefing(root())
 
-  @doc "The tool table: one entry per exposed function and its blurb."
-  @doc_trans zh_CN: "工具表:每个暴露的函数一条,附一句说明。"
+  @doc """
+  The tool table — the single source the server registers from: one
+  entry per exposed function with its capture and its blurb.
+  """
+  @doc_trans zh_CN: "工具表——服务器注册的唯一来源:每个暴露的函数一条,带捕获与一句说明。"
   @spec tools() :: list(tuple())
   @example """
       gan> Enum.count(Main.tools())
@@ -91,12 +93,12 @@ defmodule Main do
   """
   def tools() do
     [
-      {"gan_example", "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."},
-      {"gan_verify", "Compile a Gandora module and run its @example doctests; returns the verdict."},
-      {"gan_doc", "Look up documentation for Mod.fun, a bare name, or a language construct."},
-      {"gan_pack", "The one-call context pack for the project."},
-      {"gan_check", "The build verdict for the whole project."},
-      {"gan_briefing", "The session briefing for working in Gandora."}
+      {"gan_example", &gan_example/1, "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."},
+      {"gan_verify", &gan_verify/1, "Compile a Gandora module and run its @example doctests; returns the verdict."},
+      {"gan_doc", &gan_doc/1, "Look up documentation for Mod.fun, a bare name, or a language construct."},
+      {"gan_pack", &gan_pack/1, "The one-call context pack for the project."},
+      {"gan_check", &gan_check/0, "The build verdict for the whole project."},
+      {"gan_briefing", &gan_briefing/0, "The session briefing for working in Gandora."}
     ]
   end
 
@@ -110,41 +112,28 @@ defmodule Main do
   @doc_trans zh_CN: "查询所针对的项目:设了 `$GAN_MCP_ROOT` 用它,否则从当前目录向上找最近一层带 `gandora.jsonc` 的祖先目录。服务器在哪启动由客户端决定,而它完全可能选个子目录——所以项目靠发现,而非靠配置。"
   @spec root() :: string()
   def root() do
-    env = os.getenv("GAN_MCP_ROOT")
-    if is_nil(env), do: discover(os.getcwd()), else: env
+    env = System.get_env("GAN_MCP_ROOT")
+    if is_nil(env), do: discover(File.cwd!()), else: env
   end
 
   defp discover(dir) do
     cond do
-      os.path.exists(os.path.join(dir, "gandora.jsonc")) -> dir
+      dir |> Path.join("gandora.jsonc") |> File.exists?() -> dir
       # the filesystem root: no project anywhere above, so answer for
       # where we were launched rather than for "/"
-      os.path.dirname(dir) == dir -> os.getcwd()
-      true -> discover(os.path.dirname(dir))
+      Path.dirname(dir) == dir -> File.cwd!()
+      true -> discover(Path.dirname(dir))
     end
   end
 
-  @doc "Serves the tools over stdio until the client disconnects."
-  @doc_trans zh_CN: "通过 stdio 提供这些工具,直到客户端断开。"
+  @doc "Serves the tool table over stdio until the client disconnects."
+  @doc_trans zh_CN: "通过 stdio 提供工具表,直到客户端断开。"
   @spec main() :: nil
   def main() do
     server = ms.MCPServer("gandora", version: core.version(), instructions: @instructions)
-    server.add_tool(&gan_example/1, name: "gan_example", description: blurb("gan_example"))
-    server.add_tool(&gan_verify/1, name: "gan_verify", description: blurb("gan_verify"))
-    server.add_tool(&gan_doc/1, name: "gan_doc", description: blurb("gan_doc"))
-    server.add_tool(&gan_pack/1, name: "gan_pack", description: blurb("gan_pack"))
-    server.add_tool(&gan_check/0, name: "gan_check", description: blurb("gan_check"))
-    server.add_tool(&gan_briefing/0, name: "gan_briefing", description: blurb("gan_briefing"))
+    Enum.each(tools(), fn {name, f, desc} ->
+      server.add_tool(f, name: name, description: desc)
+    end)
     server.run("stdio")
-  end
-
-  defp blurb(name) do
-    hit = Enum.find(tools(), fn {n, _d} -> n == name end)
-    if is_nil(hit) do
-      name
-    else
-      {_n, d} = hit
-      d
-    end
   end
 end

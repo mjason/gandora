@@ -7,10 +7,7 @@ defmodule Main do
 
   pyimport gandora_core, as: core
   pyimport subprocess
-  pyimport shutil
-  pyimport pathlib
   pyimport sys
-  pyimport os
 
   @usage """
   gan - the Gandora task runner
@@ -31,11 +28,11 @@ defmodule Main do
   @doc "The task-runner entry: one command per invocation (GEP-0013)."
   @spec main() :: nil
   def main() do
-    args = $builtins.list(sys.argv) |> Enum.drop(1)
+    args = System.argv()
     case args do
       [] ->
         IO.puts(@usage)
-        sys.exit(2)
+        System.halt(2)
       ["version" | _] -> version()
       ["build" | rest] -> build(Enum.member?(rest, "--strict"))
       ["check" | rest] ->
@@ -56,20 +53,16 @@ defmodule Main do
   defp die_usage(msg) do
     IO.puts("gan: " <> msg)
     IO.puts(@usage)
-    sys.exit(2)
+    System.halt(2)
   end
 
-  defp root(), do: os.getcwd()
+  defp root(), do: File.cwd!()
 
   # "execute with the project Python" (GEP-0013-R002): the venv
   # interpreter when the project has one, else the runner's own
   defp project_python() do
-    venv = root() <> "/.venv/bin/python"
-    if os.path.exists(venv) do
-      venv
-    else
-      sys.executable
-    end
+    venv = root() |> Path.join(".venv/bin/python")
+    if File.exists?(venv), do: venv, else: sys.executable
   end
 
   @doc "Runner and compiler-library versions."
@@ -93,7 +86,7 @@ defmodule Main do
   def build(strict \\ false) do
     if not run_check(true, strict) do
       IO.puts(paint("build aborted: errors in the verdict", "1;31"))
-      sys.exit(1)
+      System.halt(1)
     end
     try do
       modules = core.build(root())
@@ -112,7 +105,7 @@ defmodule Main do
     # already broken
     errors0 = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
     diags = if Enum.empty?(errors0) do
-      cache = root() <> "/.gandora/cache"
+      cache = root() |> Path.join(".gandora/cache")
       verification = try do
         modules = core.build(root(), cache)
         Verifier.verify(root(), cache, modules, strict)
@@ -133,10 +126,9 @@ defmodule Main do
       []
     end
     hints = Enum.flat_map(sources, fn path ->
-      text = try do
-        pathlib.Path(path).read_text()
-      rescue
-        _e -> ""
+      text = case File.read(path) do
+        {:ok, t} -> t
+        {:error, _why} -> ""
       end
       per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
       (Advisor.analyze(text, root()) ++ Advisor.lint_hints(text, per_file))
@@ -156,7 +148,7 @@ defmodule Main do
   # ---- verdict presentation ------------------------------------------------
 
   @doc false
-  defp color?(), do: sys.stdout.isatty() and is_nil(os.environ.get("NO_COLOR"))
+  defp color?(), do: sys.stdout.isatty() and is_nil(System.get_env("NO_COLOR"))
 
   defp paint(text, code) do
     if color?() do
@@ -202,17 +194,15 @@ defmodule Main do
     if n > 0, do: ", #{n} #{word}(s)", else: ""
   end
 
-  # .gan files under the given roots (shared with fmt's discovery idea)
+  # .gan files under the given roots (shared with fmt's discovery idea);
+  # Path.wildcard already sorts
   defp collect_files(roots) do
     Enum.flat_map(roots, fn r ->
-      p = pathlib.Path(r)
       cond do
-        not p.is_dir() -> []
+        not File.dir?(r) -> []
         # tests: top level only, mirroring `gan test`; deeper dirs are fixtures
-        r == "tests" ->
-          Enum.sort(Enum.map($builtins.list(p.glob("*.gan")), &to_string/1))
-        true ->
-          Enum.sort(Enum.map($builtins.list(p.rglob("*.gan")), &to_string/1))
+        r == "tests" -> Path.wildcard(Path.join(r, "*.gan"))
+        true -> Path.wildcard(r |> Path.join("**") |> Path.join("*.gan"))
       end
     end)
   end
@@ -225,26 +215,27 @@ defmodule Main do
     # errors gate the run; the teaching pass belongs to check/build
     if not run_check(false) do
       IO.puts("run aborted: check failed")
-      sys.exit(1)
+      System.halt(1)
     end
-    cache = root() <> "/.gandora/cache"
+    cache = root() |> Path.join(".gandora/cache")
     try do
       modules = core.build(root(), cache)
-      abs = to_string(pathlib.Path(file).resolve())
+      # resolve, not expand: the module table records symlink-resolved paths
+      abs = to_string($pathlib.Path(file).resolve())
       target = Enum.find(modules, fn m -> Map.get(m, "source") == abs end)
       cond do
         is_nil(target) ->
           IO.puts("gan: #{file} is not a module of this project")
-          sys.exit(1)
+          System.halt(1)
         is_nil(Map.get(target, "python")) ->
           IO.puts("gan: #{Map.get(target, "module")} defines only macros; nothing to run")
-          sys.exit(1)
+          System.halt(1)
         true ->
           code = subprocess.call(
             [project_python(), "-P", Map.get(target, "python")] ++ args,
-            env: Map.put($builtins.dict(os.environ), "PYTHONPATH", cache)
+            env: Map.put($builtins.dict($os.environ), "PYTHONPATH", cache)
           )
-          sys.exit(code)
+          System.halt(code)
       end
     rescue
       e in core.CompileError -> compile_error(e)
@@ -385,12 +376,12 @@ defmodule Main do
   Codex, `opencode.json` for opencode. Never overwrites what is there.
   """
   @param p, "The project directory."
-  @spec write_mcp_configs(term()) :: nil
+  @spec write_mcp_configs(string()) :: nil
   def write_mcp_configs(p) do
-    write_if_absent(p / ".mcp.json", @mcp_claude)
-    write_if_absent(p / "opencode.json", @mcp_opencode)
-    (p / ".codex").mkdir(parents: true, exist_ok: true)
-    write_if_absent(p / ".codex" / "config.toml", @mcp_codex)
+    write_if_absent(Path.join(p, ".mcp.json"), @mcp_claude)
+    write_if_absent(Path.join(p, "opencode.json"), @mcp_opencode)
+    File.mkdir_p!(Path.join(p, ".codex"))
+    write_if_absent(p |> Path.join(".codex") |> Path.join("config.toml"), @mcp_codex)
   end
 
   # `init [--package] <path>`: the flag selects which scaffold
@@ -419,40 +410,39 @@ defmodule Main do
   @param path, "Where to create the project."
   @spec init(string()) :: nil
   def init(path) do
-    p = pathlib.Path(path)
-    if p.exists() and not p.is_dir() do
+    if File.exists?(path) and not File.dir?(path) do
       IO.puts("gan: #{path} is a file")
-      sys.exit(1)
+      System.halt(1)
     end
-    (p / "src").mkdir(parents: true, exist_ok: true)
-    name = to_string(p.resolve().name)
-    write_if_absent(p / "gandora.jsonc", @gandora_jsonc)
-    pyproject = p / "pyproject.toml"
-    if pyproject.exists() do
+    File.mkdir_p!(Path.join(path, "src"))
+    name = path |> Path.expand() |> Path.basename()
+    write_if_absent(Path.join(path, "gandora.jsonc"), @gandora_jsonc)
+    pyproject = Path.join(path, "pyproject.toml")
+    if File.exists?(pyproject) do
       # the MCP configs below are written either way, but their command
       # only resolves once the project depends on the toolchain — say
       # exactly what to add rather than leave dead wiring behind. A
       # pyproject that already names them needs no advice: re-running
       # init on a wired project is the normal way to pick up new files.
-      if not String.contains?(pyproject.read_text(), "gandora-mcp") do
+      if not String.contains?(File.read!(pyproject), "gandora-mcp") do
         IO.puts("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
         IO.puts("  dependencies: \"gandora-std\"        (generated code imports it)")
         IO.puts("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
       end
     else
-      pyproject.write_text(pyproject_toml(name))
+      File.write!(pyproject, pyproject_toml(name))
     end
-    write_if_absent(p / ".gitignore", @gitignore)
-    write_if_absent(p / ".python-version", "3.11\n")
-    write_if_absent(p / "src" / "main.gan", @hello_gan)
-    write_mcp_configs(p)
+    write_if_absent(Path.join(path, ".gitignore"), @gitignore)
+    write_if_absent(Path.join(path, ".python-version"), "3.11\n")
+    write_if_absent(path |> Path.join("src") |> Path.join("main.gan"), @hello_gan)
+    write_mcp_configs(path)
     IO.puts("Initialized Gandora project in #{path}")
     IO.puts("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
   end
 
   defp write_if_absent(file, content) do
-    if not file.exists() do
-      file.write_text(content)
+    if not File.exists?(file) do
+      File.write!(file, content)
     end
   end
 
@@ -547,21 +537,21 @@ defmodule Main do
   @param path, "The package directory to create; its name is the distribution name."
   @spec init_package(string()) :: nil
   def init_package(path) do
-    p = pathlib.Path(path)
-    if p.exists() do
+    if File.exists?(path) do
       IO.puts("gan: #{path} already exists")
-      sys.exit(1)
+      System.halt(1)
     end
-    dist_name = to_string(p.resolve().name)
+    dist_name = path |> Path.expand() |> Path.basename()
     py_pkg = String.replace(dist_name, "-", "_")
     module = camelize(py_pkg)
-    (p / "src" / py_pkg).mkdir(parents: true, exist_ok: true)
-    (p / "gandora.jsonc").write_text(@package_jsonc)
-    (p / "pyproject.toml").write_text(package_pyproject(dist_name, py_pkg))
-    (p / ".gitignore").write_text(@gitignore <> "pkg/\n")
-    (p / ".python-version").write_text("3.11\n")
-    (p / "src" / py_pkg / "core.gan").write_text(package_starter(module, dist_name))
-    write_mcp_configs(p)
+    src = path |> Path.join("src") |> Path.join(py_pkg)
+    File.mkdir_p!(src)
+    File.write!(Path.join(path, "gandora.jsonc"), @package_jsonc)
+    File.write!(Path.join(path, "pyproject.toml"), package_pyproject(dist_name, py_pkg))
+    File.write!(Path.join(path, ".gitignore"), @gitignore <> "pkg/\n")
+    File.write!(Path.join(path, ".python-version"), "3.11\n")
+    File.write!(Path.join(src, "core.gan"), package_starter(module, dist_name))
+    write_mcp_configs(path)
     IO.puts("Initialized Gandora package #{dist_name} in #{path}")
     IO.puts("Publish with:")
     IO.puts("  cd #{path}")
@@ -592,21 +582,16 @@ defmodule Main do
   defp find_plugin(cmd) do
     # project venv first (GEP-0013-R003: installing a plugin is `uv add`),
     # then the surrounding PATH
-    venv_bin = root() <> "/.venv/bin"
-    local = shutil.which(plugin_name(cmd), path: venv_bin)
-    if is_nil(local) do
-      shutil.which(plugin_name(cmd))
-    else
-      local
-    end
+    local = root() |> Path.join(".venv/bin") |> Path.join(plugin_name(cmd))
+    if File.exists?(local), do: local, else: System.find_executable(plugin_name(cmd))
   end
 
   defp delegate(cmd, rest) do
     plugin = find_plugin(cmd)
     ganc = ganc_bin()
     cond do
-      not is_nil(plugin) -> sys.exit(subprocess.call([plugin] ++ rest))
-      not is_nil(ganc) -> sys.exit(subprocess.call([ganc, cmd] ++ rest))
+      not is_nil(plugin) -> System.halt(subprocess.call([plugin] ++ rest))
+      not is_nil(ganc) -> System.halt(subprocess.call([ganc, cmd] ++ rest))
       true -> die_usage("unknown command '#{cmd}' (no gan-#{cmd} plugin, no ganc)")
     end
   end
@@ -615,17 +600,13 @@ defmodule Main do
   # only the primary package's scripts) — look beside the interpreter
   # first, then PATH
   defp ganc_bin() do
-    local = os.path.join(os.path.dirname(sys.executable), "ganc")
-    if os.path.exists(local) do
-      local
-    else
-      shutil.which("ganc")
-    end
+    local = sys.executable |> Path.dirname() |> Path.join("ganc")
+    if File.exists?(local), do: local, else: System.find_executable("ganc")
   end
 
   defp compile_error(e) do
     args = $builtins.list(e.args)
     IO.puts("#{Enum.at(args, 1)}:#{Enum.at(args, 2)}:#{Enum.at(args, 3)}: error: #{Enum.at(args, 0)}")
-    sys.exit(1)
+    System.halt(1)
   end
 end

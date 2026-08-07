@@ -37,7 +37,7 @@ defmodule File do
   """
   def read(path) do
     try do
-      {:ok, pathlib.Path(path).read_text()}
+      {:ok, read!(path)}
     rescue
       e in $builtins.OSError -> {:error, to_string(e)}
     end
@@ -52,7 +52,7 @@ defmodule File do
       gan> File.read!("/dev/null")
       ''
   """
-  def read!(path), do: pathlib.Path(path).read_text()
+  def read!(path), do: pathlib.Path(path).read_text(encoding: "utf-8")
 
   @doc "Writes text to a file, replacing what was there; returns `:ok`."
   @doc_trans zh_CN: "把文本写入文件并覆盖原内容;返回 `:ok`。"
@@ -68,7 +68,7 @@ defmodule File do
       'hi'
   """
   def write!(path, content) do
-    _chars = pathlib.Path(path).write_text(content)
+    _chars = pathlib.Path(path).write_text(content, encoding: "utf-8")
     :ok
   end
 

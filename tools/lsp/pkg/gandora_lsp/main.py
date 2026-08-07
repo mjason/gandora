@@ -12,16 +12,17 @@ import gandora_core as core
 import importlib.util
 import lsprotocol.types
 import lsprotocol.types as types
-import os
-import pathlib
 import pygls.lsp.server
 import re
 import gandora_lsp.construct_docs
 import gandora_lsp.py_intel
 import gandora_std.enum
+import gandora_std.file
 import gandora_std.map
 import gandora_std.string
+import gandora_std.system
 import gandora_tool.fmt
+from gandora_tool.safe import *
 
 
 def _gan_truthy(value):
@@ -282,11 +283,11 @@ def _markdown_hover(md):
 def _doc_locale() -> str:
     try:
         _gan_tmp17 = core.local_pref(_root_path(), "docLocale")
-    except Exception as _e:
+    except Exception as _e__gan1:
         _gan_tmp17 = None
     local = _gan_tmp17
     if (local is None):
-        return os.environ.get("GAN_DOC_LOCALE", "default")
+        return gandora_std.system.get_env("GAN_DOC_LOCALE", "default")
     else:
         return local
 
@@ -500,8 +501,8 @@ def _ref_ranges(target: str) -> list[dict]:
         line0 = gandora_std.enum.max([gandora_std.map.get(r, "line") - 1, 0])
         col0 = gandora_std.enum.max([gandora_std.map.get(r, "col") - 1, 0])
         try:
-            _gan_tmp38 = pathlib.Path(path).read_text(encoding="utf-8")
-        except Exception as _e:
+            _gan_tmp38 = gandora_std.file.read_bang(path)
+        except Exception as _e__gan2:
             _gan_tmp38 = ""
         text = _gan_tmp38
         l = gandora_std.enum.at(text.split("\n"), line0)

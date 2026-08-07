@@ -22,6 +22,11 @@ python = "gandora_tool/main.py"
 source = "gandora_tool/_gan/gandora_tool/main.gan"
 
 [[modules]]
+name = "Safe"
+python = "gandora_tool/safe.py"
+source = "gandora_tool/_gan/gandora_tool/safe.gan"
+
+[[modules]]
 name = "Verifier"
 python = "gandora_tool/verifier.py"
 source = "gandora_tool/_gan/gandora_tool/verifier.gan"

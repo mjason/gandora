@@ -8,15 +8,17 @@ defmodule Intel do
   @moduledoc_trans zh_CN: "这个面上零成本的一半(GEP-0026):文档、上下文包、会话简报,转发给早已回答这些问题的工具。不问模型,故此处无物可编造。"
 
   pyimport json
-  pyimport os
-  pyimport shutil
-  pyimport subprocess
   pyimport sys
+
+  # a forwarded tool that hangs must not hang the surface
+  @tool_timeout 180000
 
   @doc "The lsc arguments for one query, rooted at `root`."
   @doc_trans zh_CN: "一次查询的 lsc 参数,锚在 `root`。"
   @param args, "The query and its arguments."
+  @param_trans args, zh_CN: "查询及其参数。"
   @param root, "The project root the query runs against."
+  @param_trans root, zh_CN: "查询针对的项目根。"
   @spec argv(sequence(string()), string()) :: list(string())
   @example """
       gan> Intel.argv(["doc", "Enum.map"], "/tmp/p")
@@ -27,17 +29,18 @@ defmodule Intel do
   @doc "One `gan lsc` query against `root`, decoded; nil when it fails."
   @doc_trans zh_CN: "对 `root` 的一次 `gan lsc` 查询并解码;失败时为 nil。"
   @param args, "The lsc arguments, e.g. `[\"doc\", \"Enum.map\"]`."
+  @param_trans args, zh_CN: "lsc 参数,如 `[\"doc\", \"Enum.map\"]`。"
   @param root, "The project root the query runs against."
+  @param_trans root, zh_CN: "查询针对的项目根。"
   @spec lsc(sequence(string()), string()) :: term()
   def lsc(args, root) do
     bin = tool("gan-lsc")
     if is_nil(bin) do
       nil
     else
-      r = subprocess.run([bin] ++ argv(args, root),
-        capture_output: true, text: true, timeout: 180)
+      {out, _status} = System.cmd(bin, argv(args, root), [timeout: @tool_timeout])
       try do
-        json.loads(r.stdout)
+        json.loads(out)
       rescue
         _e -> nil
       end
@@ -47,41 +50,46 @@ defmodule Intel do
   @doc "The docs for one target: `Mod.fun`, a bare name, or a construct."
   @doc_trans zh_CN: "一个目标的文档:`Mod.fun`、裸名或构造名。"
   @param target, "What to look up."
+  @param_trans target, zh_CN: "要查的目标。"
   @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
   @spec doc(string(), string()) :: term()
   def doc(target, root), do: lsc(["doc", target], root)
 
   @doc "The one-call context pack, with `deep` modules fully expanded."
   @doc_trans zh_CN: "一次调用的上下文包,`deep` 列出的模块附全量文档。"
   @param deep, "Module names whose full docs ride along."
+  @param_trans deep, zh_CN: "随附全量文档的模块名。"
   @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
   @spec pack(sequence(string()), string()) :: term()
   def pack(deep, root), do: lsc(["pack"] ++ deep, root)
 
   @doc "The verdict for a whole project — the traffic light, as JSON."
   @doc_trans zh_CN: "整个项目的裁决——JSON 形式的红绿灯。"
   @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
   @spec check(string()) :: term()
   def check(root), do: lsc(["check"], root)
 
   @doc "The `gan agent` session briefing: the working loop plus the pack."
   @doc_trans zh_CN: "`gan agent` 会话简报:工作回路加上下文包。"
   @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
   @spec briefing(string()) :: string()
   def briefing(root) do
     bin = tool("gan")
     if is_nil(bin) do
       "gan not found — install gandora-tool"
     else
-      r = subprocess.run([bin, "agent"],
-        capture_output: true, text: true, timeout: 180, cwd: root)
-      String.trim(r.stdout)
+      {out, _status} = System.cmd(bin, ["agent"], [cd: root, timeout: @tool_timeout])
+      String.trim(out)
     end
   end
 
   # toolchain binaries sit beside the interpreter running this server
   defp tool(bin) do
-    path = os.path.join(os.path.dirname(sys.executable), bin)
-    if os.path.exists(path), do: path, else: shutil.which(bin)
+    local = sys.executable |> Path.dirname() |> Path.join(bin)
+    if File.exists?(local), do: local, else: System.find_executable(bin)
   end
 end

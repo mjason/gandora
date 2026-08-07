@@ -10,6 +10,7 @@ import re
 import gandora_std.enum
 import gandora_std.map
 import gandora_std.string
+from gandora_tool.safe import *
 
 
 def _gan_truthy(value):
@@ -109,7 +110,7 @@ def complete(root: str, import_line: str, expr: str) -> list[dict]:
 """
     try:
         return gandora_std.enum.map(gandora_std.enum.take(builtins.list(_script(root, import_line, expr).complete(2, gandora_std.string.length(expr))), 120), lambda c: {"name": c.name, "kind": c.type})
-    except Exception as _e:
+    except Exception as _e__gan1:
         return []
 
 
@@ -153,7 +154,7 @@ def signatures(root: str, import_line: str, callee: str) -> list[dict]:
             params = gandora_std.enum.map(builtins.list(s.params), lambda p: p.to_string())
             return {"label": s.to_string(), "params": params, "doc": _to_first_line(s.docstring(raw=True))}
         return gandora_std.enum.map(builtins.list(_script(root, import_line, callee + "()").get_signatures(2, gandora_std.string.length(callee) + 1)), _gan_fn1)
-    except Exception as _e:
+    except Exception as _e__gan2:
         return []
 
 

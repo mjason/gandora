@@ -10,9 +10,6 @@ defmodule Sandbox do
   pyimport gandora_core, as: core
   pyimport json
   pyimport os
-  pyimport pathlib
-  pyimport shutil
-  pyimport subprocess
   pyimport sys
   pyimport tempfile
 
@@ -28,7 +25,9 @@ defmodule Sandbox do
   """
   @doc_trans zh_CN: "一个片段的完整裁决:error、practice 建议,以及——当它能编译时——真跑 doctest 的结果。"
   @param source, "The Gandora source text of one module."
+  @param_trans source, zh_CN: "单个模块的 Gandora 源码文本。"
   @param root, "The project the snippet is judged for; its toolchain is used."
+  @param_trans root, zh_CN: "片段所属的项目;用其工具链。"
   @spec verdict(string(), string()) :: map()
   def verdict(source, root) do
     dir = tempfile.mkdtemp(prefix: "gan-mcp-")
@@ -42,7 +41,7 @@ defmodule Sandbox do
         Map.put(base, "doctests", skipped("the code did not compile"))
       end
     after
-      shutil.rmtree(dir, ignore_errors: true)
+      File.rm_rf!(dir)
     end
   end
 
@@ -54,15 +53,17 @@ defmodule Sandbox do
   """
   @doc_trans zh_CN: "片段受审所在的环境:项目自带 `.venv` 时用它,否则用服务器的。裁决须关乎项目真正运行的工具链,而非服务器碰巧装在哪。"
   @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
   @spec venv(string()) :: string()
   def venv(root) do
-    local = os.path.join(root, ".venv")
-    if os.path.isdir(local), do: local, else: sys.prefix
+    local = Path.join(root, ".venv")
+    if File.dir?(local), do: local, else: sys.prefix
   end
 
   @doc "The doctest report for source that carries no `gan>` lines."
   @doc_trans zh_CN: "源码中没有 `gan>` 行时的 doctest 报告。"
   @param why, "Why nothing ran."
+  @param_trans why, zh_CN: "为何没跑。"
   @spec skipped(string()) :: map()
   @example """
       gan> Sandbox.skipped("no gan> lines")
@@ -79,6 +80,7 @@ defmodule Sandbox do
   """
   @doc_trans zh_CN: "模块必须落在的文件路径(GEP-0001-R013):`App.HelloWeb` 属于 `app/hello_web.gan`;文件对不上的片段会因一个毫无教益的理由挂在裁决上。"
   @param name, "The module name, or nil when the source declares none."
+  @param_trans name, zh_CN: "模块名;源码未声明时为 nil。"
   @spec module_path(string()) :: string()
   @example """
       gan> Sandbox.module_path("App.DMagicFactor")
@@ -96,6 +98,7 @@ defmodule Sandbox do
   @doc "The module a source declares, or nil when it declares none."
   @doc_trans zh_CN: "源码声明的模块名;未声明时为 nil。"
   @param source, "The Gandora source text."
+  @param_trans source, zh_CN: "Gandora 源码文本。"
   @spec module_name(string()) :: string()
   @example """
       gan> Sandbox.module_name("defmodule App.Shop do\\nend")
@@ -108,8 +111,11 @@ defmodule Sandbox do
 
   # the compiler's own rule, mirrored: every capital opens a new word
   defp snake(seg) do
-    chars = for {c, i} <- Enum.with_index(String.codepoints(seg)), do: snake_char(c, i)
-    Enum.join(chars, "")
+    seg
+    |> String.codepoints()
+    |> Enum.with_index()
+    |> Enum.map(fn {c, i} -> snake_char(c, i) end)
+    |> Enum.join("")
   end
 
   defp snake_char(c, i) do
@@ -123,49 +129,48 @@ defmodule Sandbox do
   # a project is two files: the config and the module, at the path its
   # own name demands
   defp write_project(dir, source, env) do
-    target = os.path.join(dir, "src", module_path(module_name(source)))
-    os.makedirs(os.path.dirname(target), exist_ok: true)
-    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(@config)
-    pathlib.Path(target).write_text(source)
+    target = Path.join(dir, "src") |> Path.join(module_path(module_name(source)))
+    File.mkdir_p!(Path.dirname(target))
+    File.write!(Path.join(dir, "gandora.jsonc"), @config)
+    File.write!(target, source)
     # installed packages are found under the project's own .venv
     # (GEP-0006-R006), so the sandbox borrows one: without it `Enum`
     # resolves to Python's stdlib `enum` and every std call is reported
     # missing — a verdict about the sandbox, not about the code
     try do
-      os.symlink(env, os.path.join(dir, ".venv"))
+      os.symlink(env, Path.join(dir, ".venv"))
     rescue
       _e -> nil
     end
   end
 
   # the verdict comes from gan-lsc, not from a private re-implementation:
-  # the sandbox must agree with what the user's own `gan build` says
+  # the sandbox must agree with what the user's own `gan build` says.
+  # streams merged: on success stdout is the JSON verdict alone, and on
+  # a crash the traceback is right there as the `why`
   defp check(dir) do
     lsc = tool("gan-lsc")
     if is_nil(lsc) do
-      %{
-        "ok" => false,
-        "clean" => false,
-        "diagnostics" => [],
-        "suggestions" => [],
-        "why" => "gan-lsc not found — install gandora-lsp"
-      }
+      no_verdict("gan-lsc not found — install gandora-lsp")
     else
-      r = subprocess.run([lsc, "check", "--root", dir],
-        capture_output: true, text: true, timeout: 180)
+      {out, _status} = System.cmd(lsc, ["check", "--root", dir],
+        [timeout: 180000, stderr_to_stdout: true])
       try do
-        json.loads(r.stdout)
+        json.loads(out)
       rescue
-        _e ->
-          %{
-            "ok" => false,
-            "clean" => false,
-            "diagnostics" => [],
-            "suggestions" => [],
-            "why" => String.trim(r.stderr)
-          }
+        _e -> no_verdict(String.trim(out))
       end
     end
+  end
+
+  defp no_verdict(why) do
+    %{
+      "ok" => false,
+      "clean" => false,
+      "diagnostics" => [],
+      "suggestions" => [],
+      "why" => why
+    }
   end
 
   # doctests are the run: `@example` compiles to a native Python doctest,
@@ -174,18 +179,18 @@ defmodule Sandbox do
     if not String.contains?(source, "gan> ") do
       skipped("no gan> lines in @example")
     else
-      cache = os.path.join(dir, "dist")
+      cache = Path.join(dir, "dist")
       try do
         files =
           core.build(dir, cache)
           |> Enum.flat_map(fn m -> List.wrap(Map.get(m, "python")) end)
-        r = subprocess.run([python(env), "-m", "doctest"] ++ files,
-          capture_output: true, text: true, timeout: 120, cwd: cache)
+        {out, status} = System.cmd(python(env), ["-m", "doctest"] ++ files,
+          [cd: cache, timeout: 120000, stderr_to_stdout: true])
         %{
           "ran" => true,
-          "passed" => r.returncode == 0,
+          "passed" => status == 0,
           "why" => "",
-          "output" => String.trim(r.stdout <> r.stderr)
+          "output" => String.trim(out)
         }
       rescue
         # a sandbox that dies is a verdict, never an exception crossing
@@ -197,13 +202,13 @@ defmodule Sandbox do
 
   # the interpreter of the environment the snippet is judged in
   defp python(env) do
-    local = os.path.join(env, "bin", "python")
-    if os.path.exists(local), do: local, else: sys.executable
+    local = env |> Path.join("bin") |> Path.join("python")
+    if File.exists?(local), do: local, else: sys.executable
   end
 
   # toolchain binaries sit beside the interpreter running this server
   defp tool(bin) do
-    path = os.path.join(os.path.dirname(sys.executable), bin)
-    if os.path.exists(path), do: path, else: shutil.which(bin)
+    local = sys.executable |> Path.dirname() |> Path.join(bin)
+    if File.exists?(local), do: local, else: System.find_executable(bin)
   end
 end

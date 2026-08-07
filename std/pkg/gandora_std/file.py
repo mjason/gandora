@@ -40,7 +40,7 @@ GEP-0010-R004: Elixir returns a posix atom, this returns the message.
     'error'
 """
     try:
-        return ("ok", pathlib.Path(path).read_text())
+        return ("ok", read_bang(path))
     except builtins.OSError as e:
         return ("error", str(e))
 
@@ -55,7 +55,7 @@ def read_bang(path: str) -> str:
     >>> read_bang("/dev/null")
     ''
 """
-    return pathlib.Path(path).read_text()
+    return pathlib.Path(path).read_text(encoding="utf-8")
 
 
 def write_bang(path: str, content: str) -> str:
@@ -71,7 +71,7 @@ def write_bang(path: str, content: str) -> str:
     >>> read_bang("/tmp/gan_std_file_example.txt")
     'hi'
 """
-    _chars = pathlib.Path(path).write_text(content)
+    _chars = pathlib.Path(path).write_text(content, encoding="utf-8")
     return "ok"
 
 

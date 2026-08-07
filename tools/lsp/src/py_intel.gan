@@ -7,6 +7,8 @@ defmodule PyIntel do
 
   pyimport jedi
 
+  import Safe
+
   @pyimport_re ~r/pyimport\s+([A-Za-z0-9_.]+)(?:\s*,\s*as:\s*([a-z_][A-Za-z0-9_]*))?/
 
   @doc "The alias -> module map from the file's pyimport declarations."
@@ -84,13 +86,11 @@ defmodule PyIntel do
   @param expr, "The dotted prefix to complete."
   @spec complete(string(), string(), string()) :: list(map())
   def complete(root, import_line, expr) do
-    try do
+    safe(
       $builtins.list(script(root, import_line, expr).complete(2, String.length(expr)))
       |> Enum.take(120)
-      |> Enum.map(fn c -> %{name: c.name, kind: c.type} end)
-    rescue
-      _e -> []
-    end
+      |> Enum.map(fn c -> %{name: c.name, kind: c.type} end),
+      [])
   end
 
   @doc "The defining source location of a Python reference, zero-based for LSP."
@@ -125,17 +125,15 @@ defmodule PyIntel do
   @param callee, "The callable whose signatures to fetch."
   @spec signatures(string(), string(), string()) :: list(map())
   def signatures(root, import_line, callee) do
-    try do
+    safe(
       $builtins.list(
         script(root, import_line, callee <> "()").get_signatures(2, String.length(callee) + 1)
       )
       |> Enum.map(fn s ->
         params = $builtins.list(s.params) |> Enum.map(fn p -> p.to_string() end)
         %{label: s.to_string(), params: params, doc: to_first_line(s.docstring(raw: true))}
-      end)
-    rescue
-      _e -> []
-    end
+      end),
+      [])
   end
 
   @doc """

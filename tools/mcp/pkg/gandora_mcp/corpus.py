@@ -67,7 +67,7 @@ def matching(requirement: str) -> list[dict]:
 
 
 def _summoned_p(atom, low):
-    return gandora_std.enum.count(gandora_std.enum.filter(gandora_std.map.get(atom, "triggers", []), lambda t, *, low=low: gandora_std.string.contains_p(low, t))) > 0
+    return gandora_std.enum.any_p(gandora_std.map.get(atom, "triggers", []), lambda t, *, low=low: gandora_std.string.contains_p(low, t))
 
 
 def block(atom: collections.abc.Mapping[str, object]) -> str:

@@ -1,0 +1,44 @@
+defmodule Safe do
+  @moduledoc """
+  One macro: `safe(expr, fallback)` — evaluate `expr`, and if the host
+  raises anything, be `fallback` instead. The toolchain queries a
+  compiler core and a filesystem that are allowed to fail; what it is
+  not allowed to do is crash a verdict over it. The spelling is a
+  macro, not a function, so `expr` stays unevaluated until it is
+  guarded — and the expansion is exactly the try/rescue a reviewer
+  would have written by hand, in every package that imports it
+  (GEP-0002, GEP-0006 macro shipping).
+  """
+  @moduledoc_trans zh_CN: "一个宏:`safe(expr, fallback)`——求值 `expr`,宿主抛任何异常就以 `fallback` 代之。工具链查询的编译器内核与文件系统允许失败;不允许的是让裁决因此崩溃。拼成宏而非函数,`expr` 才能不被先行求值;展开物恰是评审者会手写的那段 try/rescue,并随宏分发到每个导入它的包(GEP-0002、GEP-0006)。"
+
+  @doc """
+  `expr`, or `fallback` when evaluating `expr` raises. Deliberate
+  swallowing — reach for an explicit `try`/`rescue` naming the
+  exception type when the failure itself carries meaning.
+  """
+  @doc_trans zh_CN: "`expr`;当求值 `expr` 抛出异常时为 `fallback`。这是有意的吞没——当失败本身携带含义时,请写显式 `try`/`rescue` 并点名异常类型。"
+  @param expr, "The expression to guard."
+  @param_trans expr, zh_CN: "要护住的表达式。"
+  @param fallback, "The value to be when it raises."
+  @param_trans fallback, zh_CN: "抛出时代之的值。"
+  defmacro safe(expr, fallback) do
+    quote do
+      try do
+        unquote(expr)
+      rescue
+        _e -> unquote(fallback)
+      end
+    end
+  end
+
+  @doc "Proof the macro expands and guards: a crash becomes its fallback."
+  @doc_trans zh_CN: "宏展开且真在护卫的证明:崩溃变成兜底值。"
+  @spec demo() :: tuple()
+  @example """
+      gan> Safe.demo()
+      ('fell back', 42)
+  """
+  def demo() do
+    {safe($builtins.int("nope"), "fell back"), safe($builtins.int("42"), 0)}
+  end
+end

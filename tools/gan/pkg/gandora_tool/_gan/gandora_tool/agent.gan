@@ -8,8 +8,6 @@ defmodule Agent do
   @moduledoc_trans zh_CN: "`gan agent`——AI 会话入口(GEP-0026-R004):一次输出 Markdown 简报(工作回路 + 项目上下文包),harness 开局即全知,几乎无需逐条查询;不向项目写任何文件。"
 
   pyimport json
-  pyimport subprocess
-  pyimport os
   pyimport sys
 
   @loop_text """
@@ -48,15 +46,15 @@ defmodule Agent do
   end
 
   defp fetch_pack(args) do
-    lsc = os.path.join(os.path.dirname(sys.executable), "gan-lsc")
-    if not os.path.exists(lsc) do
+    lsc = sys.executable |> Path.dirname() |> Path.join("gan-lsc")
+    if not File.exists?(lsc) do
       nil
     else
       deep = Enum.filter(args, fn a -> not String.starts_with?(a, "--") end)
-      r = subprocess.run([lsc, "pack"] ++ deep ++ ["--root", os.getcwd()],
-        capture_output: true, text: true, timeout: 120)
+      {out, _status} = System.cmd(lsc, ["pack"] ++ deep ++ ["--root", File.cwd!()],
+        [timeout: 120000])
       try do
-        json.loads(r.stdout)
+        json.loads(out)
       rescue
         _e -> nil
       end
@@ -76,12 +74,19 @@ defmodule Agent do
 
   # the pack as compact Markdown a harness can inline
   defp render(pack) do
-    std = Map.get(pack, "std", %{})
-    std_lines = for {mod, names} <- std.items(), do: std_line(mod, names)
-    project = Map.get(pack, "project", %{})
-    proj_lines = Enum.flat_map($builtins.sorted(project.items()), fn {mod, heads} ->
-      ["- **#{mod}**"] ++ Enum.map(heads, fn h -> "    - `#{h}`" end)
-    end)
+    std_lines =
+      pack
+      |> Map.get("std", %{})
+      |> Map.to_list()
+      |> Enum.map(fn {mod, names} -> std_line(mod, names) end)
+    proj_lines =
+      pack
+      |> Map.get("project", %{})
+      |> Map.to_list()
+      |> Enum.sort()
+      |> Enum.flat_map(fn {mod, heads} ->
+        ["- **#{mod}**"] ++ Enum.map(heads, fn h -> "    - `#{h}`" end)
+      end)
     lang = Map.get(pack, "language", %{})
     verdict = Map.get(pack, "verdict", %{})
     Enum.join([

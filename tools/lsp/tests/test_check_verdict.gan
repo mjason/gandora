@@ -234,9 +234,14 @@ defmodule TestCheckVerdict do
       assert suggests?(v, "practice", "Enum.empty?")
     end
 
-    test "map+filter chains want a comprehension" do
+    test "filter-then-map chains fuse into a comprehension" do
+      {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: xs |> Enum.filter(fn x -> x end) |> Enum.map(fn x -> x end)\nend")
+      assert suggests?(v, "practice", "fuses")
+    end
+
+    test "map-then-filter has no for spelling and stays a pipeline" do
       {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: xs |> Enum.map(fn x -> x end) |> Enum.filter(fn x -> x end)\nend")
-      assert suggests?(v, "practice", "comprehension")
+      refute suggests?(v, "practice", "fuses")
     end
   end
 

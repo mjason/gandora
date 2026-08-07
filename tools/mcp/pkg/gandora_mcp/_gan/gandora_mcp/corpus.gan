@@ -360,8 +360,9 @@ defmodule Corpus do
   end
 
   defp summoned?(atom, low) do
-    Enum.count(Enum.filter(Map.get(atom, "triggers", []),
-      fn t -> String.contains?(low, t) end)) > 0
+    atom
+    |> Map.get("triggers", [])
+    |> Enum.any?(fn t -> String.contains?(low, t) end)
   end
 
   @doc "The prompt block for one syntax atom."

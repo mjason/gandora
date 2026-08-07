@@ -7,8 +7,6 @@ a failure carrying its findings, never as confident prose.
 
 import collections.abc
 import functools
-import os
-import pathlib
 import pydantic_ai
 import pydantic_ai.models.openai as oai
 import pydantic_ai.providers.deepseek as dsp
@@ -17,8 +15,11 @@ import gandora_mcp.corpus
 import gandora_mcp.intel
 import gandora_mcp.sandbox
 import gandora_std.enum
+import gandora_std.file
 import gandora_std.map
+import gandora_std.path
 import gandora_std.string
+import gandora_std.system
 import gandora_std.task
 
 
@@ -55,7 +56,7 @@ returned map carries `ok`, the `module` source, its `verdict`, the
 """
     key = _api_key(root)
     if (key is None):
-        return {"ok": False, "why": "no GAN_API_KEY in the environment or .env", "explanation": "", "module": "", "verdict": {}, "rounds": 0, "atoms": []}
+        return _failure("no GAN_API_KEY in the environment or .env", 0, [])
     else:
         ground_task = gandora_std.task.async__kw(gandora_std.task.blocking(lambda *, root=root: _grounding(root)))
         cards_task = gandora_std.task.async__kw(_constructs(requirement, root))
@@ -129,7 +130,7 @@ async def _attempt(requirement, key, ground, efforts, findings, round):
     while True:
         atoms = gandora_std.map.get(ground, "atoms")
         if _gan_truthy(gandora_std.enum.empty_p(efforts)):
-            return {"ok": False, "why": "no draft reached a clean verdict", "explanation": "", "module": "", "verdict": {}, "rounds": round, "findings": findings, "atoms": atoms}
+            return gandora_std.map.put(_failure("no draft reached a clean verdict", round, atoms), "findings", findings)
         else:
             raw = (await _ask(_prompt(requirement, ground, findings), gandora_std.enum.at(efforts, 0), key))
             _gan_val2 = answer(raw)
@@ -144,10 +145,8 @@ async def _attempt(requirement, key, ground, efforts, findings, round):
                 _gan_tmp4 = (await gandora_std.task.blocking(lambda *, draft=draft, ground=ground: gandora_mcp.sandbox.verdict(draft, gandora_std.map.get(ground, "root"))))
             verdict = _gan_tmp4
             left = gandora_std.enum.drop(efforts, 1)
-            if _gan_truthy(_gan_and(green_p(verdict), lambda: gandora_std.string.trim(prose) != "")):
-                return {"ok": True, "explanation": prose, "module": draft, "verdict": verdict, "rounds": round + 1, "atoms": atoms}
-            elif _gan_truthy(_gan_and(green_p(verdict), lambda: gandora_std.enum.empty_p(left))):
-                return {"ok": True, "explanation": prose, "module": draft, "verdict": verdict, "rounds": round + 1, "atoms": atoms}
+            if _gan_truthy(_gan_and(green_p(verdict), lambda: _gan_or(gandora_std.string.trim(prose) != "", lambda: gandora_std.enum.empty_p(left)))):
+                return _success(prose, draft, verdict, round + 1, atoms)
             elif _gan_truthy(green_p(verdict)):
                 requirement, key, ground, efforts, findings, round = requirement, key, ground, left, "Your module was accepted but your answer had no EXPLANATION: section. Send both parts.", round + 1
                 continue
@@ -156,11 +155,23 @@ async def _attempt(requirement, key, ground, efforts, findings, round):
                 continue
 
 
+def _success(prose, draft, verdict, rounds, atoms):
+    return {"ok": True, "explanation": prose, "module": draft, "verdict": verdict, "rounds": rounds, "atoms": atoms}
+
+
+def _failure(why, rounds, atoms):
+    return {"ok": False, "why": why, "explanation": "", "module": "", "verdict": {}, "rounds": rounds, "atoms": atoms}
+
+
 def _report(verdict):
-    errors = gandora_std.enum.map(gandora_std.map.get(verdict, "diagnostics", []), lambda d: "error: " + str(gandora_std.map.get(d, "message", "")))
-    hints = gandora_std.enum.map(gandora_std.map.get(verdict, "suggestions", []), lambda s: "practice: " + str(gandora_std.map.get(s, "message", "")))
+    errors = _findings(verdict, "diagnostics", "error")
+    hints = _findings(verdict, "suggestions", "practice")
     doctest = gandora_std.map.get(gandora_std.map.get(verdict, "doctests", {}), "output", "")
     return gandora_std.enum.join(errors + (hints + [doctest]), "\n")
+
+
+def _findings(verdict, key, label):
+    return gandora_std.enum.map(gandora_std.map.get(verdict, key, []), lambda f, *, label=label: label + (": " + str(gandora_std.map.get(f, "message", ""))))
 
 
 def _prompt(requirement, ground, findings):
@@ -185,7 +196,7 @@ def _retry(findings):
 
 async def _constructs(requirement, root):
     low = gandora_std.string.downcase(requirement)
-    _gan_tmp5 = [names for _gan_for6 in triggers.items() if isinstance(_gan_for6, tuple) and len(_gan_for6) == 2 for (word, names,) in [(_gan_for6[0], _gan_for6[1],)] if _gan_truthy(gandora_std.string.contains_p(low, word))]
+    _gan_tmp5 = [names for _gan_for6 in gandora_std.map.to_list(triggers) if isinstance(_gan_for6, tuple) and len(_gan_for6) == 2 for (word, names,) in [(_gan_for6[0], _gan_for6[1],)] if _gan_truthy(gandora_std.string.contains_p(low, word))]
     wanted = _gan_tmp5
     cards = (await gandora_std.task.async_stream(gandora_std.enum.uniq(gandora_std.enum.concat(wanted)), lambda n, *, root=root: gandora_std.task.blocking(lambda *, root=root: _card(n, root)), 4))
     kept = gandora_std.enum.filter(cards, lambda c: c != "")
@@ -211,18 +222,22 @@ def _grounding(root):
         return ""
     else:
         notes = gandora_std.enum.join(gandora_std.map.get(gandora_std.map.get(pack, "language", {}), "notes", []), "\n")
-        _gan_tmp9 = ["- " + (mod + (": " + gandora_std.enum.join(names, " "))) for _gan_for10 in gandora_std.map.get(pack, "std", {}).items() if isinstance(_gan_for10, tuple) and len(_gan_for10) == 2 for (mod, names,) in [(_gan_for10[0], _gan_for10[1],)]]
-        lines = _gan_tmp9
-        _gan_fstr11 = gandora_std.enum.join(lines, "\n")
-        return f"Language notes:\n{notes}\n\nThe standard library — these functions exist, no others:\n{_gan_fstr11}\n"
+        def _gan_fn0(*_gan_args):
+            match _gan_args:
+                case ((mod, names) as _gan_t9,) if isinstance(_gan_t9, tuple):
+                    return "- " + (mod + (": " + gandora_std.enum.join(names, " ")))
+            raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
+        lines = gandora_std.enum.map(gandora_std.map.to_list(gandora_std.map.get(pack, "std", {})), _gan_fn0)
+        _gan_fstr10 = gandora_std.enum.join(lines, "\n")
+        return f"Language notes:\n{notes}\n\nThe standard library — these functions exist, no others:\n{_gan_fstr10}\n"
 
 
 def _atom_block(atom):
-    _gan_fstr12 = gandora_std.map.get(atom, "target", "")
-    _gan_fstr13 = gandora_std.map.get(atom, "spec", "")
-    _gan_fstr14 = gandora_std.map.get(atom, "doc", "")
-    _gan_fstr15 = gandora_std.map.get(atom, "example", "")
-    return f"## {_gan_fstr12}\n{_gan_fstr13}\n{_gan_fstr14}\n{_gan_fstr15}\n"
+    _gan_fstr11 = gandora_std.map.get(atom, "target", "")
+    _gan_fstr12 = gandora_std.map.get(atom, "spec", "")
+    _gan_fstr13 = gandora_std.map.get(atom, "doc", "")
+    _gan_fstr14 = gandora_std.map.get(atom, "example", "")
+    return f"## {_gan_fstr11}\n{_gan_fstr12}\n{_gan_fstr13}\n{_gan_fstr14}\n"
 
 
 async def _request(text, effort, key):
@@ -232,14 +247,14 @@ async def _request(text, effort, key):
 
 async def _ask(text, effort, key):
     t = gandora_std.task.async__kw(_request(text, effort, key))
-    _gan_case16 = (await gandora_std.task.try_await(t, model_timeout))
-    match _gan_case16:
-        case ("ok", out) as _gan_t17 if isinstance(_gan_t17, tuple):
+    _gan_case15 = (await gandora_std.task.try_await(t, model_timeout))
+    match _gan_case15:
+        case ("ok", out) as _gan_t16 if isinstance(_gan_t16, tuple):
             return out
-        case ("error", _why) as _gan_t18 if isinstance(_gan_t18, tuple):
+        case ("error", _why) as _gan_t17 if isinstance(_gan_t17, tuple):
             return ""
         case _:
-            raise GanMatchError("no case clause matched: " + repr(_gan_case16))
+            raise GanMatchError("no case clause matched: " + repr(_gan_case15))
 
 
 @functools.cache
@@ -254,28 +269,30 @@ def _no_draft():
 
 
 def _model_name():
-    name = os.getenv("GAN_MODEL")
-    if (name is None):
-        return "deepseek-v4-flash"
-    else:
-        return name
+    return gandora_std.system.get_env("GAN_MODEL", "deepseek-v4-flash")
 
 
 def _api_key(root):
-    env = os.getenv("GAN_API_KEY")
+    env = gandora_std.system.get_env("GAN_API_KEY")
     if not ((env is None)):
         return env
     else:
-        return _dotenv(os.path.join(root, ".env"))
+        return _dotenv(gandora_std.path.join(root, ".env"))
 
 
 def _dotenv(path):
-    if not (_gan_truthy(os.path.exists(path))):
+    _gan_case18 = gandora_std.file.read(path)
+    match _gan_case18:
+        case ("error", _why) as _gan_t19 if isinstance(_gan_t19, tuple):
+            return None
+        case ("ok", text) as _gan_t20 if isinstance(_gan_t20, tuple):
+            return _key_value(gandora_std.enum.find(gandora_std.string.split_on(text, "\n"), lambda l: gandora_std.string.starts_with_p(gandora_std.string.trim(l), "GAN_API_KEY=")))
+        case _:
+            raise GanMatchError("no case clause matched: " + repr(_gan_case18))
+
+
+def _key_value(line):
+    if (line is None):
         return None
     else:
-        lines = gandora_std.string.split_on(pathlib.Path(path).read_text(), "\n")
-        hit = gandora_std.enum.find(lines, lambda l: gandora_std.string.starts_with_p(gandora_std.string.trim(l), "GAN_API_KEY="))
-        if (hit is None):
-            return None
-        else:
-            return gandora_std.string.trim(gandora_std.enum.at(gandora_std.string.split_on(hit, "="), 1))
+        return gandora_std.string.trim(gandora_std.enum.at(gandora_std.string.split_on(line, "="), 1))

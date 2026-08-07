@@ -57,24 +57,24 @@ question that needs a model.
   - query: The requirement text.
   - k: How many atoms to return.
 """
-    _gan_tmp0 = [_stem(w) for w in keywords(query)]
-    words = _gan_tmp0
+    words = gandora_std.enum.map(keywords(query), _stem)
     all = catalog(root)
-    _gan_tmp1 = [(score(a, words), a) for a in all]
-    scored = _gan_tmp1
     def _gan_fn0(*_gan_args):
         match _gan_args:
-            case ((s, _a) as _gan_t2,) if isinstance(_gan_t2, tuple):
+            case ((s, _a) as _gan_t0,) if isinstance(_gan_t0, tuple):
                 return s > 0
         raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
     def _gan_fn1(*_gan_args):
         match _gan_args:
-            case ((s, _a) as _gan_t3,) if isinstance(_gan_t3, tuple):
+            case ((s, _a) as _gan_t1,) if isinstance(_gan_t1, tuple):
                 return s
         raise GanMatchError("no clause of _gan_fn1/1 matched " + repr(_gan_args))
-    top = gandora_std.enum.take(gandora_std.enum.reverse(gandora_std.enum.sort_by(gandora_std.enum.filter(scored, _gan_fn0), _gan_fn1)), k)
-    _gan_tmp4 = [a for _gan_for5 in top if isinstance(_gan_for5, tuple) and len(_gan_for5) == 2 for (a,) in [(_gan_for5[1],)]]
-    hits = _gan_tmp4
+    def _gan_fn2(*_gan_args):
+        match _gan_args:
+            case ((_s, a) as _gan_t2,) if isinstance(_gan_t2, tuple):
+                return a
+        raise GanMatchError("no clause of _gan_fn2/1 matched " + repr(_gan_args))
+    hits = gandora_std.enum.map(gandora_std.enum.take(gandora_std.enum.reverse(gandora_std.enum.sort_by(gandora_std.enum.filter(gandora_std.enum.map(all, lambda a, *, words=words: (score(a, words), a)), _gan_fn0), _gan_fn1)), k), _gan_fn2)
     return _pad(hits, all, k)
 
 
@@ -109,25 +109,22 @@ three in the prose, because a name is what the caller will type.
     >>> score({"target": "Enum.sum", "doc": "Adds the numbers."}, ["sum", "numbers"])
     4
 """
-    _gan_tmp6 = [_stem(w) for w in _name_words(gandora_std.map.get(atom, "target", ""))]
-    name = _gan_tmp6
-    _gan_tmp7 = [_stem(w) for w in keywords(gandora_std.map.get(atom, "doc", ""))]
-    prose = _gan_tmp7
-    _gan_tmp8 = [_hit(name, prose, _stem(w)) for w in words]
-    return gandora_std.enum.sum(_gan_tmp8)
+    name = gandora_std.enum.map(_name_words(gandora_std.map.get(atom, "target", "")), _stem)
+    prose = gandora_std.enum.map(keywords(gandora_std.map.get(atom, "doc", "")), _stem)
+    return gandora_std.enum.sum(gandora_std.enum.map(words, lambda w, *, name=name, prose=prose: _hit(name, prose, _stem(w))))
 
 
 def _hit(name, prose, stem):
     if _gan_truthy(gandora_std.enum.member_p(name, stem)):
-        _gan_tmp9 = 3
+        _gan_tmp3 = 3
     else:
-        _gan_tmp9 = 0
-    name_hit = _gan_tmp9
+        _gan_tmp3 = 0
+    name_hit = _gan_tmp3
     if _gan_truthy(gandora_std.enum.member_p(prose, stem)):
-        _gan_tmp10 = 1
+        _gan_tmp4 = 1
     else:
-        _gan_tmp10 = 0
-    prose_hit = _gan_tmp10
+        _gan_tmp4 = 0
+    prose_hit = _gan_tmp4
     return name_hit + prose_hit
 
 
@@ -144,20 +141,20 @@ def _stem(word):
 
 def _module_atoms(module, root):
     try:
-        _gan_tmp11 = core.symbols(module, root)
+        _gan_tmp5 = core.symbols(module, root)
     except Exception as _e:
-        _gan_tmp11 = []
-    syms = _gan_tmp11
+        _gan_tmp5 = []
+    syms = _gan_tmp5
     return gandora_std.enum.flat_map(gandora_std.enum.uniq(gandora_std.enum.map(syms, lambda s: gandora_std.map.get(s, "name"))), lambda n, *, module=module, root=root: gandora_std.list.wrap(_atom(module, n, root)))
 
 
 def _atom(module, name, root):
     target = module + ("." + name)
     try:
-        _gan_tmp12 = core.doc(target, root)
+        _gan_tmp6 = core.doc(target, root)
     except Exception as _e:
-        _gan_tmp12 = None
-    info = _gan_tmp12
+        _gan_tmp6 = None
+    info = _gan_tmp6
     if (info is None):
         return None
     else:

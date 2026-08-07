@@ -7,20 +7,23 @@ from here has gone unrun — that is the whole point of the surface.
 import gandora_core as core
 import json
 import os
-import pathlib
 import re
-import shutil
-import subprocess
 import sys
 import tempfile
 import gandora_std.enum
+import gandora_std.file
 import gandora_std.list
 import gandora_std.map
+import gandora_std.path
 import gandora_std.string
+import gandora_std.system
 
 
 def _gan_truthy(value):
     return value is not None and value is not False
+
+class GanMatchError(Exception):
+    pass
 
 config = "{\"source\": [\"src\"], \"outDir\": \"dist\", \"targetPython\": \"3.11\"}\n"
 
@@ -44,7 +47,7 @@ when the code compiles — the result of really running its doctests.
         else:
             return gandora_std.map.put(base, "doctests", skipped("the code did not compile"))
     finally:
-        shutil.rmtree(dir, ignore_errors=True)
+        gandora_std.file.rm_rf_bang(dir)
 
 
 def venv(root: str) -> str:
@@ -57,8 +60,8 @@ to be installed in.
 
   - root: The project root.
 """
-    local = os.path.join(root, ".venv")
-    if _gan_truthy(os.path.isdir(local)):
+    local = gandora_std.path.join(root, ".venv")
+    if _gan_truthy(gandora_std.file.dir_p(local)):
         return local
     else:
         return sys.prefix
@@ -114,9 +117,12 @@ def module_name(source: str) -> str:
 
 
 def _snake(seg):
-    _gan_tmp0 = [_snake_char(c, i) for _gan_for1 in gandora_std.enum.with_index(gandora_std.string.codepoints(seg)) if isinstance(_gan_for1, tuple) and len(_gan_for1) == 2 for (c, i,) in [(_gan_for1[0], _gan_for1[1],)]]
-    chars = _gan_tmp0
-    return gandora_std.enum.join(chars, "")
+    def _gan_fn0(*_gan_args):
+        match _gan_args:
+            case ((c, i) as _gan_t0,) if isinstance(_gan_t0, tuple):
+                return _snake_char(c, i)
+        raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
+    return gandora_std.enum.join(gandora_std.enum.map(gandora_std.enum.with_index(gandora_std.string.codepoints(seg)), _gan_fn0), "")
 
 
 def _snake_char(c, i):
@@ -127,12 +133,12 @@ def _snake_char(c, i):
 
 
 def _write_project(dir, source, env):
-    target = os.path.join(dir, "src", module_path(module_name(source)))
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    pathlib.Path(os.path.join(dir, "gandora.jsonc")).write_text(config)
-    pathlib.Path(target).write_text(source)
+    target = gandora_std.path.join(gandora_std.path.join(dir, "src"), module_path(module_name(source)))
+    gandora_std.file.mkdir_p_bang(gandora_std.path.dirname(target))
+    gandora_std.file.write_bang(gandora_std.path.join(dir, "gandora.jsonc"), config)
+    gandora_std.file.write_bang(target, source)
     try:
-        return os.symlink(env, os.path.join(dir, ".venv"))
+        return os.symlink(env, gandora_std.path.join(dir, ".venv"))
     except Exception as _e:
         return None
 
@@ -140,39 +146,53 @@ def _write_project(dir, source, env):
 def _check(dir):
     lsc = _tool("gan-lsc")
     if (lsc is None):
-        return {"ok": False, "clean": False, "diagnostics": [], "suggestions": [], "why": "gan-lsc not found — install gandora-lsp"}
+        return _no_verdict("gan-lsc not found — install gandora-lsp")
     else:
-        r = subprocess.run([lsc, "check", "--root", dir], capture_output=True, text=True, timeout=180)
+        _gan_val1 = gandora_std.system.cmd(lsc, ["check", "--root", dir], [("timeout", 180000), ("stderr_to_stdout", True)])
+        match _gan_val1:
+            case (out, _status) as _gan_t2 if isinstance(_gan_t2, tuple):
+                pass
+            case _:
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val1))
         try:
-            return json.loads(r.stdout)
+            return json.loads(out)
         except Exception as _e:
-            return {"ok": False, "clean": False, "diagnostics": [], "suggestions": [], "why": gandora_std.string.trim(r.stderr)}
+            return _no_verdict(gandora_std.string.trim(out))
+
+
+def _no_verdict(why):
+    return {"ok": False, "clean": False, "diagnostics": [], "suggestions": [], "why": why}
 
 
 def _doctests(dir, source, env):
     if not (_gan_truthy(gandora_std.string.contains_p(source, "gan> "))):
         return skipped("no gan> lines in @example")
     else:
-        cache = os.path.join(dir, "dist")
+        cache = gandora_std.path.join(dir, "dist")
         try:
             files = gandora_std.enum.flat_map(core.build(dir, cache), lambda m: gandora_std.list.wrap(gandora_std.map.get(m, "python")))
-            r = subprocess.run([_python(env), "-m", "doctest"] + files, capture_output=True, text=True, timeout=120, cwd=cache)
-            return {"ran": True, "passed": r.returncode == 0, "why": "", "output": gandora_std.string.trim(r.stdout + r.stderr)}
+            _gan_val3 = gandora_std.system.cmd(_python(env), ["-m", "doctest"] + files, [("cd", cache), ("timeout", 120000), ("stderr_to_stdout", True)])
+            match _gan_val3:
+                case (out, status) as _gan_t4 if isinstance(_gan_t4, tuple):
+                    pass
+                case _:
+                    raise GanMatchError("no match of right-hand side value: " + repr(_gan_val3))
+            return {"ran": True, "passed": status == 0, "why": "", "output": gandora_std.string.trim(out)}
         except Exception as e:
             return skipped("the artifact could not be run: " + str(e))
 
 
 def _python(env):
-    local = os.path.join(env, "bin", "python")
-    if _gan_truthy(os.path.exists(local)):
+    local = gandora_std.path.join(gandora_std.path.join(env, "bin"), "python")
+    if _gan_truthy(gandora_std.file.exists_p(local)):
         return local
     else:
         return sys.executable
 
 
 def _tool(bin):
-    path = os.path.join(os.path.dirname(sys.executable), bin)
-    if _gan_truthy(os.path.exists(path)):
-        return path
+    local = gandora_std.path.join(gandora_std.path.dirname(sys.executable), bin)
+    if _gan_truthy(gandora_std.file.exists_p(local)):
+        return local
     else:
-        return shutil.which(bin)
+        return gandora_std.system.find_executable(bin)

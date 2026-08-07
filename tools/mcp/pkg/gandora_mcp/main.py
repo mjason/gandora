@@ -9,11 +9,13 @@ every public function is exactly what the protocol needs.
 import collections.abc
 import gandora_core as core
 import mcp.server.mcpserver as ms
-import os
 import gandora_mcp.composer
 import gandora_mcp.intel
 import gandora_mcp.sandbox
 import gandora_std.enum
+import gandora_std.file
+import gandora_std.path
+import gandora_std.system
 
 
 def _gan_truthy(value):
@@ -84,12 +86,13 @@ def gan_briefing() -> str:
 
 
 def tools() -> list[tuple]:
-    """The tool table: one entry per exposed function and its blurb.
+    """The tool table — the single source the server registers from: one
+entry per exposed function with its capture and its blurb.
 
     >>> gandora_std.enum.count(tools())
     6
 """
-    return [("gan_example", "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."), ("gan_verify", "Compile a Gandora module and run its @example doctests; returns the verdict."), ("gan_doc", "Look up documentation for Mod.fun, a bare name, or a language construct."), ("gan_pack", "The one-call context pack for the project."), ("gan_check", "The build verdict for the whole project."), ("gan_briefing", "The session briefing for working in Gandora.")]
+    return [("gan_example", gan_example, "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."), ("gan_verify", gan_verify, "Compile a Gandora module and run its @example doctests; returns the verdict."), ("gan_doc", gan_doc, "Look up documentation for Mod.fun, a bare name, or a language construct."), ("gan_pack", gan_pack, "The one-call context pack for the project."), ("gan_check", gan_check, "The build verdict for the whole project."), ("gan_briefing", gan_briefing, "The session briefing for working in Gandora.")]
 
 
 def root() -> str:
@@ -99,53 +102,34 @@ otherwise the nearest ancestor of the working directory holding a
 may well choose a subdirectory — so the project is discovered, not
 configured.
 """
-    env = os.getenv("GAN_MCP_ROOT")
+    env = gandora_std.system.get_env("GAN_MCP_ROOT")
     if (env is None):
-        return _discover(os.getcwd())
+        return _discover(gandora_std.file.cwd_bang())
     else:
         return env
 
 
 def _discover(dir):
     while True:
-        if _gan_truthy(os.path.exists(os.path.join(dir, "gandora.jsonc"))):
+        if _gan_truthy(gandora_std.file.exists_p(gandora_std.path.join(dir, "gandora.jsonc"))):
             return dir
-        elif os.path.dirname(dir) == dir:
-            return os.getcwd()
+        elif gandora_std.path.dirname(dir) == dir:
+            return gandora_std.file.cwd_bang()
         else:
-            dir = os.path.dirname(dir)
+            dir = gandora_std.path.dirname(dir)
             continue
 
 
 def main() -> None:
-    """Serves the tools over stdio until the client disconnects."""
+    """Serves the tool table over stdio until the client disconnects."""
     server = ms.MCPServer("gandora", version=core.version(), instructions=instructions)
-    server.add_tool(gan_example, name="gan_example", description=_blurb("gan_example"))
-    server.add_tool(gan_verify, name="gan_verify", description=_blurb("gan_verify"))
-    server.add_tool(gan_doc, name="gan_doc", description=_blurb("gan_doc"))
-    server.add_tool(gan_pack, name="gan_pack", description=_blurb("gan_pack"))
-    server.add_tool(gan_check, name="gan_check", description=_blurb("gan_check"))
-    server.add_tool(gan_briefing, name="gan_briefing", description=_blurb("gan_briefing"))
-    return server.run("stdio")
-
-
-def _blurb(name):
-    def _gan_fn0(*_gan_args, name=name):
+    def _gan_fn0(*_gan_args, server=server):
         match _gan_args:
-            case ((n, _d) as _gan_t0,) if isinstance(_gan_t0, tuple):
-                return n == name
+            case ((name, f, desc) as _gan_t0,) if isinstance(_gan_t0, tuple):
+                return server.add_tool(f, name=name, description=desc)
         raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
-    hit = gandora_std.enum.find(tools(), _gan_fn0)
-    if (hit is None):
-        return name
-    else:
-        _gan_val1 = hit
-        match _gan_val1:
-            case (_n, d) as _gan_t2 if isinstance(_gan_t2, tuple):
-                pass
-            case _:
-                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val1))
-        return d
+    gandora_std.enum.each(tools(), _gan_fn0)
+    return server.run("stdio")
 
 
 if __name__ == "__main__":

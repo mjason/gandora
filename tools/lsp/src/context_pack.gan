@@ -9,14 +9,16 @@ defmodule ContextPack do
 
   pyimport gandora_core, as: core
 
-  @std_modules ["Enum", "List", "Map", "Keyword", "String", "Task", "Test"]
+  import Safe
+
+  @std_modules ["Enum", "List", "Map", "Keyword", "String", "Path", "File", "System", "Task", "Test"]
 
   @doc "The standard-library modules the pack enumerates."
   @doc_trans zh_CN: "pack 枚举的标准库模块清单。"
   @spec known_std() :: list(string())
   @example """
       gan> ContextPack.known_std()
-      ['Enum', 'List', 'Map', 'Keyword', 'String', 'Task', 'Test']
+      ['Enum', 'List', 'Map', 'Keyword', 'String', 'Path', 'File', 'System', 'Task', 'Test']
   """
   def known_std(), do: @std_modules
 
@@ -52,26 +54,19 @@ defmodule ContextPack do
   end
 
   defp std_lists(root) do
-    pairs = for mod <- @std_modules, do: {mod, member_names(mod, root)}
-    Map.new(pairs)
+    @std_modules
+    |> Enum.map(fn mod -> {mod, member_names(mod, root)} end)
+    |> Map.new()
   end
 
   defp member_names(mod, root) do
-    syms = try do
-      core.symbols(mod, root)
-    rescue
-      _e -> []
-    end
+    syms = safe(core.symbols(mod, root), [])
     for s <- syms, Map.get(s, "kind") == "def", do: Map.get(s, "name")
   end
 
   # every project module with its public heads, one line each
   defp project(root) do
-    syms = try do
-      core.wsymbols("", root)
-    rescue
-      _e -> []
-    end
+    syms = safe(core.wsymbols("", root), [])
     Enum.reduce(syms, %{}, fn s, acc ->
       if Map.get(s, "kind") == "def" do
         mod = Map.get(s, "module", "?")
@@ -84,11 +79,7 @@ defmodule ContextPack do
   end
 
   defp verdict(root) do
-    diags = try do
-      core.check(root)
-    rescue
-      _e -> []
-    end
+    diags = safe(core.check(root), [])
     errors = Enum.count(Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end))
     %{
       "ok" => errors == 0,
@@ -98,25 +89,19 @@ defmodule ContextPack do
   end
 
   defp deep_docs(root, deep) do
-    pairs = for mod <- deep, do: {mod, module_docs(mod, root)}
-    Map.new(pairs)
+    deep
+    |> Enum.map(fn mod -> {mod, module_docs(mod, root)} end)
+    |> Map.new()
   end
 
   defp module_docs(mod, root) do
-    for name <- member_names(mod, root),
-      do: doc_or_stub("#{mod}.#{name}", root)
+    mod
+    |> member_names(root)
+    |> Enum.map(fn name -> doc_or_stub("#{mod}.#{name}", root) end)
   end
 
   defp doc_or_stub(target, root) do
-    info = try do
-      core.doc(target, root)
-    rescue
-      _e -> nil
-    end
-    if is_nil(info) do
-      %{"label" => target}
-    else
-      info
-    end
+    info = safe(core.doc(target, root), nil)
+    if is_nil(info), do: %{"label" => target}, else: info
   end
 end

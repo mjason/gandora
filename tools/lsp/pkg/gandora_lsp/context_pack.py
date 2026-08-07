@@ -9,19 +9,20 @@ import gandora_core as core
 import gandora_lsp.construct_docs
 import gandora_std.enum
 import gandora_std.map
+from gandora_tool.safe import *
 
 
 class GanMatchError(Exception):
     pass
 
-std_modules = ["Enum", "List", "Map", "Keyword", "String", "Task", "Test"]
+std_modules = ["Enum", "List", "Map", "Keyword", "String", "Path", "File", "System", "Task", "Test"]
 
 
 def known_std() -> list[str]:
     """The standard-library modules the pack enumerates.
 
     >>> known_std()
-    ['Enum', 'List', 'Map', 'Keyword', 'String', 'Task', 'Test']
+    ['Enum', 'List', 'Map', 'Keyword', 'String', 'Path', 'File', 'System', 'Task', 'Test']
 """
     return std_modules
 
@@ -50,26 +51,24 @@ def _language():
 
 
 def _std_lists(root):
-    _gan_tmp0 = [(mod, _member_names(mod, root)) for mod in std_modules]
-    pairs = _gan_tmp0
-    return gandora_std.map.new(pairs)
+    return gandora_std.map.new(gandora_std.enum.map(std_modules, lambda mod, *, root=root: (mod, _member_names(mod, root))))
 
 
 def _member_names(mod, root):
     try:
-        _gan_tmp1 = core.symbols(mod, root)
-    except Exception as _e:
-        _gan_tmp1 = []
-    syms = _gan_tmp1
+        _gan_tmp0 = core.symbols(mod, root)
+    except Exception as _e__gan1:
+        _gan_tmp0 = []
+    syms = _gan_tmp0
     return [gandora_std.map.get(s, "name") for s in syms if gandora_std.map.get(s, "kind") == "def"]
 
 
 def _project(root):
     try:
-        _gan_tmp2 = core.wsymbols("", root)
-    except Exception as _e:
-        _gan_tmp2 = []
-    syms = _gan_tmp2
+        _gan_tmp1 = core.wsymbols("", root)
+    except Exception as _e__gan2:
+        _gan_tmp1 = []
+    syms = _gan_tmp1
     def _gan_fn0(s, acc):
         if gandora_std.map.get(s, "kind") == "def":
             mod = gandora_std.map.get(s, "module", "?")
@@ -82,30 +81,28 @@ def _project(root):
 
 def _verdict(root):
     try:
-        _gan_tmp4 = core.check(root)
-    except Exception as _e:
-        _gan_tmp4 = []
-    diags = _gan_tmp4
+        _gan_tmp3 = core.check(root)
+    except Exception as _e__gan3:
+        _gan_tmp3 = []
+    diags = _gan_tmp3
     errors = gandora_std.enum.count(gandora_std.enum.filter(diags, lambda d: gandora_std.map.get(d, "severity") == "error"))
     return {"ok": errors == 0, "errors": errors, "warnings": gandora_std.enum.count(diags) - errors}
 
 
 def _deep_docs(root, deep):
-    _gan_tmp5 = [(mod, _module_docs(mod, root)) for mod in deep]
-    pairs = _gan_tmp5
-    return gandora_std.map.new(pairs)
+    return gandora_std.map.new(gandora_std.enum.map(deep, lambda mod, *, root=root: (mod, _module_docs(mod, root))))
 
 
 def _module_docs(mod, root):
-    return [_doc_or_stub(f"{mod}.{name}", root) for name in _member_names(mod, root)]
+    return gandora_std.enum.map(_member_names(mod, root), lambda name, *, mod=mod, root=root: _doc_or_stub(f"{mod}.{name}", root))
 
 
 def _doc_or_stub(target, root):
     try:
-        _gan_tmp6 = core.doc(target, root)
-    except Exception as _e:
-        _gan_tmp6 = None
-    info = _gan_tmp6
+        _gan_tmp4 = core.doc(target, root)
+    except Exception as _e__gan4:
+        _gan_tmp4 = None
+    info = _gan_tmp4
     if (info is None):
         return {"label": target}
     else:

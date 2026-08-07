@@ -6,9 +6,8 @@ defmodule Lsc do
 
   pyimport gandora_core, as: core
   pyimport json
-  pyimport pathlib
-  pyimport sys
-  pyimport os
+
+  import Safe
 
   @usage """
   gan lsc <query> — one JSON value on stdout
@@ -38,8 +37,7 @@ defmodule Lsc do
   @doc "Entry: parses --root, dispatches one query, emits one JSON value."
   @spec main() :: nil
   def main() do
-    args = $builtins.list(sys.argv) |> Enum.drop(1)
-    {root, args} = take_root(args)
+    {root, args} = take_root(System.argv())
     try do
       dispatch(args, root)
     rescue
@@ -51,12 +49,17 @@ defmodule Lsc do
           "line" => Enum.at(parts, 2),
           "col" => Enum.at(parts, 3)
         })
-        sys.exit(1)
+        System.halt(1)
       e ->
         # never a bare traceback: every failure is one JSON value
         emit(%{"error" => "#{$builtins.type(e).__name__}: #{to_string(e)}"})
-        sys.exit(2)
+        System.halt(2)
     end
+  end
+
+  # the arguments that are not flags: targets, modules, queries
+  defp positional(args) do
+    Enum.filter(args, fn a -> not String.starts_with?(a, "--") end)
   end
 
   defp dispatch(args, root) do
@@ -77,9 +80,7 @@ defmodule Lsc do
         # many targets in one call; --brief trims each to one line
         # (GEP-0026-R001/R002)
         brief = Enum.member?(rest, "--brief")
-        targets = [target] ++ Enum.filter(rest, fn a ->
-          not String.starts_with?(a, "--")
-        end)
+        targets = [target] ++ positional(rest)
         results = Enum.map(targets, fn t -> doc_one(t, root, brief) end)
         if Enum.count(targets) == 1 do
           emit(Enum.at(results, 0))
@@ -89,19 +90,18 @@ defmodule Lsc do
       ["definition", target | _] ->
         emit(core.definition(target, root))
       ["symbols", module | rest] ->
-        mods = [module] ++ Enum.filter(rest, fn a ->
-          not String.starts_with?(a, "--")
-        end)
+        mods = [module] ++ positional(rest)
         if Enum.count(mods) == 1 do
           emit(core.symbols(module, root))
         else
-          pairs = for m <- mods, do: {m, core.symbols(m, root)}
-          emit(Map.new(pairs))
+          mods
+          |> Enum.map(fn m -> {m, core.symbols(m, root)} end)
+          |> Map.new()
+          |> emit()
         end
       ["pack" | rest] ->
         # the one-call agent context (GEP-0026-R003)
-        deep = Enum.filter(rest, fn a -> not String.starts_with?(a, "--") end)
-        emit(ContextPack.build(root, deep))
+        emit(ContextPack.build(root, positional(rest)))
       ["references", target | _] ->
         emit(core.references(target, root))
       ["wsymbols", query | _] ->
@@ -114,39 +114,29 @@ defmodule Lsc do
         # the project already compiles; --strict adds type-flow warnings
         errors0 = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
         diags = if Enum.empty?(errors0) do
-          cache = os.path.join(root, ".gandora", "cache")
-          verification = try do
-            modules = core.build(root, cache)
-            Verifier.verify(root, cache, modules, Enum.member?(rest, "--strict"))
-          rescue
-            _e -> []
-          end
+          cache = Path.join(root, ".gandora/cache")
+          verification = safe(
+            Verifier.verify(root, cache, core.build(root, cache),
+              Enum.member?(rest, "--strict")),
+            [])
           diags ++ verification
         else
           diags
         end
-        files = try do
+        # a parse-broken file must not silence the whole verdict: fall
+        # back to globbing when the symbol walk dies
+        files = safe(
           core.wsymbols("", root)
           |> Enum.map(fn sym -> Map.get(sym, "path") end)
-          |> Enum.uniq()
-        rescue
-          _e ->
-            # a parse-broken file must not silence the whole verdict
-            $builtins.list(pathlib.Path(root).glob("src/**/*.gan"))
-            |> Enum.map(&to_string/1)
-        end
+          |> Enum.uniq(),
+          Path.wildcard(Path.join(root, "src/**/*.gan")))
         # tests are part of the project surface too (Advisor pass only —
-        # their compile diagnostics belong to `gan test`)
-        # top-level only, mirroring what `gan test` runs — deeper
-        # directories hold fixtures, not tests
-        test_files = $builtins.list(pathlib.Path(root).glob("tests/*.gan"))
-        |> Enum.map(&to_string/1)
+        # their compile diagnostics belong to `gan test`); top-level
+        # only, mirroring what `gan test` runs — deeper directories
+        # hold fixtures, not tests
+        test_files = Path.wildcard(Path.join(root, "tests/*.gan"))
         suggestions = Enum.flat_map(Enum.uniq(files ++ test_files), fn path ->
-          text = try do
-            read(path)
-          rescue
-            _e -> ""
-          end
+          text = safe(read(path), "")
           per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
           (Advisor.analyze(text, root) ++ Advisor.lint_hints(text, per_file))
           |> Enum.map(fn h -> Map.put(h, "path", path) end)
@@ -160,7 +150,7 @@ defmodule Lsc do
           "suggestions" => suggestions
         })
         if not Enum.empty?(errors) do
-          sys.exit(1)
+          System.halt(1)
         end
       ["pydoc", chain | _] ->
         emit(PyIntel.hover_markdown(root, import_line(chain), chain))
@@ -172,7 +162,7 @@ defmodule Lsc do
         emit(PyIntel.signatures(root, import_line(chain), chain))
       _ ->
         IO.puts(@usage)
-        sys.exit(2)
+        System.halt(2)
     end
   end
 
@@ -212,11 +202,7 @@ defmodule Lsc do
     else
       mod = Enum.at(parts, 0)
       name = Enum.at(parts, 1)
-      syms = try do
-        core.symbols(mod, root)
-      rescue
-        _e -> []
-      end
+      syms = safe(core.symbols(mod, root), [])
       hit = Enum.find(syms, fn s -> Map.get(s, "name") == name end)
       if is_nil(hit) do
         nil
@@ -234,11 +220,7 @@ defmodule Lsc do
   # exact-name search across the project's symbols; resolves the
   # owning module and returns its full doc (GEP-0026)
   defp project_doc(name, root) do
-    syms = try do
-      core.wsymbols(name, root)
-    rescue
-      _e -> []
-    end
+    syms = safe(core.wsymbols(name, root), [])
     hit = Enum.find(syms, fn s -> Map.get(s, "name") == name end)
     if is_nil(hit) do
       nil
@@ -269,14 +251,14 @@ defmodule Lsc do
 
   defp take_root(args) do
     case Enum.find_index(args, fn a -> a == "--root" end) do
-      nil -> {$os.getcwd(), args}
+      nil -> {File.cwd!(), args}
       i ->
         root = Enum.at(args, i + 1)
         {root, Enum.take(args, i) ++ Enum.drop(args, i + 2)}
     end
   end
 
-  defp read(file), do: pathlib.Path(file).read_text()
+  defp read(file), do: File.read!(file)
 
   defp emit(value), do: IO.puts(json.dumps(value))
 end

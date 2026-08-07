@@ -6,15 +6,20 @@ here can be invented.
 
 import collections.abc
 import json
-import os
-import shutil
-import subprocess
 import sys
+import gandora_std.file
+import gandora_std.path
 import gandora_std.string
+import gandora_std.system
 
 
 def _gan_truthy(value):
     return value is not None and value is not False
+
+class GanMatchError(Exception):
+    pass
+
+tool_timeout = 180000
 
 
 def argv(args: collections.abc.Sequence[str], root: str) -> list[str]:
@@ -43,9 +48,14 @@ def lsc(args: collections.abc.Sequence[str], root: str) -> object:
     if (bin is None):
         return None
     else:
-        r = subprocess.run([bin] + argv(args, root), capture_output=True, text=True, timeout=180)
+        _gan_val0 = gandora_std.system.cmd(bin, argv(args, root), [("timeout", tool_timeout)])
+        match _gan_val0:
+            case (out, _status) as _gan_t1 if isinstance(_gan_t1, tuple):
+                pass
+            case _:
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val0))
         try:
-            return json.loads(r.stdout)
+            return json.loads(out)
         except Exception as _e:
             return None
 
@@ -93,13 +103,18 @@ def briefing(root: str) -> str:
     if (bin is None):
         return "gan not found — install gandora-tool"
     else:
-        r = subprocess.run([bin, "agent"], capture_output=True, text=True, timeout=180, cwd=root)
-        return gandora_std.string.trim(r.stdout)
+        _gan_val2 = gandora_std.system.cmd(bin, ["agent"], [("cd", root), ("timeout", tool_timeout)])
+        match _gan_val2:
+            case (out, _status) as _gan_t3 if isinstance(_gan_t3, tuple):
+                pass
+            case _:
+                raise GanMatchError("no match of right-hand side value: " + repr(_gan_val2))
+        return gandora_std.string.trim(out)
 
 
 def _tool(bin):
-    path = os.path.join(os.path.dirname(sys.executable), bin)
-    if _gan_truthy(os.path.exists(path)):
-        return path
+    local = gandora_std.path.join(gandora_std.path.dirname(sys.executable), bin)
+    if _gan_truthy(gandora_std.file.exists_p(local)):
+        return local
     else:
-        return shutil.which(bin)
+        return gandora_std.system.find_executable(bin)
