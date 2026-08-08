@@ -94,14 +94,14 @@ def gan_briefing() -> str:
 
 
 def tools() -> list[tuple]:
-    """The tool table the hook accumulated from the `@tool` annotations —
-the single source the server registers from: each entry is the
-function's own name, a capture of it, and the blurb that sits on it.
+    """The tool table the hook accumulated from the `@tool` markers — the
+single source the server registers from: each entry is the
+function's own name and a capture of it.
 
     >>> gandora_std.enum.count(tools())
     6
 """
-    return [("gan_verify", gan_verify, "Compile a Gandora module and run its @example doctests; returns the verdict."), ("gan_example", gan_example, "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."), ("gan_doc", gan_doc, "Look up documentation for Mod.fun, a bare name, or a language construct."), ("gan_pack", gan_pack, "The one-call context pack for the project."), ("gan_check", gan_check, "The build verdict for the whole project."), ("gan_briefing", gan_briefing, "The session briefing for working in Gandora.")]
+    return [("gan_verify", gan_verify), ("gan_example", gan_example), ("gan_doc", gan_doc), ("gan_pack", gan_pack), ("gan_check", gan_check), ("gan_briefing", gan_briefing)]
 
 
 def root() -> str:
@@ -139,7 +139,7 @@ on the definition, visible to every client.
     s = ms.MCPServer("gandora", version=core.version(), instructions=instructions)
     def _gan_fn0(*_gan_args, s=s):
         match _gan_args:
-            case ((name, f, _blurb) as _gan_t0,) if isinstance(_gan_t0, tuple):
+            case ((name, f) as _gan_t0,) if isinstance(_gan_t0, tuple):
                 return _register(s, name, f)
         raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
     gandora_std.enum.each(tools(), _gan_fn0)

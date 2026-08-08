@@ -1,18 +1,19 @@
 defmodule Toolkit do
   @moduledoc """
-  The declarative tool surface (GEP-0008): an MCP tool is declared as
-  an annotation on the function that implements it —
+  The declarative tool surface (GEP-0008): an MCP tool is declared by
+  a bare marker on the function that implements it —
 
-      @tool "Compile a Gandora module and run its doctests."
+      @tool true
       def gan_verify(source), do: ...
 
-  — and the `on_tool` hook registers `{name, &name/arity, blurb}` into
-  the accumulated `@tool_table`. The server registers from that one
-  table: the name is the function's own, the callable is a capture of
-  it, and the blurb sits on the definition it describes — data and
-  execution cannot disagree.
+  — and the `on_tool` hook registers `{name, &name/arity}` into the
+  accumulated `@tool_table`. The server registers from that one table:
+  the name is the function's own, the callable is a capture of it, and
+  everything a client reads — description, parameter docs, schema —
+  comes from the `@doc`/`@param`/`@spec` already on the definition.
+  The marker adds no second prose channel; there is nothing to drift.
   """
-  @moduledoc_trans zh_CN: "声明式工具面(GEP-0008):MCP 工具声明为其实现函数上的注解,`on_tool` 钩子把 {名字, &name/arity, 一句说明} 注册进累积的 @tool_table。服务器只从这张表注册:名字取自函数本名,可调用物是它的捕获,说明就落在被说明的定义上——data 与执行无从不一致。"
+  @moduledoc_trans zh_CN: "声明式工具面(GEP-0008):MCP 工具由实现函数上的裸标记声明(@tool true),`on_tool` 钩子把 {名字, &name/arity} 注册进累积的 @tool_table。服务器只从这张表注册:名字取自函数本名,可调用物是它的捕获;客户端读到的一切——描述、参数说明、schema——皆出自定义上本有的 @doc/@param/@spec。标记不开第二条散文通道,故无物可漂移。"
 
   # attrs arrive as a keyword list; a local macro doubles as the
   # compile-time lookup function (GEP-0002-R010)
@@ -25,7 +26,7 @@ defmodule Toolkit do
   end
 
   @doc """
-  The definition hook: a `@tool "blurb"` annotation turns the following
+  The definition hook: a `@tool true` marker turns the following
   function into a tool-table entry — sync or async, arity 0 or 1;
   every other definition passes through untouched (GEP-0008-R005).
   """
@@ -34,24 +35,24 @@ defmodule Toolkit do
   @param attrs, "The registered attributes collected for this definition."
   @param body, "The definition body, quoted."
   defmacro on_tool(kind, head, attrs, body) do
-    blurb = find_attr(attrs, :tool)
+    marker = find_attr(attrs, :tool)
     {name, _meta, args} = head
     arity = length(args)
     cond do
-      blurb != nil and kind == :"async def" ->
+      marker != nil and kind == :"async def" ->
         quote do
           async def unquote(head), do: unquote(body)
-          @tool_table {unquote(name), &unquote(name)/1, unquote(blurb)}
+          @tool_table {unquote(name), &unquote(name)/1}
         end
-      blurb != nil and arity == 0 ->
+      marker != nil and arity == 0 ->
         quote do
           def unquote(head), do: unquote(body)
-          @tool_table {unquote(name), &unquote(name)/0, unquote(blurb)}
+          @tool_table {unquote(name), &unquote(name)/0}
         end
-      blurb != nil ->
+      marker != nil ->
         quote do
           def unquote(head), do: unquote(body)
-          @tool_table {unquote(name), &unquote(name)/1, unquote(blurb)}
+          @tool_table {unquote(name), &unquote(name)/1}
         end
       kind == :"async def" ->
         quote do

@@ -14,11 +14,10 @@ defmodule Main do
 
   require Toolkit
 
-  # each tool is an annotation on the function that implements it
-  # (GEP-0008): the Toolkit.on_tool hook accumulates
-  # {name, &name/arity, blurb} here, and the server registers from
-  # this one table — the schema still comes from @spec, the
-  # description from @doc, and now the table from the definition too
+  # a tool is a bare marker on the function that implements it
+  # (GEP-0008): the Toolkit.on_tool hook accumulates {name, &name/arity}
+  # here, and the server registers from this one table — everything a
+  # client reads comes from the @doc/@param/@spec already on the def
   defattr :tool
   defattr :tool_table, accumulate: true
 
@@ -45,7 +44,7 @@ defmodule Main do
   @doc_trans zh_CN: "在一次性项目里编译一个 Gandora 模块并真跑它的 `@example` doctest;返回 error、practice 建议与 doctest 输出。"
   @param source, "The Gandora source text of one module."
   @spec gan_verify(string()) :: map()
-  @tool "Compile a Gandora module and run its @example doctests; returns the verdict."
+  @tool true
   def gan_verify(source), do: Sandbox.verdict(source, root())
 
   @doc """
@@ -61,7 +60,7 @@ defmodule Main do
   # on its own loop, so the model round-trips ride the server's loop
   # with no bridge in between
   @spec gan_example(string()) :: map()
-  @tool "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."
+  @tool true
   async def gan_example(requirement), do: await Composer.example(requirement, root())
 
   @doc """
@@ -71,7 +70,7 @@ defmodule Main do
   @doc_trans zh_CN: "一个目标的文档——`Enum.map`、裸函数名,或 `defmacro` 这样的语言构造。"
   @param target, "What to look up."
   @spec gan_doc(string()) :: term()
-  @tool "Look up documentation for Mod.fun, a bare name, or a language construct."
+  @tool true
   def gan_doc(target), do: Intel.doc(target, root())
 
   @doc """
@@ -84,27 +83,27 @@ defmodule Main do
   # no default argument: `\\` compiles to `*_gan_args`, which erases the
   # signature MCP derives its inputSchema from — a tool parameter must
   # stay a named, typed parameter
-  @tool "The one-call context pack for the project."
+  @tool true
   def gan_pack(modules), do: Intel.pack(modules, root())
 
   @doc "The verdict for the current project: `ok`, `clean`, and why not."
   @doc_trans zh_CN: "当前项目的裁决:`ok`、`clean`,以及为何不是。"
   @spec gan_check() :: term()
-  @tool "The build verdict for the whole project."
+  @tool true
   def gan_check(), do: Intel.check(root())
 
   @doc "The session briefing: how to work in Gandora, plus this project."
   @doc_trans zh_CN: "会话简报:如何在 Gandora 中工作,以及这个项目的情况。"
   @spec gan_briefing() :: string()
-  @tool "The session briefing for working in Gandora."
+  @tool true
   def gan_briefing(), do: Intel.briefing(root())
 
   @doc """
-  The tool table the hook accumulated from the `@tool` annotations —
-  the single source the server registers from: each entry is the
-  function's own name, a capture of it, and the blurb that sits on it.
+  The tool table the hook accumulated from the `@tool` markers — the
+  single source the server registers from: each entry is the
+  function's own name and a capture of it.
   """
-  @doc_trans zh_CN: "钩子从 `@tool` 注解累积的工具表——服务器注册的唯一来源:每条是函数本名、其捕获与落在定义上的说明。"
+  @doc_trans zh_CN: "钩子从 `@tool` 标记累积的工具表——服务器注册的唯一来源:每条是函数本名与其捕获。"
   @spec tools() :: list(tuple())
   @example """
       gan> Enum.count(Main.tools())
@@ -147,7 +146,7 @@ defmodule Main do
   @spec server() :: term()
   def server() do
     s = ms.MCPServer("gandora", version: core.version(), instructions: @instructions)
-    Enum.each(tools(), fn {name, f, _blurb} -> register(s, name, f) end)
+    Enum.each(tools(), fn {name, f} -> register(s, name, f) end)
     s
   end
 

@@ -88,7 +88,7 @@ defmodule TestMcpSurface do
   end
 
   test "the tool table names the composer and the verifier" do
-    names = Enum.map(Main.tools(), fn {n, _f, _d} -> n end)
+    names = Enum.map(Main.tools(), fn {n, _f} -> n end)
     assert_contains(names, "gan_example")
     assert_contains(names, "gan_verify")
     assert_eq(Enum.count(names), 6)
@@ -107,7 +107,7 @@ defmodule TestMcpSurface do
     |> Map.get("description")
     assert_contains(source_desc, "Gandora source text")
     # every registered tool with parameters carries a description on each
-    Enum.each(Main.tools(), fn {name, _f, _blurb} ->
+    Enum.each(Main.tools(), fn {name, _f} ->
       props = s._tool_manager.get_tool(name).parameters |> Map.get("properties", %{})
       Enum.each(Map.to_list(props), fn {_pname, schema} ->
         assert_true(Map.get(schema, "description", "") != "")

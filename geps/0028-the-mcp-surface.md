@@ -214,15 +214,17 @@ draft.
 ## Change History
 
 - Revision 3, 2026-08-08: the write-once contract is now fully wired.
-  The tool table is declared on the definitions (`@tool` +
-  `defattr`/`@on_definition`, GEP-0008 rev 2) instead of maintained
-  beside them, and registration carries the whole annotation surface
-  into the protocol: the `@doc` prose is the tool description
-  (previously the table blurb overrode it), and each `@param` text is
-  injected into its `inputSchema` property — parsed from the
-  `## Parameters` docstring section our own codegen emits (GEP-0018),
-  a contract rather than a guess. `@tool`'s one-liner remains the
-  table/listing summary. Nothing about a tool is written twice.
+  A tool is a bare `@tool true` marker on the function that implements
+  it (`defattr`/`@on_definition`, GEP-0008 rev 2) — the hook derives
+  the table entry from the definition's own name and arity — and
+  registration carries the whole annotation surface into the protocol:
+  the `@doc` prose is the tool description (previously a hand-kept
+  blurb overrode it), and each `@param` text is injected into its
+  `inputSchema` property, parsed from the `## Parameters` docstring
+  section our own codegen emits (GEP-0018) — a contract rather than a
+  guess. The marker carries no prose of its own: a second description
+  channel on the same definition would be exactly the duplication this
+  GEP exists to forbid. Nothing about a tool is written twice.
 
 - Revision 2, 2026-08-07: Accepted. `gandora-mcp` joins the release
   chain as the sixth published package, and R012 makes `gan init`
