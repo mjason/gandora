@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-06
 updated: 2026-08-08
-revision: 4
+revision: 5
 requires: [13, 15, 25, 26]
 replaces: []
 superseded-by: null
@@ -156,20 +156,20 @@ clones, and the verdicts they produce are the project's own, judged
 inside its own environment rather than by whatever toolchain happens
 to be installed system-wide.
 
-**GEP-0028-R012A (the agent instructions are wired the same way, rev
-4):** `gan init` also wires the agent-instruction files. When neither
-exists, it creates `AGENTS.md` holding the marker-delimited Gandora
-section — a compact pointer document (the loop, the retrieval-first
-habit, `gan_verify` as the only proof, and where the live briefing
-lives), never a copy of rules the toolchain already serves. When
-`AGENTS.md` exists, the section is appended, its markers making the
-operation idempotent; the user's own content is never touched. When
-`CLAUDE.md` exists, one `@AGENTS.md` import line is appended (once) so
-Claude reads the same section. Static wiring stays `gan init`'s job —
-re-runnable, deterministic, and honest about mutation — while the MCP
-server keeps its property of never writing into the project: its
-`instructions` may point an agent at `gan init .`, not do the writing
-for it.
+**GEP-0028-R012A (agent instructions belong to the agents, rev 5):**
+`gan init` writes nothing into `AGENTS.md` or `CLAUDE.md`, ever.
+Those files carry each agent's own conventions, structure, and voice;
+a tool appending a universal section into them is pollution, not
+wiring — revision 4 specified exactly that and was withdrawn the same
+day, against a real project. R012's config files are different in
+kind: they are machine-read, single-shape, and ours to define. The
+self-setup path is the server's `instructions` instead: they tell a
+connected agent that lacks Gandora coverage in its own instruction
+file to add a short section itself, in that file's conventions — the
+loop, retrieval before editing, `gan_verify` as the only proof. Each
+AI configures itself through its normal edit flow, with its user
+watching; the MCP server keeps its property of never writing into the
+project.
 
 ## Rationale
 
@@ -228,12 +228,19 @@ draft.
 
 ## Change History
 
+- Revision 5, 2026-08-08: R012A inverted — `gan init` does NOT write
+  agent-instruction files; revision 4's append-a-section design
+  polluted real projects' `AGENTS.md`/`CLAUDE.md` with a voice not
+  their own and was withdrawn the same day. The server's
+  `instructions` now carry the self-setup nudge: each agent adds its
+  own short Gandora section, in its own file's conventions.
+
 - Revision 4, 2026-08-08: R012A — `gan init` wires the
   agent-instruction files: creates `AGENTS.md` when absent, appends
   the marker-delimited Gandora section when present, and adds one
   `@AGENTS.md` import to an existing `CLAUDE.md`. The section is a
   pointer, not a rulebook copy; the MCP server continues to write
-  nothing into the project.
+  nothing into the project. Withdrawn by revision 5.
 
 - Revision 3, 2026-08-08: the write-once contract is now fully wired.
   A tool is a bare `@tool true` marker on the function that implements

@@ -139,34 +139,6 @@ defmodule TestInitCli do
     cleanup(dir)
   end
 
-  # agent-instruction wiring (GEP-0028-R012A): create when absent,
-  # append the marked section when present, point CLAUDE.md at it —
-  # idempotent, user prose untouched
-  test "a fresh project is born with AGENTS.md" do
-    dir = scaffold()
-    text = read(dir, "AGENTS.md")
-    assert_true(String.contains?(text, "<!-- gandora:begin -->"))
-    assert_true(String.contains?(text, "gan_verify"))
-    cleanup(dir)
-  end
-
-  test "existing AGENTS.md and CLAUDE.md gain the wiring without losses" do
-    dir = scaffold()
-    File.write!(Path.join(dir, "AGENTS.md"), "# House rules\n\nBe kind.\n")
-    File.write!(Path.join(dir, "CLAUDE.md"), "# Project notes\n")
-    _r = System.cmd(gan_bin(), ["init", dir], [stderr_to_stdout: true])
-    agents = read(dir, "AGENTS.md")
-    assert_true(String.contains?(agents, "Be kind."))
-    assert_true(String.contains?(agents, "<!-- gandora:begin -->"))
-    claude = read(dir, "CLAUDE.md")
-    assert_true(String.contains?(claude, "@AGENTS.md"))
-    # a third run changes nothing: the markers gate both appends
-    _r2 = System.cmd(gan_bin(), ["init", dir], [stderr_to_stdout: true])
-    assert_eq(read(dir, "AGENTS.md"), agents)
-    assert_eq(read(dir, "CLAUDE.md"), claude)
-    cleanup(dir)
-  end
-
   # the scaffold faces the verdict it will be judged by, from birth
   test "the generated entry module carries its annotations" do
     dir = scaffold()

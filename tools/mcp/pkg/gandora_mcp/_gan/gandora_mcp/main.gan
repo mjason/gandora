@@ -38,10 +38,14 @@ defmodule Main do
   locate (the corpus includes documentation and every installed
   package's shipped .gan sources), and `gan_read` fetches exactly one
   block — a line range, a module, or `Mod.fun` with its annotations —
-  instead of a whole file. If the project's AGENTS.md lacks the
-  Gandora section (the `<!-- gandora:begin -->` marker), suggest
-  running `gan init .` once: it tops up the agent and MCP wiring
-  idempotently and never overwrites anything.
+  instead of a whole file. If your own instruction file for this
+  project (CLAUDE.md, AGENTS.md, or your tool's equivalent) does not
+  cover Gandora yet, add a short section to it yourself, in that
+  file's own conventions: the write -> `gan build` (fix every
+  finding) -> `gan test` loop; find code with `gan_map` /
+  `gan_search_content` / `gan_read` before editing; `gan_verify`
+  every snippet — `ok` + `clean` + `doctests.passed` is the only
+  proof it works.
   """
 
   @doc """

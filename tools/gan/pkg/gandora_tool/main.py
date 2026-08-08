@@ -48,14 +48,6 @@ mcp_codex = "# Codex reads this for a trusted project; `codex mcp list` shows it
 
 mcp_opencode = "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"mcp\": {\n    \"gandora\": {\n      \"type\": \"local\",\n      \"command\": [\"uv\", \"run\", \"gan\", \"mcp\"],\n      \"enabled\": true\n    }\n  }\n}\n"
 
-agents_begin = "<!-- gandora:begin -->"
-
-agents_end = "<!-- gandora:end -->"
-
-agents_body = "## Gandora\n\nThis project contains Gandora sources (`.gan` — Elixir-flavored,\ncompiled to readable Python). The loop: write -> `gan build` (fix\nEVERY finding) -> `gan test`.\n\n- Start a session with the `gan_briefing` MCP tool (or `uv run gan agent`):\n  the working loop, the house style, and this project's context pack.\n- Find before touching: `gan_map` (with `ranked`, it searches definitions\n  by meaning), `gan_search_files` / `gan_search_content` (project docs and\n  installed-package sources included), then `gan_read` for one precise\n  block instead of a whole file.\n- `gan_verify` every snippet before handing it over — `ok: true` with\n  `clean: true` and `doctests.passed: true` is the only evidence it works.\n- The MCP server is `uv run gan mcp`, wired in `.mcp.json`,\n  `.codex/config.toml`, and `opencode.json`.\n"
-
-claude_import = "@AGENTS.md"
-
 package_jsonc = "{\n  // Gandora package project (GEP-0006): `gan build` also emits the\n  // gandora.toml marker and ships .gan sources for macro consumers.\n  \"source\": [\"src\"],\n  \"outDir\": \"pkg\",\n  \"targetPython\": \"3.11\",\n  \"package\": true\n}\n"
 
 
@@ -384,33 +376,6 @@ Codex, `opencode.json` for opencode. Never overwrites what is there.
     return _write_if_absent(gandora_std.path.join(gandora_std.path.join(p, ".codex"), "config.toml"), mcp_codex)
 
 
-def write_agents_wiring(p: str) -> None:
-    """Wires the agent-instruction files (GEP-0028-R012A): creates
-`AGENTS.md` when absent, appends the marker-delimited Gandora
-section when present, and points an existing `CLAUDE.md` at it with
-one `@AGENTS.md` import line. Idempotent; user prose untouched.
-
-## Parameters
-
-  - p: The project directory.
-"""
-    section = agents_begin + ("\n" + (agents_body + (agents_end + "\n")))
-    agents = gandora_std.path.join(p, "AGENTS.md")
-    if not (_gan_truthy(gandora_std.file.exists_p(agents))):
-        gandora_std.file.write_bang(agents, "# Agent instructions\n\n" + section)
-    elif _gan_truthy(gandora_std.string.contains_p(gandora_std.file.read_bang(agents), agents_begin)):
-        pass
-    else:
-        kept = gandora_std.string.trim_trailing(gandora_std.file.read_bang(agents))
-        gandora_std.file.write_bang(agents, kept + ("\n\n" + section))
-    claude = gandora_std.path.join(p, "CLAUDE.md")
-    if _gan_truthy(_gan_and(gandora_std.file.exists_p(claude), lambda: not (_gan_truthy(gandora_std.string.contains_p(gandora_std.file.read_bang(claude), claude_import))))):
-        kept = gandora_std.string.trim_trailing(gandora_std.file.read_bang(claude))
-        return gandora_std.file.write_bang(claude, kept + ("\n\n" + (claude_import + "\n")))
-    else:
-        return None
-
-
 def _init_cmd(args):
     paths = gandora_std.enum.filter(args, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
     if _gan_truthy(gandora_std.enum.empty_p(paths)):
@@ -457,10 +422,8 @@ would write, it writes only when absent.
     _write_if_absent(gandora_std.path.join(path, ".python-version"), "3.11\n")
     _write_if_absent(gandora_std.path.join(gandora_std.path.join(path, "src"), "main.gan"), hello_gan)
     write_mcp_configs(path)
-    write_agents_wiring(path)
     print(f"Initialized Gandora project in {path}")
-    print("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
-    return print("Agent instructions wired (AGENTS.md; @AGENTS.md import added to an existing CLAUDE.md)")
+    return print("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
 
 
 def _write_if_absent(file, content):
@@ -502,7 +465,6 @@ def init_package(path: str) -> None:
     gandora_std.file.write_bang(gandora_std.path.join(path, ".python-version"), "3.11\n")
     gandora_std.file.write_bang(gandora_std.path.join(src, "core.gan"), _package_starter(module, dist_name))
     write_mcp_configs(path)
-    write_agents_wiring(path)
     print(f"Initialized Gandora package {dist_name} in {path}")
     print("Publish with:")
     print(f"  cd {path}")
