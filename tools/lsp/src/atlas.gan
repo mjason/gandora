@@ -64,10 +64,15 @@ defmodule Atlas do
   end
 
   # the doc key can be present-but-nil: an undocumented def has no
-  # sentence, not the string "None"
+  # sentence, not the string "None". The full doc arrives with its
+  # source-wrap newlines; one orientation line collapses them.
   defp doc_sentence(s) do
     doc = Map.get(s, "doc")
-    if is_nil(doc), do: "", else: String.trim(to_string(doc))
+    if is_nil(doc) do
+      ""
+    else
+      doc |> to_string() |> String.split() |> Enum.join(" ")
+    end
   end
 
   # `defp` and `async defp` alike: private stays off the map

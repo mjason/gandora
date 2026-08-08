@@ -73,7 +73,7 @@ def _doc_sentence(s):
     if (doc is None):
         return ""
     else:
-        return gandora_std.string.trim(str(doc))
+        return gandora_std.enum.join(gandora_std.string.split(str(doc)), " ")
 
 
 def _private_p(s):

@@ -590,7 +590,10 @@ pub struct SymbolInfo {
 }
 
 /// Every definition of a module, in source order, with rendered heads and
-/// the first line of each `@doc` (GEP-0015-R008).
+/// each `@doc`'s full default text (GEP-0015-R008): docs are lightweight
+/// by design — the English default channel is one purposeful sentence or
+/// two (GEP-0007-R011) — so nothing is gained by cutting them and the
+/// retrieval surface loses ranking signal when we do.
 pub fn module_symbols(
     config: &Config,
     module_name: &str,
@@ -615,8 +618,8 @@ pub fn module_symbols(
                     if let Some(Term::Str(_)) = c.args.first() {
                         if let Some(Term::Str(parts)) = c.args.first() {
                             if let Some(crate::ast::StrPart::Text(t)) = parts.first() {
-                                pending_doc =
-                                    t.lines().find(|l| !l.trim().is_empty()).map(String::from);
+                                let full = t.trim().to_string();
+                                pending_doc = (!full.is_empty()).then_some(full);
                             }
                         }
                     }
