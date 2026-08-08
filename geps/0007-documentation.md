@@ -9,8 +9,8 @@ areas:
   - Language
   - Tooling
 created: 2026-08-01
-updated: 2026-08-01
-revision: 6
+updated: 2026-08-08
+revision: 7
 requires: [1]
 replaces: []
 superseded-by: null
@@ -136,6 +136,18 @@ reports per-module results and exits 0 only when all pass. Emitted
 doctests are standard: `python -m doctest` and pytest's
 `--doctest-modules` MUST work on generated files without `gan`.
 
+**GEP-0007-R011:** The default documentation channels — `@doc`,
+`@moduledoc`, `@param` — are written in English; text containing CJK
+code points there is a compile error, caught in the check phase and
+teaching the `_trans` spelling. Localized prose has its own channels
+(`@doc_trans`, `@moduledoc_trans`, `@param_trans`, R001A/GEP-0018-R003)
+and stays untouched, as do `@example` bodies and comments. The reason
+is retrieval (GEP-0031): the lightweight `@doc` sentence is the
+semantic key the code map ranks by — a corpus that mixes languages in
+one channel ranks in neither, while one language per channel lets an
+agent search by meaning and lets every locale keep its own full-weight
+prose beside it.
+
 ## Rationale
 
 Three channels with disjoint jobs make every earlier failure mode
@@ -205,6 +217,11 @@ preserved indentation; locale fallback and example rendering in
 generated module run by `python -m doctest` directly.
 
 ## Change History
+
+- Revision 7, 2026-08-08: R011 — the default doc channels are English,
+  enforced as a check-phase error; `_trans` channels, `@example`
+  bodies, and comments are untouched. The default `@doc` sentence is
+  the semantic key GEP-0031's code map ranks by.
 
 - Revision 6, 2026-08-02: R009 — built-ins carry embedded bilingual
   docs in gan doc.

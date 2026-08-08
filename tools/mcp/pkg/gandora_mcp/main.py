@@ -93,17 +93,25 @@ def gan_briefing() -> str:
     return gandora_mcp.intel.briefing(root())
 
 
-def gan_map(needle: str) -> object:
-    """The code atlas (GEP-0031): project modules with paths and public
-heads, every installed package's modules with the `.gan` sources
-they ship (the standard library included), and the documentation
-files — the map to read once before searching.
+def gan_map(query: str, ranked: bool) -> object:
+    """The code atlas (GEP-0031): project modules with paths and doc-signed
+public heads, every installed package's modules with the `.gan`
+sources they ship (the standard library included), and the
+documentation files. With `ranked`, the query searches the atlas
+itself — every definition is a BM25 document of name, head, and
+`@doc` sentence — answering "which function does X" without knowing
+its name.
 
 ## Parameters
 
-  - needle: Narrow to modules whose name contains this; "" for the full atlas.
+  - query: A module-name fragment ("" for the full atlas), or — with `ranked` — the words describing what the definition should do.
+  - ranked: Rank the atlas's definitions by BM25 instead of listing the map.
 """
-    return gandora_mcp.intel.lsc(["map", needle], root())
+    if _gan_truthy(ranked):
+        _gan_tmp0 = ["map", query, "--query"]
+    else:
+        _gan_tmp0 = ["map", query]
+    return gandora_mcp.intel.lsc(_gan_tmp0, root())
 
 
 def gan_search_files(pattern: str, deps: bool) -> object:
@@ -204,7 +212,7 @@ on the definition, visible to every client.
     s = ms.MCPServer("gandora", version=core.version(), instructions=instructions)
     def _gan_fn0(*_gan_args, s=s):
         match _gan_args:
-            case ((name, f) as _gan_t0,) if isinstance(_gan_t0, tuple):
+            case ((name, f) as _gan_t1,) if isinstance(_gan_t1, tuple):
                 return _register(s, name, f)
         raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
     gandora_std.enum.each(tools(), _gan_fn0)
@@ -221,7 +229,7 @@ def _annotate(tool, docs):
         props = gandora_std.map.get(tool.parameters, "properties", {})
         def _gan_fn1(*_gan_args, props=props):
             match _gan_args:
-                case ((pname, text) as _gan_t1,) if isinstance(_gan_t1, tuple):
+                case ((pname, text) as _gan_t2,) if isinstance(_gan_t2, tuple):
                     if _gan_truthy(gandora_std.map.has_key_p(props, pname)):
                         _none = gandora_std.map.get(props, pname).update({"description": text})
                         return None
@@ -264,16 +272,16 @@ def param_docs(doc: str) -> dict:
     {'x': 'The input.', 'y': 'The other.'}
 """
     if (doc is None):
-        _gan_tmp2 = [doc]
+        _gan_tmp3 = [doc]
     else:
-        _gan_tmp2 = gandora_std.string.split_on(doc, "## Parameters")
-    parts = _gan_tmp2
+        _gan_tmp3 = gandora_std.string.split_on(doc, "## Parameters")
+    parts = _gan_tmp3
     if gandora_std.enum.count(parts) < 2:
         return {}
     else:
         matches = gandora_std.enum.map(gandora_std.enum.take_while(gandora_std.string.split_on(gandora_std.enum.at(parts, 1), "\n"), lambda l: _gan_or(gandora_std.string.trim(l) == "", lambda: gandora_std.string.match_p(l, param_line))), lambda l: param_line.match(l))
-        _gan_tmp3 = [(m.group(1), m.group(2)) for m in matches if not ((m is None))]
-        pairs = _gan_tmp3
+        _gan_tmp4 = [(m.group(1), m.group(2)) for m in matches if not ((m is None))]
+        pairs = _gan_tmp4
         return gandora_std.map.new(pairs)
 
 

@@ -10,7 +10,7 @@ areas:
   - AI Integration
 created: 2026-08-08
 updated: 2026-08-08
-revision: 1
+revision: 2
 requires: [6, 15, 26, 28]
 replaces: []
 superseded-by: null
@@ -100,6 +100,16 @@ is sorted; paths inside the project are project-relative and dep
 paths are absolute. `map <Mod>` narrows the atlas to modules whose
 name contains `<Mod>`.
 
+**GEP-0031-R003A:** `map --query <words>` searches the atlas itself:
+every public definition — project and installed alike — is one BM25
+document (module name, function name, head, and the `@doc` first
+sentence; same constants as R005), and the answer is the ranked
+symbols, each carrying `target`, `head`, `path`, and `score`. This is
+what the lightweight English `@doc` channel (GEP-0007-R011) buys: the
+one-sentence docs are the semantic keys, so "read a file returning a
+verdict" finds `File.read` without knowing its name. Capped at 20
+symbols, `truncated` reported.
+
 **GEP-0031-R004:** `find <pattern>` matches file *names* in the corpus
 (substring or glob when the pattern carries `*`/`?`). When `fd` is on
 `PATH` it MAY accelerate the project walk; the pure fallback MUST
@@ -187,5 +197,10 @@ and by definition including the annotation block; and the gan-mcp
 forwarding of all four.
 
 ## Change History
+
+- Revision 2, 2026-08-08: R003 — atlas heads carry the `@doc` first
+  sentence (orientation lines); R003A — `map --query` ranks the
+  atlas's definitions themselves with BM25, made meaningful by the
+  English default channel GEP-0007-R011 guarantees.
 
 - Revision 1, 2026-08-08: Initial version.

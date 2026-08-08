@@ -18,6 +18,7 @@ defmodule Retrieval do
   # caps (GEP-0031-R005): reported, never silent
   @max_matches 200
   @ranked_files 10
+  @ranked_symbols 20
 
   @doc """
   Corpus files whose *name* matches `pattern` — a glob when it carries
@@ -111,19 +112,10 @@ defmodule Retrieval do
   @spec ranked(string(), string(), boolean()) :: map()
   def ranked(root, query, deps) do
     terms = tokens(query)
-    files = Atlas.corpus(root, deps)
-    texts = Enum.map(files, fn path -> {path, safe(File.read!(path), "")} end)
-    freqs = Enum.map(texts, fn {path, text} -> {path, text, Enum.frequencies(tokens(text))} end)
-    n = Enum.count(freqs)
-    avg = average(Enum.map(freqs, fn {_p, _t, f} -> doc_len(f) end))
-    idfs = Enum.map(terms, fn t -> {t, idf(t, freqs, n)} end)
-    scored = freqs
-    |> Enum.map(fn {path, text, f} -> {score(f, idfs, avg), path, text} end)
-    |> Enum.filter(fn {s, _p, _t} -> s > 0.0 end)
-    |> Enum.sort_by(fn {s, path, _t} -> {-s, path} end)
-    |> Enum.take(@ranked_files)
+    pairs = Enum.map(Atlas.corpus(root, deps), &doc_pair/1)
+    scored = pairs |> bm25(terms) |> Enum.take(@ranked_files)
     %{
-      "files" => Enum.map(scored, fn {s, path, text} ->
+      "files" => Enum.map(scored, fn {s, _i, {path, text}} ->
         %{
           "path" => Atlas.relative(path, root),
           "score" => $builtins.round(s, 2),
@@ -131,8 +123,59 @@ defmodule Retrieval do
         }
       end),
       "count" => Enum.count(scored),
-      "truncated" => Enum.count(freqs) > @ranked_files and Enum.count(scored) == @ranked_files
+      "truncated" => Enum.count(pairs) > @ranked_files and Enum.count(scored) == @ranked_files
     }
+  end
+
+  defp doc_pair(path) do
+    text = safe(File.read!(path), "")
+    {{path, text}, Enum.frequencies(tokens(text))}
+  end
+
+  @doc """
+  The atlas's definitions ranked for a prose query (GEP-0031-R003A):
+  every public symbol — project and installed alike — is one BM25
+  document of target, head, and `@doc` sentence, so "read a file
+  returning a verdict" finds `File.read` without knowing its name.
+  This is what the English default channel (GEP-0007-R011) buys.
+  """
+  @doc_trans zh_CN: "地图内定义对散文式查询的排名(GEP-0031-R003A):每个公开符号——项目与已安装一视同仁——是一份由 target、函数头与 `@doc` 首句构成的 BM25 文档,「读文件返回裁决」不需要知道名字就能找到 `File.read`。这正是默认通道英文化(GEP-0007-R011)换来的东西。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param query, "The words describing what the definition should do."
+  @param_trans query, zh_CN: "描述目标定义行为的词。"
+  @spec symbols_ranked(string(), string()) :: map()
+  def symbols_ranked(root, query) do
+    terms = tokens(query)
+    pairs = Enum.map(Atlas.symbols(root), fn e ->
+      {e, e |> symbol_text() |> tokens() |> Enum.frequencies()}
+    end)
+    scored = pairs |> bm25(terms) |> Enum.take(@ranked_symbols)
+    %{
+      "symbols" => Enum.map(scored, fn {s, _i, e} ->
+        Map.put(e, "score", $builtins.round(s, 2))
+      end),
+      "count" => Enum.count(scored),
+      "truncated" => Enum.count(pairs) > @ranked_symbols and Enum.count(scored) == @ranked_symbols
+    }
+  end
+
+  defp symbol_text(e) do
+    [Map.get(e, "target", ""), Map.get(e, "head", ""), Map.get(e, "doc", "")]
+    |> Enum.join(" ")
+  end
+
+  # payload-generic BM25 over {payload, freq} pairs: {score, index,
+  # payload} descending, ties by original order — deterministic
+  defp bm25(pairs, terms) do
+    n = Enum.count(pairs)
+    avg = average(Enum.map(pairs, fn {_p, f} -> doc_len(f) end))
+    idfs = Enum.map(terms, fn t -> {t, idf(t, pairs, n)} end)
+    pairs
+    |> Enum.with_index()
+    |> Enum.map(fn {{payload, f}, i} -> {score(f, idfs, avg), i, payload} end)
+    |> Enum.filter(fn {s, _i, _p} -> s > 0.0 end)
+    |> Enum.sort_by(fn {s, i, _p} -> {-s, i} end)
   end
 
   @doc "The lowercased `[a-z0-9_]+` tokens of a text (GEP-0031-R005)."
@@ -154,8 +197,8 @@ defmodule Retrieval do
     if Enum.empty?(xs), do: 1.0, else: Enum.sum(xs) / Enum.count(xs)
   end
 
-  defp idf(term, freqs, n) do
-    df = Enum.count(Enum.filter(freqs, fn {_p, _t, f} -> Map.has_key?(f, term) end))
+  defp idf(term, pairs, n) do
+    df = Enum.count(Enum.filter(pairs, fn {_p, f} -> Map.has_key?(f, term) end))
     math.log((n - df + 0.5) / (df + 0.5) + 1.0)
   end
 

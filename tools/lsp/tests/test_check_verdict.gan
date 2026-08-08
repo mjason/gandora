@@ -226,6 +226,22 @@ defmodule TestCheckVerdict do
       assert suggests?(v, "practice", "lives in @example")
     end
 
+    test "CJK in the default doc channel is a check error (R011)" do
+      {v, rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"对每个元素求值\"\n  @spec f(integer()) :: integer()\n  def f(x), do: x\nend")
+      assert_eq(rc, 1)
+      refute Map.get(v, "ok")
+      assert diag?(v, "GEP-0007-R011")
+      assert diag?(v, "_trans")
+    end
+
+    test "CJK stays welcome in the trans channels" do
+      {v, _rc} = check(@clean_module <> "")
+      assert Map.get(v, "ok")
+      {v2, rc2} = check("defmodule Prog do\n  @moduledoc \"m\"\n  @doc \"Doubles.\"\n  @doc_trans zh_CN: \"翻倍\"\n  @param x, \"The number.\"\n  @param_trans x, zh_CN: \"数字\"\n  @spec f(integer()) :: integer()\n  @example \"\"\"\n      gan> Prog.f(2)\n      4\n  \"\"\"\n  def f(x), do: x * 2\nend")
+      assert_eq(rc2, 0)
+      assert Map.get(v2, "ok")
+    end
+
     test "count == 0 wants empty?" do
       {v, _rc} = check("defmodule Prog do\n  @moduledoc \"m\"\n  def f(xs), do: Enum.count(xs) == 0\nend")
       assert suggests?(v, "practice", "Enum.empty?")

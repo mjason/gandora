@@ -78,7 +78,7 @@ def _run(*_gan_args):
 
 
 def _queries():
-    return [(("version", "", "compiler/library version"), _version_q), (("diagnostics", "<file>", "full-pipeline diagnostics"), _diagnostics_q), (("ast", "<file>", "quoted term of the source"), _ast_q), (("expand", "<file>", "quoted term after macro expansion"), _expand_q), (("compile", "<file>", "generated Python source (plain text)"), _compile_q), (("resolve", "<module>", "how a module reference resolves"), _resolve_q), (("pack", "[<Mod> ...]", "one-call agent context: std lists, project\nsignatures, construct index, verdict summary;\nnamed modules ride along with full docs (GEP-0026-R003)"), _pack_q), (("map", "[<Mod>]", "the code atlas: project modules + heads, installed\npackages with their shipped .gan sources, docs (GEP-0031)"), _map_q), (("find", "<pattern> [--deps]", "corpus files whose name matches (glob with */?,\nsubstring otherwise); --deps adds installed sources (GEP-0031)"), _find_q), (("grep", "<pattern> [--ranked] [--deps]", "content search: regex (rg-accelerated), or BM25\nranking with --ranked; --deps adds installed sources (GEP-0031)"), _grep_q), (("read", "<path|Mod|Mod.fun> [from to]", "one precise read: a line range, a whole module,\nor one definition's block with its annotations (GEP-0031)"), _read_q), (("doc", "<target> [...] [--brief]", "docs for one or many targets; --brief = one line each"), _doc_q), (("definition", "<Mod>[.<fun>]", "defining source path/line/col"), _definition_q), (("symbols", "<Mod> [...]", "every definition with rendered heads"), _symbols_q), (("references", "<Mod>.<fun>", "every project call site (+ definitions)"), _references_q), (("wsymbols", "[<query>]", "project-wide symbol search"), _wsymbols_q), (("check", "[--strict]", "the project verdict: {diagnostics, suggestions}"), _check_q), (("pydoc", "<mod.chain>", "Python docstring for a $-style reference"), _pydoc_q), (("pycomplete", "<mod.prefix>", "Python member completions"), _pycomplete_q), (("pygoto", "<mod.chain>", "Python source location"), _pygoto_q), (("pysig", "<mod.fun>", "Python call signatures"), _pysig_q)]
+    return [(("version", "", "compiler/library version"), _version_q), (("diagnostics", "<file>", "full-pipeline diagnostics"), _diagnostics_q), (("ast", "<file>", "quoted term of the source"), _ast_q), (("expand", "<file>", "quoted term after macro expansion"), _expand_q), (("compile", "<file>", "generated Python source (plain text)"), _compile_q), (("resolve", "<module>", "how a module reference resolves"), _resolve_q), (("pack", "[<Mod> ...]", "one-call agent context: std lists, project\nsignatures, construct index, verdict summary;\nnamed modules ride along with full docs (GEP-0026-R003)"), _pack_q), (("map", "[<Mod>] [--query <words>]", "the code atlas: project modules + doc-signed heads,\ninstalled packages with shipped .gan sources, docs;\n--query ranks the definitions themselves by BM25 (GEP-0031)"), _map_q), (("find", "<pattern> [--deps]", "corpus files whose name matches (glob with */?,\nsubstring otherwise); --deps adds installed sources (GEP-0031)"), _find_q), (("grep", "<pattern> [--ranked] [--deps]", "content search: regex (rg-accelerated), or BM25\nranking with --ranked; --deps adds installed sources (GEP-0031)"), _grep_q), (("read", "<path|Mod|Mod.fun> [from to]", "one precise read: a line range, a whole module,\nor one definition's block with its annotations (GEP-0031)"), _read_q), (("doc", "<target> [...] [--brief]", "docs for one or many targets; --brief = one line each"), _doc_q), (("definition", "<Mod>[.<fun>]", "defining source path/line/col"), _definition_q), (("symbols", "<Mod> [...]", "every definition with rendered heads"), _symbols_q), (("references", "<Mod>.<fun>", "every project call site (+ definitions)"), _references_q), (("wsymbols", "[<query>]", "project-wide symbol search"), _wsymbols_q), (("check", "[--strict]", "the project verdict: {diagnostics, suggestions}"), _check_q), (("pydoc", "<mod.chain>", "Python docstring for a $-style reference"), _pydoc_q), (("pycomplete", "<mod.prefix>", "Python member completions"), _pycomplete_q), (("pygoto", "<mod.chain>", "Python source location"), _pygoto_q), (("pysig", "<mod.fun>", "Python call signatures"), _pysig_q)]
 
 
 def _usage_halt():
@@ -147,12 +147,16 @@ def _pack_q(rest, root):
 
 
 def _map_q(rest, root):
-    needle = gandora_std.enum.at(_positional(rest), 0)
-    if (needle is None):
-        _gan_tmp18 = ""
+    args = _positional(rest)
+    if _gan_truthy(gandora_std.enum.member_p(rest, "--query")):
+        return _emit(gandora_lsp.retrieval.symbols_ranked(root, gandora_std.enum.join(args, " ")))
     else:
-        _gan_tmp18 = needle
-    return _emit(gandora_lsp.atlas.build(root, _gan_tmp18))
+        needle = gandora_std.enum.at(args, 0)
+        if (needle is None):
+            _gan_tmp18 = ""
+        else:
+            _gan_tmp18 = needle
+        return _emit(gandora_lsp.atlas.build(root, _gan_tmp18))
 
 
 def _find_q(*_gan_args):

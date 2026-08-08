@@ -104,16 +104,22 @@ defmodule Main do
   def gan_briefing(), do: Intel.briefing(root())
 
   @doc """
-  The code atlas (GEP-0031): project modules with paths and public
-  heads, every installed package's modules with the `.gan` sources
-  they ship (the standard library included), and the documentation
-  files — the map to read once before searching.
+  The code atlas (GEP-0031): project modules with paths and doc-signed
+  public heads, every installed package's modules with the `.gan`
+  sources they ship (the standard library included), and the
+  documentation files. With `ranked`, the query searches the atlas
+  itself — every definition is a BM25 document of name, head, and
+  `@doc` sentence — answering "which function does X" without knowing
+  its name.
   """
-  @doc_trans zh_CN: "代码地图(GEP-0031):项目模块及路径与公开函数头、每个已安装包的模块与其随附 .gan 源(std 在内)、以及文档文件——检索前先读一遍的地图。"
-  @param needle, "Narrow to modules whose name contains this; \"\" for the full atlas."
-  @spec gan_map(string()) :: term()
+  @doc_trans zh_CN: "代码地图(GEP-0031):项目模块及路径与带 @doc 摘要的公开函数头、每个已安装包的模块与其随附 .gan 源(std 在内)、以及文档文件。`ranked` 时按查询搜地图本身——每个定义是名字+函数头+@doc 首句构成的 BM25 文档,不知道名字也能答「哪个函数做 X」。"
+  @param query, "A module-name fragment (\"\" for the full atlas), or — with `ranked` — the words describing what the definition should do."
+  @param ranked, "Rank the atlas's definitions by BM25 instead of listing the map."
+  @spec gan_map(string(), boolean()) :: term()
   @tool true
-  def gan_map(needle), do: Intel.lsc(["map", needle], root())
+  def gan_map(query, ranked) do
+    Intel.lsc(if(ranked, do: ["map", query, "--query"], else: ["map", query]), root())
+  end
 
   @doc """
   Corpus files whose name matches `pattern` — a glob when it carries

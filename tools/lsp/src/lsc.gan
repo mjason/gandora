@@ -93,10 +93,15 @@ defmodule Lsc do
   @command {"pack", "[<Mod> ...]", "one-call agent context: std lists, project\nsignatures, construct index, verdict summary;\nnamed modules ride along with full docs (GEP-0026-R003)"}
   defp pack_q(rest, root), do: emit(ContextPack.build(root, positional(rest)))
 
-  @command {"map", "[<Mod>]", "the code atlas: project modules + heads, installed\npackages with their shipped .gan sources, docs (GEP-0031)"}
+  @command {"map", "[<Mod>] [--query <words>]", "the code atlas: project modules + doc-signed heads,\ninstalled packages with shipped .gan sources, docs;\n--query ranks the definitions themselves by BM25 (GEP-0031)"}
   defp map_q(rest, root) do
-    needle = rest |> positional() |> Enum.at(0)
-    emit(Atlas.build(root, if(is_nil(needle), do: "", else: needle)))
+    args = positional(rest)
+    if Enum.member?(rest, "--query") do
+      emit(Retrieval.symbols_ranked(root, Enum.join(args, " ")))
+    else
+      needle = Enum.at(args, 0)
+      emit(Atlas.build(root, if(is_nil(needle), do: "", else: needle)))
+    end
   end
 
   @command {"find", "<pattern> [--deps]", "corpus files whose name matches (glob with */?,\nsubstring otherwise); --deps adds installed sources (GEP-0031)"}

@@ -65,6 +65,14 @@ defmodule TestRetrieval do
       assert_eq(Enum.count(files), 1)
     end
 
+    test "the atlas's own definitions answer a prose query (R003A)" do
+      v = Retrieval.symbols_ranked(root(), "read a file returning an ok or error verdict")
+      top = v |> Map.get("symbols") |> Enum.at(0)
+      assert_eq(Map.get(top, "target"), "File.read")
+      assert_contains(Map.get(top, "path"), "_gan/gandora_std/file.gan")
+      assert_true(Map.get(top, "score") > 0)
+    end
+
     test "ranked mode orders by BM25 and reaches installed docs" do
       v = Retrieval.ranked(root(), "verdict shaped read host message", true)
       top = v |> Map.get("files") |> Enum.at(0)

@@ -176,6 +176,50 @@ def _sources(root):
     return gandora_std.enum.uniq(files)
 
 
+def symbols(root: str) -> list[dict]:
+    """Every public definition the atlas knows — project and installed
+alike — as one flat stream: `target`, `head`, `doc`, `path`. These
+are the documents the `--query` search ranks (GEP-0031-R003A).
+
+## Parameters
+
+  - root: The project root.
+"""
+    return _project_symbols(root) + _dep_symbols(root)
+
+
+def _project_symbols(root):
+    try:
+        _gan_tmp10 = core.wsymbols("", root)
+    except Exception as _e__gan6:
+        _gan_tmp10 = []
+    return [_symbol_entry(s, gandora_std.map.get(s, "module", "?"), relative(gandora_std.map.get(s, "path", ""), root)) for s in _gan_tmp10 if gandora_std.map.get(s, "kind") != "defp"]
+
+
+def _dep_symbols(root):
+    def _gan_fn3(marker, *, root=root):
+        site = gandora_std.path.dirname(gandora_std.path.dirname(marker))
+        try:
+            _gan_tmp11 = tomllib.loads(gandora_std.file.read_bang(marker))
+        except Exception as _e__gan7:
+            _gan_tmp11 = {}
+        data = _gan_tmp11
+        def _gan_fn4(m, *, root=root, site=site):
+            mod = gandora_std.map.get(m, "name", "")
+            src = gandora_std.path.join(site, gandora_std.map.get(m, "source", ""))
+            try:
+                _gan_tmp12 = core.symbols(mod, root)
+            except Exception as _e__gan8:
+                _gan_tmp12 = []
+            return [_symbol_entry(s, mod, src) for s in _gan_tmp12 if gandora_std.map.get(s, "kind") != "defp"]
+        return gandora_std.enum.flat_map(gandora_std.map.get(data, "modules", []), _gan_fn4)
+    return gandora_std.enum.flat_map(markers(root), _gan_fn3)
+
+
+def _symbol_entry(s, mod, path):
+    return {"target": mod + ("." + gandora_std.map.get(s, "name", "")), "head": gandora_std.map.get(s, "head", gandora_std.map.get(s, "name", "")), "doc": gandora_std.string.trim(str(gandora_std.map.get(s, "doc", ""))), "path": path}
+
+
 def relative(path: str, root: str) -> str:
     """A path made project-relative when it lives under `root`.
 

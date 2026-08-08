@@ -44,6 +44,8 @@ max_matches = 200
 
 ranked_files = 10
 
+ranked_symbols = 20
+
 
 def find(root: str, pattern: str, deps: bool) -> dict:
     """Corpus files whose *name* matches `pattern` — a glob when it carries
@@ -140,50 +142,77 @@ and its score — deterministic, ties broken by path (GEP-0031-R005).
   - deps: Whether dependency sources join the search.
 """
     terms = tokens(query)
-    files = gandora_lsp.atlas.corpus(root, deps)
-    def _gan_fn2(path):
-        try:
-            _gan_tmp10 = gandora_std.file.read_bang(path)
-        except Exception as _e__gan2:
-            _gan_tmp10 = ""
-        return (path, _gan_tmp10)
-    texts = gandora_std.enum.map(files, _gan_fn2)
+    pairs = gandora_std.enum.map(gandora_lsp.atlas.corpus(root, deps), _doc_pair)
+    scored = gandora_std.enum.take(_bm25(pairs, terms), ranked_files)
+    def _gan_fn2(*_gan_args, root=root, terms=terms):
+        match _gan_args:
+            case ((s, _i, (path, text) as _gan_t9) as _gan_t10,) if isinstance(_gan_t9, tuple) and isinstance(_gan_t10, tuple):
+                return {"path": gandora_lsp.atlas.relative(path, root), "score": builtins.round(s, 2), "lines": _best_lines(text, terms)}
+        raise GanMatchError("no clause of _gan_fn2/1 matched " + repr(_gan_args))
+    return {"files": gandora_std.enum.map(scored, _gan_fn2), "count": gandora_std.enum.count(scored), "truncated": (gandora_std.enum.count(pairs) > ranked_files) and (gandora_std.enum.count(scored) == ranked_files)}
+
+
+def _doc_pair(path):
+    try:
+        _gan_tmp11 = gandora_std.file.read_bang(path)
+    except Exception as _e__gan2:
+        _gan_tmp11 = ""
+    text = _gan_tmp11
+    return ((path, text), gandora_std.enum.frequencies(tokens(text)))
+
+
+def symbols_ranked(root: str, query: str) -> dict:
+    """The atlas's definitions ranked for a prose query (GEP-0031-R003A):
+every public symbol — project and installed alike — is one BM25
+document of target, head, and `@doc` sentence, so "read a file
+returning a verdict" finds `File.read` without knowing its name.
+This is what the English default channel (GEP-0007-R011) buys.
+
+## Parameters
+
+  - root: The project root.
+  - query: The words describing what the definition should do.
+"""
+    terms = tokens(query)
+    pairs = gandora_std.enum.map(gandora_lsp.atlas.symbols(root), lambda e: (e, gandora_std.enum.frequencies(tokens(_symbol_text(e)))))
+    scored = gandora_std.enum.take(_bm25(pairs, terms), ranked_symbols)
     def _gan_fn3(*_gan_args):
         match _gan_args:
-            case ((path, text) as _gan_t11,) if isinstance(_gan_t11, tuple):
-                return (path, text, gandora_std.enum.frequencies(tokens(text)))
+            case ((s, _i, e) as _gan_t12,) if isinstance(_gan_t12, tuple):
+                return gandora_std.map.put(e, "score", builtins.round(s, 2))
         raise GanMatchError("no clause of _gan_fn3/1 matched " + repr(_gan_args))
-    freqs = gandora_std.enum.map(texts, _gan_fn3)
-    n = gandora_std.enum.count(freqs)
+    return {"symbols": gandora_std.enum.map(scored, _gan_fn3), "count": gandora_std.enum.count(scored), "truncated": (gandora_std.enum.count(pairs) > ranked_symbols) and (gandora_std.enum.count(scored) == ranked_symbols)}
+
+
+def _symbol_text(e):
+    return gandora_std.enum.join([gandora_std.map.get(e, "target", ""), gandora_std.map.get(e, "head", ""), gandora_std.map.get(e, "doc", "")], " ")
+
+
+def _bm25(pairs, terms):
+    n = gandora_std.enum.count(pairs)
     def _gan_fn4(*_gan_args):
         match _gan_args:
-            case ((_p, _t, f) as _gan_t12,) if isinstance(_gan_t12, tuple):
+            case ((_p, f) as _gan_t13,) if isinstance(_gan_t13, tuple):
                 return _doc_len(f)
         raise GanMatchError("no clause of _gan_fn4/1 matched " + repr(_gan_args))
-    avg = _average(gandora_std.enum.map(freqs, _gan_fn4))
-    idfs = gandora_std.enum.map(terms, lambda t, *, freqs=freqs, n=n: (t, _idf(t, freqs, n)))
+    avg = _average(gandora_std.enum.map(pairs, _gan_fn4))
+    idfs = gandora_std.enum.map(terms, lambda t, *, n=n, pairs=pairs: (t, _idf(t, pairs, n)))
     def _gan_fn5(*_gan_args, avg=avg, idfs=idfs):
         match _gan_args:
-            case ((path, text, f) as _gan_t13,) if isinstance(_gan_t13, tuple):
-                return (_score(f, idfs, avg), path, text)
+            case (((payload, f) as _gan_t14, i) as _gan_t15,) if isinstance(_gan_t14, tuple) and isinstance(_gan_t15, tuple):
+                return (_score(f, idfs, avg), i, payload)
         raise GanMatchError("no clause of _gan_fn5/1 matched " + repr(_gan_args))
     def _gan_fn6(*_gan_args):
         match _gan_args:
-            case ((s, _p, _t) as _gan_t14,) if isinstance(_gan_t14, tuple):
+            case ((s, _i, _p) as _gan_t16,) if isinstance(_gan_t16, tuple):
                 return s > 0.0
         raise GanMatchError("no clause of _gan_fn6/1 matched " + repr(_gan_args))
     def _gan_fn7(*_gan_args):
         match _gan_args:
-            case ((s, path, _t) as _gan_t15,) if isinstance(_gan_t15, tuple):
-                return (-(s), path)
+            case ((s, i, _p) as _gan_t17,) if isinstance(_gan_t17, tuple):
+                return (-(s), i)
         raise GanMatchError("no clause of _gan_fn7/1 matched " + repr(_gan_args))
-    scored = gandora_std.enum.take(gandora_std.enum.sort_by(gandora_std.enum.filter(gandora_std.enum.map(freqs, _gan_fn5), _gan_fn6), _gan_fn7), ranked_files)
-    def _gan_fn8(*_gan_args, root=root, terms=terms):
-        match _gan_args:
-            case ((s, path, text) as _gan_t16,) if isinstance(_gan_t16, tuple):
-                return {"path": gandora_lsp.atlas.relative(path, root), "score": builtins.round(s, 2), "lines": _best_lines(text, terms)}
-        raise GanMatchError("no clause of _gan_fn8/1 matched " + repr(_gan_args))
-    return {"files": gandora_std.enum.map(scored, _gan_fn8), "count": gandora_std.enum.count(scored), "truncated": (gandora_std.enum.count(freqs) > ranked_files) and (gandora_std.enum.count(scored) == ranked_files)}
+    return gandora_std.enum.sort_by(gandora_std.enum.filter(gandora_std.enum.map(gandora_std.enum.with_index(pairs), _gan_fn5), _gan_fn6), _gan_fn7)
 
 
 def tokens(text: str) -> list[str]:
@@ -210,49 +239,49 @@ def _average(xs):
         return gandora_std.enum.sum(xs) / gandora_std.enum.count(xs)
 
 
-def _idf(term, freqs, n):
-    def _gan_fn9(*_gan_args, term=term):
+def _idf(term, pairs, n):
+    def _gan_fn8(*_gan_args, term=term):
         match _gan_args:
-            case ((_p, _t, f) as _gan_t17,) if isinstance(_gan_t17, tuple):
+            case ((_p, f) as _gan_t18,) if isinstance(_gan_t18, tuple):
                 return gandora_std.map.has_key_p(f, term)
-        raise GanMatchError("no clause of _gan_fn9/1 matched " + repr(_gan_args))
-    df = gandora_std.enum.count(gandora_std.enum.filter(freqs, _gan_fn9))
+        raise GanMatchError("no clause of _gan_fn8/1 matched " + repr(_gan_args))
+    df = gandora_std.enum.count(gandora_std.enum.filter(pairs, _gan_fn8))
     return math.log((((n - df) + 0.5) / (df + 0.5)) + 1.0)
 
 
 def _score(freq, idfs, avg):
     len = _doc_len(freq)
-    def _gan_fn10(*_gan_args, avg=avg, freq=freq, len=len):
+    def _gan_fn9(*_gan_args, avg=avg, freq=freq, len=len):
         match _gan_args:
-            case ((term, w) as _gan_t18,) if isinstance(_gan_t18, tuple):
+            case ((term, w) as _gan_t19,) if isinstance(_gan_t19, tuple):
                 tf = gandora_std.map.get(freq, term, 0)
                 return ((w * tf) * 2.2) / (tf + (1.2 * (0.25 + ((0.75 * len) / avg))))
-        raise GanMatchError("no clause of _gan_fn10/1 matched " + repr(_gan_args))
-    return gandora_std.enum.sum(gandora_std.enum.map(idfs, _gan_fn10))
+        raise GanMatchError("no clause of _gan_fn9/1 matched " + repr(_gan_args))
+    return gandora_std.enum.sum(gandora_std.enum.map(idfs, _gan_fn9))
 
 
 def _best_lines(text, terms):
-    def _gan_fn11(*_gan_args, terms=terms):
+    def _gan_fn10(*_gan_args, terms=terms):
         match _gan_args:
-            case ((l, i) as _gan_t19,) if isinstance(_gan_t19, tuple):
+            case ((l, i) as _gan_t20,) if isinstance(_gan_t20, tuple):
                 return (_hits_on(l, terms), i + 1, l)
+        raise GanMatchError("no clause of _gan_fn10/1 matched " + repr(_gan_args))
+    def _gan_fn11(*_gan_args):
+        match _gan_args:
+            case ((h, _i, _l) as _gan_t21,) if isinstance(_gan_t21, tuple):
+                return h > 0
         raise GanMatchError("no clause of _gan_fn11/1 matched " + repr(_gan_args))
     def _gan_fn12(*_gan_args):
         match _gan_args:
-            case ((h, _i, _l) as _gan_t20,) if isinstance(_gan_t20, tuple):
-                return h > 0
+            case ((h, i, _l) as _gan_t22,) if isinstance(_gan_t22, tuple):
+                return (-(h), i)
         raise GanMatchError("no clause of _gan_fn12/1 matched " + repr(_gan_args))
     def _gan_fn13(*_gan_args):
         match _gan_args:
-            case ((h, i, _l) as _gan_t21,) if isinstance(_gan_t21, tuple):
-                return (-(h), i)
-        raise GanMatchError("no clause of _gan_fn13/1 matched " + repr(_gan_args))
-    def _gan_fn14(*_gan_args):
-        match _gan_args:
-            case ((_h, i, l) as _gan_t22,) if isinstance(_gan_t22, tuple):
+            case ((_h, i, l) as _gan_t23,) if isinstance(_gan_t23, tuple):
                 return {"line": i, "text": gandora_std.string.trim(l)}
-        raise GanMatchError("no clause of _gan_fn14/1 matched " + repr(_gan_args))
-    return gandora_std.enum.map(gandora_std.enum.take(gandora_std.enum.sort_by(gandora_std.enum.filter(gandora_std.enum.map(gandora_std.enum.with_index(gandora_std.string.split_on(text, "\n")), _gan_fn11), _gan_fn12), _gan_fn13), 3), _gan_fn14)
+        raise GanMatchError("no clause of _gan_fn13/1 matched " + repr(_gan_args))
+    return gandora_std.enum.map(gandora_std.enum.take(gandora_std.enum.sort_by(gandora_std.enum.filter(gandora_std.enum.map(gandora_std.enum.with_index(gandora_std.string.split_on(text, "\n")), _gan_fn10), _gan_fn11), _gan_fn12), 3), _gan_fn13)
 
 
 def _hits_on(line, terms):
@@ -284,39 +313,39 @@ symbol). An unresolvable target answers `{"error": why}`.
 
 def _read_range(root, path, from__kw, to):
     if _gan_truthy(gandora_std.path.absolute_p(path)):
-        _gan_tmp23 = path
+        _gan_tmp24 = path
     else:
-        _gan_tmp23 = gandora_std.path.join(root, path)
-    abs = _gan_tmp23
-    _gan_case24 = gandora_std.file.read(abs)
-    match _gan_case24:
-        case ("error", why) as _gan_t25 if isinstance(_gan_t25, tuple):
+        _gan_tmp24 = gandora_std.path.join(root, path)
+    abs = _gan_tmp24
+    _gan_case25 = gandora_std.file.read(abs)
+    match _gan_case25:
+        case ("error", why) as _gan_t26 if isinstance(_gan_t26, tuple):
             return {"error": why}
-        case ("ok", text) as _gan_t26 if isinstance(_gan_t26, tuple):
+        case ("ok", text) as _gan_t27 if isinstance(_gan_t27, tuple):
             lines = gandora_std.string.split_on(text, "\n")
             total = gandora_std.enum.count(lines)
             if from__kw < 1:
-                _gan_tmp27 = 1
+                _gan_tmp28 = 1
             else:
-                _gan_tmp27 = from__kw
-            first = _gan_tmp27
+                _gan_tmp28 = from__kw
+            first = _gan_tmp28
             if (to < 1) or (to > total):
-                _gan_tmp28 = total
+                _gan_tmp29 = total
             else:
-                _gan_tmp28 = to
-            last = _gan_tmp28
+                _gan_tmp29 = to
+            last = _gan_tmp29
             slice = gandora_std.enum.take(gandora_std.enum.drop(lines, first - 1), (last - first) + 1)
             return {"path": gandora_lsp.atlas.relative(abs, root), "from": first, "to": last, "text": gandora_std.enum.join(slice, "\n")}
         case _:
-            raise GanMatchError("no case clause matched: " + repr(_gan_case24))
+            raise GanMatchError("no case clause matched: " + repr(_gan_case25))
 
 
 def _read_module(root, mod):
     try:
-        _gan_tmp29 = core.definition(mod, root)
+        _gan_tmp30 = core.definition(mod, root)
     except Exception as _e__gan3:
-        _gan_tmp29 = None
-    hit = _gan_tmp29
+        _gan_tmp30 = None
+    hit = _gan_tmp30
     if (hit is None):
         return {"error": f"module {mod} does not resolve here"}
     else:
@@ -325,10 +354,10 @@ def _read_module(root, mod):
 
 def _read_block(root, target):
     try:
-        _gan_tmp30 = core.definition(target, root)
+        _gan_tmp31 = core.definition(target, root)
     except Exception as _e__gan4:
-        _gan_tmp30 = None
-    hit = _gan_tmp30
+        _gan_tmp31 = None
+    hit = _gan_tmp31
     if (hit is None):
         return {"error": f"{target} does not resolve here"}
     else:
@@ -337,29 +366,29 @@ def _read_block(root, target):
         mod = gandora_std.enum.join(gandora_std.enum.take(parts, gandora_std.enum.count(parts) - 1), ".")
         name = gandora_std.enum.at(parts, -1)
         try:
-            _gan_tmp31 = core.symbols(mod, root)
+            _gan_tmp32 = core.symbols(mod, root)
         except Exception as _e__gan5:
-            _gan_tmp31 = []
-        sym_lines = gandora_std.enum.sort(gandora_std.enum.map(_gan_tmp31, lambda s: gandora_std.map.get(s, "line", 0)))
+            _gan_tmp32 = []
+        sym_lines = gandora_std.enum.sort(gandora_std.enum.map(_gan_tmp32, lambda s: gandora_std.map.get(s, "line", 0)))
         try:
-            _gan_tmp32 = gandora_std.file.read_bang(path)
+            _gan_tmp33 = gandora_std.file.read_bang(path)
         except Exception as _e__gan6:
-            _gan_tmp32 = ""
-        lines = gandora_std.string.split_on(_gan_tmp32, "\n")
+            _gan_tmp33 = ""
+        lines = gandora_std.string.split_on(_gan_tmp33, "\n")
         total = gandora_std.enum.count(lines)
         def_line = gandora_std.map.get(hit, "line", 1)
         prev = gandora_std.enum.at(gandora_std.enum.filter(sym_lines, lambda l, *, def_line=def_line: l < def_line), -1)
         next = gandora_std.enum.at(gandora_std.enum.filter(sym_lines, lambda l, *, def_line=def_line: l > def_line), 0)
         if (prev is None):
-            _gan_tmp33 = 0
+            _gan_tmp34 = 0
         else:
-            _gan_tmp33 = prev
-        floor = _gan_tmp33
+            _gan_tmp34 = prev
+        floor = _gan_tmp34
         if (next is None):
-            _gan_tmp34 = total - 1
+            _gan_tmp35 = total - 1
         else:
-            _gan_tmp34 = block_start(lines, next, def_line) - 1
-        stop = _gan_tmp34
+            _gan_tmp35 = block_start(lines, next, def_line) - 1
+        stop = _gan_tmp35
         start = block_start(lines, def_line, floor)
         return gandora_std.map.put(gandora_std.map.put(_read_range(root, path, start, _trim_blank(lines, stop)), "target", target), "name", name)
 
@@ -398,10 +427,10 @@ def _walk_annotations(lines, i, def_line, start, open):
                 continue
             elif _gan_truthy(gandora_std.string.match_p(line, re.compile("^\\s*(@|#)"))):
                 if (start is None):
-                    _gan_tmp35 = i
+                    _gan_tmp36 = i
                 else:
-                    _gan_tmp35 = start
-                lines, i, def_line, start, open = lines, i + 1, def_line, _gan_tmp35, fences
+                    _gan_tmp36 = start
+                lines, i, def_line, start, open = lines, i + 1, def_line, _gan_tmp36, fences
                 continue
             else:
                 lines, i, def_line, start, open = lines, i + 1, def_line, None, False

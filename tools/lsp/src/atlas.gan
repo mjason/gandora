@@ -59,7 +59,7 @@ defmodule Atlas do
   # @doc first sentence in one orientation line
   defp signed(s) do
     head = Map.get(s, "head", Map.get(s, "name", ""))
-    doc = String.trim(to_string(Map.get(s, "doc", "")))
+    doc = s |> Map.get("doc", "") |> to_string() |> String.trim()
     if doc == "", do: head, else: head <> " — " <> doc
   end
 
@@ -181,6 +181,46 @@ defmodule Atlas do
       walked ++ Path.wildcard(Path.join(root, "tests/*.gan"))
     end
     Enum.uniq(files)
+  end
+
+  @doc """
+  Every public definition the atlas knows — project and installed
+  alike — as one flat stream: `target`, `head`, `doc`, `path`. These
+  are the documents the `--query` search ranks (GEP-0031-R003A).
+  """
+  @doc_trans zh_CN: "地图所知的全部公开定义——项目与已安装一视同仁——摊平为一条流:`target`、`head`、`doc`、`path`。即 `--query` 搜索所排名的文档(GEP-0031-R003A)。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @spec symbols(string()) :: list(map())
+  def symbols(root) do
+    project_symbols(root) ++ dep_symbols(root)
+  end
+
+  defp project_symbols(root) do
+    for s <- safe(core.wsymbols("", root), []), Map.get(s, "kind") != "defp",
+      do: symbol_entry(s, Map.get(s, "module", "?"), relative(Map.get(s, "path", ""), root))
+  end
+
+  defp dep_symbols(root) do
+    Enum.flat_map(markers(root), fn marker ->
+      site = marker |> Path.dirname() |> Path.dirname()
+      data = safe(tomllib.loads(File.read!(marker)), %{})
+      Enum.flat_map(Map.get(data, "modules", []), fn m ->
+        mod = Map.get(m, "name", "")
+        src = Path.join(site, Map.get(m, "source", ""))
+        for s <- safe(core.symbols(mod, root), []), Map.get(s, "kind") != "defp",
+          do: symbol_entry(s, mod, src)
+      end)
+    end)
+  end
+
+  defp symbol_entry(s, mod, path) do
+    %{
+      "target" => mod <> "." <> Map.get(s, "name", ""),
+      "head" => Map.get(s, "head", Map.get(s, "name", "")),
+      "doc" => s |> Map.get("doc", "") |> to_string() |> String.trim(),
+      "path" => path
+    }
   end
 
   @doc "A path made project-relative when it lives under `root`."

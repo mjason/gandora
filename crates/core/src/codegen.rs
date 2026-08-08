@@ -122,6 +122,39 @@ impl DocInfo {
     }
 }
 
+/// The default documentation channel stays in English (GEP-0007-R011):
+/// the retrieval index ranks its words, so CJK prose there betrays a
+/// translation written into the wrong channel. `_trans` channels are
+/// exactly where that prose belongs.
+pub fn english_channel(
+    file: &str,
+    span: Span,
+    attr: &str,
+    text: &str,
+) -> crate::diag::Result<()> {
+    let cjk = text.chars().any(|c| {
+        let u = c as u32;
+        (0x3000..=0x30FF).contains(&u)       // CJK punctuation + kana
+            || (0x3400..=0x4DBF).contains(&u) // CJK extension A
+            || (0x4E00..=0x9FFF).contains(&u) // CJK unified
+            || (0xAC00..=0xD7AF).contains(&u) // Hangul
+            || (0xF900..=0xFAFF).contains(&u) // CJK compatibility
+            || (0xFF00..=0xFFEF).contains(&u) // fullwidth forms
+    });
+    if cjk {
+        return Err(Diagnostic::new(
+            file,
+            span,
+            format!(
+                "{attr} is the default documentation channel and stays in English — \
+                 the retrieval index ranks its words (GEP-0007-R011); localized prose \
+                 belongs in the {attr}_trans channel, e.g. {attr}_trans zh_CN: \"...\""
+            ),
+        ));
+    }
+    Ok(())
+}
+
 /// Merge one `@doc`/`@moduledoc` attribute into a doc map. Elixir
 /// semantics: a string sets the text, `false` hides, a keyword list sets
 /// metadata; multiple attributes before one definition accumulate
@@ -145,8 +178,9 @@ pub fn merge_doc_value(
                     format!("{attr} text is given twice for the same definition"),
                 ));
             }
-            info.entries
-                .push(("default".to_string(), t.as_plain_str().unwrap()));
+            let text = t.as_plain_str().unwrap();
+            english_channel(file, call.span, attr, &text)?;
+            info.entries.push(("default".to_string(), text));
             return Ok(());
         }
         Some(Term::Str(_)) => {
@@ -655,6 +689,7 @@ impl Codegen {
                     let text = text_t.as_plain_str().ok_or_else(|| {
                         self.err(call.span, "@param text must be a plain string (GEP-0018-R001)")
                     })?;
+                    english_channel(&self.file, call.span, "@param", &text)?;
                     if pending_params.iter().any(|(n, _)| *n == pname) {
                         return Err(self.err(
                             call.span,
@@ -5648,6 +5683,30 @@ mod tests {
     }
 
     #[test]
+    fn cjk_in_a_default_doc_channel_is_an_error() {
+        // GEP-0007-R011: the default channel is the retrieval index's
+        // language; localized prose belongs in the _trans channels
+        for src in [
+            "defmodule M do\n  @doc \"对每个元素求值\"\n  def f(), do: 1\nend",
+            "defmodule M do\n  @moduledoc \"模块文档\"\n  def f(), do: 1\nend",
+            "defmodule M do\n  @doc \"d\"\n  @param x, \"输入\"\n  def f(x), do: x\nend",
+        ] {
+            let err = compile_err(src);
+            assert!(err.contains("GEP-0007-R011"), "{err}");
+            assert!(err.contains("_trans"), "{err}");
+        }
+    }
+
+    #[test]
+    fn cjk_stays_welcome_in_trans_channels() {
+        let py = compile(
+            "defmodule M do\n  @moduledoc \"module doc\"\n  @moduledoc_trans zh_CN: \"模块文档\"\n  @doc \"doubles\"\n  @doc_trans zh_CN: \"翻倍\"\n  @param x, \"the input\"\n  @param_trans x, zh_CN: \"输入\"\n  def f(x), do: x\nend",
+        );
+        // the trans channels compile without tripping R011
+        assert!(py.contains("doubles"), "{py}");
+    }
+
+    #[test]
     fn compiles_cons_pattern_match() {
         let py = compile(
             "defmodule M do\n  def f(xs) do\n    [h | t] = xs\n    {h, t}\n  end\nend",
@@ -5928,11 +5987,13 @@ mod doc_robustness_tests {
     #[test]
     fn chinese_prose_and_comments_survive_extraction() {
         let py = compile(
-            "defmodule M do\n  @doc \"\"\"\n符号判断。# 这不是注释是正文\n\n以上 # 中文井号 无碍。\n\"\"\"\n  @example \"\"\"\n    gan> classify(-3) # 行尾中文注释会被词法器剥掉\n    'negative'\n\"\"\"\n  def classify(x), do: :negative\nend",
+            "defmodule M do\n  @doc \"\"\"\nSign check. # this is prose, not a comment\n\nThe # mark above stays put.\n\"\"\"\n  @example \"\"\"\n    gan> classify(-3) # 行尾中文注释会被词法器剥掉\n    'negative'\n\"\"\"\n  def classify(x), do: :negative\nend",
         );
-        // prose with Chinese # passes through verbatim
-        assert!(py.contains("符号判断。# 这不是注释是正文"), "{py}");
-        assert!(py.contains("以上 # 中文井号 无碍。"), "{py}");
+        // prose with a # mark passes through verbatim (comments are a
+        // lexer concept, not a docstring one); the Chinese trailing
+        // comment in the @example is stripped before R011 ever looks
+        assert!(py.contains("Sign check. # this is prose, not a comment"), "{py}");
+        assert!(py.contains("The # mark above stays put."), "{py}");
         // the doctest compiled, trailing comment stripped by the lexer
         assert!(py.contains(">>> classify(-3)\n    'negative'"), "{py}");
         assert!(!py.contains("行尾中文注释"), "{py}");
