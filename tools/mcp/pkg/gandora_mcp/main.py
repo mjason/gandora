@@ -172,7 +172,7 @@ single source the server registers from: each entry is the
 function's own name and a capture of it.
 
     >>> gandora_std.enum.count(tools())
-    6
+    10
 """
     return [("gan_verify", gan_verify), ("gan_example", gan_example), ("gan_doc", gan_doc), ("gan_pack", gan_pack), ("gan_check", gan_check), ("gan_briefing", gan_briefing), ("gan_map", gan_map), ("gan_search_files", gan_search_files), ("gan_search_content", gan_search_content), ("gan_read", gan_read)]
 
