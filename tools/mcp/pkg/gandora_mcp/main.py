@@ -30,7 +30,7 @@ def _gan_or(value, then):
 class GanMatchError(Exception):
     pass
 
-instructions = "Gandora is an Elixir-flavored language compiling to readable Python.\nCall `gan_briefing` once at the start of a session. Ask `gan_example`\nwhen you need to know how a feature or a piece of syntax is really\nwritten — it answers with prose plus a module that compiled and whose\ndoctests ran. Call `gan_verify` on every snippet before you hand it to\nthe user, including snippets you wrote yourself: a verdict of\n`clean: true` with `doctests.passed: true` is the only evidence that\nthe code works. `gan_doc` and `gan_pack` answer what a name means, and\nare the same answers as `gan lsc doc` / `gan lsc pack` if you have a\nshell.\n"
+instructions = "Gandora is an Elixir-flavored language compiling to readable Python.\nCall `gan_briefing` once at the start of a session. Ask `gan_example`\nwhen you need to know how a feature or a piece of syntax is really\nwritten — it answers with prose plus a module that compiled and whose\ndoctests ran. Call `gan_verify` on every snippet before you hand it to\nthe user, including snippets you wrote yourself: a verdict of\n`clean: true` with `doctests.passed: true` is the only evidence that\nthe code works. `gan_doc` and `gan_pack` answer what a name means, and\nare the same answers as `gan lsc doc` / `gan lsc pack` if you have a\nshell. To find code before touching it: `gan_map` orients (project,\ninstalled packages, docs), `gan_search_files`/`gan_search_content`\nlocate (the corpus includes documentation and every installed\npackage's shipped .gan sources), and `gan_read` fetches exactly one\nblock — a line range, a module, or `Mod.fun` with its annotations —\ninstead of a whole file.\n"
 
 param_line = re.compile("^\\s*- ([a-z_][A-Za-z0-9_]*): (.*)$")
 
@@ -93,6 +93,71 @@ def gan_briefing() -> str:
     return gandora_mcp.intel.briefing(root())
 
 
+def gan_map(needle: str) -> object:
+    """The code atlas (GEP-0031): project modules with paths and public
+heads, every installed package's modules with the `.gan` sources
+they ship (the standard library included), and the documentation
+files — the map to read once before searching.
+
+## Parameters
+
+  - needle: Narrow to modules whose name contains this; "" for the full atlas.
+"""
+    return gandora_mcp.intel.lsc(["map", needle], root())
+
+
+def gan_search_files(pattern: str, deps: bool) -> object:
+    """Corpus files whose name matches `pattern` — a glob when it carries
+`*`/`?`, a substring otherwise. The corpus is project sources and
+docs; `deps` adds the `.gan` sources of every installed package
+(GEP-0031).
+
+## Parameters
+
+  - pattern: The file-name pattern.
+  - deps: Whether installed packages' sources join the search.
+"""
+    return gandora_mcp.intel.lsc(["find", pattern] + _flag(deps, "--deps"), root())
+
+
+def gan_search_content(pattern: str, ranked: bool, deps: bool) -> object:
+    """Content search over the corpus (GEP-0031): a regular expression by
+default, or BM25 ranking when `ranked` — use ranked mode for prose
+questions, regex for exact shapes. `deps` adds the `.gan` sources of
+every installed package, so library code and its `@doc` prose are
+searchable too. Capped output says so via `truncated`.
+
+## Parameters
+
+  - pattern: The regular expression, or the words to rank by.
+  - ranked: BM25 ranking instead of regex matching.
+  - deps: Whether installed packages' sources join the search.
+"""
+    return gandora_mcp.intel.lsc(["grep", pattern] + (_flag(ranked, "--ranked") + _flag(deps, "--deps")), root())
+
+
+def gan_read(target: str, from_line: int, to_line: int) -> object:
+    """One precise read (GEP-0031): a corpus path with a 1-based inclusive
+line range (0, 0 for the whole file), a module name (its whole
+source, project or installed), or `Mod.fun` (that definition's
+block, annotations included). Prefer this over paging whole files.
+
+## Parameters
+
+  - target: A corpus path, `Mod`, or `Mod.fun`.
+  - from_line: First line, 1-based; 0 for a named or whole-file read.
+  - to_line: Last line, inclusive; 0 for a named or whole-file read.
+"""
+    return gandora_mcp.intel.lsc(["read", target, str(from_line), str(to_line)], root())
+
+
+def _flag(on, name):
+    if _gan_truthy(on):
+        return [name]
+    else:
+        return []
+
+
 def tools() -> list[tuple]:
     """The tool table the hook accumulated from the `@tool` markers — the
 single source the server registers from: each entry is the
@@ -101,7 +166,7 @@ function's own name and a capture of it.
     >>> gandora_std.enum.count(tools())
     6
 """
-    return [("gan_verify", gan_verify), ("gan_example", gan_example), ("gan_doc", gan_doc), ("gan_pack", gan_pack), ("gan_check", gan_check), ("gan_briefing", gan_briefing)]
+    return [("gan_verify", gan_verify), ("gan_example", gan_example), ("gan_doc", gan_doc), ("gan_pack", gan_pack), ("gan_check", gan_check), ("gan_briefing", gan_briefing), ("gan_map", gan_map), ("gan_search_files", gan_search_files), ("gan_search_content", gan_search_content), ("gan_read", gan_read)]
 
 
 def root() -> str:

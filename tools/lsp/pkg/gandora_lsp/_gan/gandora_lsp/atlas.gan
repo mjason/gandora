@@ -1,0 +1,190 @@
+defmodule Atlas do
+  @moduledoc """
+  The code map and its corpus (GEP-0031): where everything lives — the
+  project's modules with their rendered heads, every installed
+  package's modules with the `.gan` sources they ship (GEP-0006, the
+  standard library included), and the documentation files. No
+  tree-sitter, no index: the compiler is the parser, and the sources
+  of every dependency are already on disk.
+  """
+  @moduledoc_trans zh_CN: "代码地图与其语料(GEP-0031):一切所在之处——项目模块及其渲染函数头、每个已安装包的模块与其随附 .gan 源(GEP-0006,std 在内)、以及文档文件。无 tree-sitter、无索引:编译器即解析器,依赖的源码本就落在盘上。"
+
+  pyimport gandora_core, as: core
+  pyimport tomllib
+
+  import Safe
+
+  @doc """
+  The atlas for `root`: project modules (path + public heads),
+  installed packages' modules (shipped source + public names), and the
+  documentation files. `needle` narrows module lists to names
+  containing it; `""` keeps everything.
+  """
+  @doc_trans zh_CN: "`root` 的地图:项目模块(路径+公开函数头)、已安装包的模块(随附源+公开名)、文档文件。`needle` 收窄到名字包含它的模块;`\"\"` 保留全部。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param needle, "A module-name fragment; \"\" for the full atlas."
+  @param_trans needle, zh_CN: "模块名片段;\"\" 给全图。"
+  @spec build(string(), string()) :: map()
+  def build(root, needle) do
+    low = String.downcase(needle)
+    %{
+      "project" => project(root, low),
+      "packages" => packages(root, low),
+      "docs" => docs(root)
+    }
+  end
+
+  # every project module: relative path plus its public heads, from the
+  # compiler's own symbol walk
+  defp project(root, low) do
+    syms = safe(core.wsymbols("", root), [])
+    grouped = Enum.reduce(syms, %{}, fn s, acc ->
+      mod = Map.get(s, "module", "?")
+      entry = Map.get(acc, mod, %{"path" => relative(Map.get(s, "path", ""), root), "heads" => []})
+      entry = if Map.get(s, "kind") == "defp" do
+        entry
+      else
+        Map.put(entry, "heads", Map.get(entry, "heads") ++ [Map.get(s, "head", Map.get(s, "name"))])
+      end
+      Map.put(acc, mod, entry)
+    end)
+    sorted = grouped |> Map.to_list() |> Enum.sort()
+    for {mod, e} <- sorted, String.contains?(String.downcase(mod), low),
+      do: Map.put(e, "module", mod)
+  end
+
+  @doc """
+  The installed packages and their modules, from the `gandora.toml`
+  markers under the project venv (GEP-0006): package name, then per
+  module its shipped `.gan` source (absolute) and public names.
+  """
+  @doc_trans zh_CN: "已安装包及其模块,来自项目 venv 下的 gandora.toml marker(GEP-0006):包名,及每模块的随附 .gan 源(绝对路径)与公开名。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param low, "The lowercased module-name filter; \"\" keeps all."
+  @param_trans low, zh_CN: "小写模块名过滤;\"\" 保留全部。"
+  @spec packages(string(), string()) :: map()
+  def packages(root, low) do
+    markers(root)
+    |> Enum.map(fn marker -> {Path.basename(Path.dirname(marker)), marker_modules(marker, root, low)} end)
+    |> Enum.filter(fn {_pkg, mods} -> not Enum.empty?(mods) end)
+    |> Map.new()
+  end
+
+  @doc "Every `gandora.toml` marker under the project's venv, sorted."
+  @doc_trans zh_CN: "项目 venv 下全部 gandora.toml marker,已排序。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @spec markers(string()) :: list(string())
+  def markers(root) do
+    root
+    |> Path.join(".venv/lib/*/site-packages/*/gandora.toml")
+    |> Path.wildcard()
+  end
+
+  defp marker_modules(marker, root, low) do
+    site = marker |> Path.dirname() |> Path.dirname()
+    data = safe(tomllib.loads(File.read!(marker)), %{})
+    for m <- Map.get(data, "modules", []), named?(m, low), do: dep_entry(m, site, root)
+  end
+
+  defp named?(m, low) do
+    m |> Map.get("name", "") |> String.downcase() |> String.contains?(low)
+  end
+
+  defp dep_entry(m, site, root) do
+    name = Map.get(m, "name", "")
+    %{
+      "module" => name,
+      "source" => Path.join(site, Map.get(m, "source", "")),
+      "names" => public_names(name, root)
+    }
+  end
+
+  defp public_names(mod, root) do
+    for s <- safe(core.symbols(mod, root), []),
+      Map.get(s, "kind") != "defp",
+      do: Map.get(s, "name")
+  end
+
+  @doc """
+  The documentation files of the project: `README*` and root-level
+  `*.md`, plus everything under `docs/` — documentation is a
+  first-class member of the corpus (GEP-0031-R002).
+  """
+  @doc_trans zh_CN: "项目文档文件:README* 与根级 *.md,加 docs/ 下全部——文档是语料的一等成员(GEP-0031-R002)。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @spec docs(string()) :: list(string())
+  def docs(root) do
+    (Path.wildcard(Path.join(root, "README*")) ++
+        Path.wildcard(Path.join(root, "*.md")) ++
+        Path.wildcard(root |> Path.join("docs") |> Path.join("**") |> Path.join("*.md")))
+      |> Enum.uniq()
+      |> Enum.sort()
+      |> Enum.map(fn p -> relative(p, root) end)
+  end
+
+  @doc """
+  The searchable corpus (GEP-0031-R002): the project's `.gan` sources
+  and documentation, plus — when `deps` — the `.gan` sources every
+  installed package ships. Absolute paths, sorted, project first.
+  """
+  @doc_trans zh_CN: "可检索语料(GEP-0031-R002):项目 .gan 源与文档,`deps` 时加上每个已安装包随附的 .gan 源。绝对路径、有序、项目在前。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param deps, "Whether dependency sources join the corpus."
+  @param_trans deps, zh_CN: "依赖源是否入语料。"
+  @spec corpus(string(), boolean()) :: list(string())
+  def corpus(root, deps) do
+    project_files = sources(root) ++ Enum.map(docs(root), fn d -> Path.join(root, d) end)
+    dep_files = if deps do
+      markers(root)
+      |> Enum.flat_map(fn marker ->
+        site = marker |> Path.dirname() |> Path.dirname()
+        data = safe(tomllib.loads(File.read!(marker)), %{})
+        data
+        |> Map.get("modules", [])
+        |> Enum.map(fn m -> Path.join(site, Map.get(m, "source", "")) end)
+      end)
+      |> Enum.sort()
+    else
+      []
+    end
+    Enum.uniq(project_files ++ dep_files)
+  end
+
+  # the project's .gan files: the compiler's symbol walk knows them;
+  # a parse-broken project falls back to the conventional roots
+  defp sources(root) do
+    walked = safe(
+      core.wsymbols("", root)
+      |> Enum.map(fn s -> Map.get(s, "path") end)
+      |> Enum.uniq()
+      |> Enum.sort(),
+      [])
+    files = if Enum.empty?(walked) do
+      Path.wildcard(Path.join(root, "src/**/*.gan")) ++
+        Path.wildcard(Path.join(root, "tests/*.gan"))
+    else
+      walked ++ Path.wildcard(Path.join(root, "tests/*.gan"))
+    end
+    Enum.uniq(files)
+  end
+
+  @doc "A path made project-relative when it lives under `root`."
+  @doc_trans zh_CN: "位于 `root` 下的路径转为项目相对;否则原样。"
+  @param path, "The path."
+  @param_trans path, zh_CN: "路径。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @spec relative(string(), string()) :: string()
+  @example """
+      gan> Atlas.relative("/a/b/src/m.gan", "/a/b")
+      'src/m.gan'
+  """
+  def relative(path, root) do
+    String.replace(to_string(path), root <> "/", "")
+  end
+end

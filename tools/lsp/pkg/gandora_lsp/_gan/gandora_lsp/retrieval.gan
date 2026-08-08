@@ -1,0 +1,323 @@
+defmodule Retrieval do
+  @moduledoc """
+  The three retrieval verbs (GEP-0031): `find` matches file names,
+  `grep` matches contents (regex, `rg`-accelerated with an
+  identical-shape fallback; or BM25-ranked for prose queries), and
+  `read` fetches one precise piece — a line range, a whole module, or
+  one definition's block located through the compiler's own line data.
+  """
+  @moduledoc_trans zh_CN: "三个检索动词(GEP-0031):`find` 匹配文件名,`grep` 匹配内容(正则,rg 加速、纯实现同形兜底;或 BM25 排名答散文式查询),`read` 精准取一段——行区间、整模块、或经编译器行号定位的单个定义块。"
+
+  pyimport gandora_core, as: core
+  pyimport fnmatch
+  pyimport math
+  pyimport re
+
+  import Safe
+
+  # caps (GEP-0031-R005): reported, never silent
+  @max_matches 200
+  @ranked_files 10
+
+  @doc """
+  Corpus files whose *name* matches `pattern` — a glob when it carries
+  `*`/`?`, a substring otherwise. Sorted paths (GEP-0031-R004).
+  """
+  @doc_trans zh_CN: "文件名匹配 `pattern` 的语料文件——含 `*`/`?` 按 glob,否则按子串。路径有序(GEP-0031-R004)。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param pattern, "The name pattern."
+  @param_trans pattern, zh_CN: "文件名模式。"
+  @param deps, "Whether dependency sources join the search."
+  @param_trans deps, zh_CN: "依赖源是否参与。"
+  @spec find(string(), string(), boolean()) :: map()
+  def find(root, pattern, deps) do
+    hits = for path <- Atlas.corpus(root, deps), name_match?(Path.basename(path), pattern),
+      do: Atlas.relative(path, root)
+    %{"files" => hits, "count" => Enum.count(hits)}
+  end
+
+  defp name_match?(name, pattern) do
+    if String.contains?(pattern, "*") or String.contains?(pattern, "?") do
+      fnmatch.fnmatch(name, pattern)
+    else
+      String.contains?(String.downcase(name), String.downcase(pattern))
+    end
+  end
+
+  @doc """
+  Content matches for a regular expression over the corpus:
+  `{path, line, text}` in path order, `rg` when present and a pure
+  scan otherwise — same shape either way, capped and saying so
+  (GEP-0031-R005).
+  """
+  @doc_trans zh_CN: "正则在语料上的内容命中:按路径序的 {path, line, text},有 rg 用 rg、否则纯扫描——形状一致,有上限且如实相告(GEP-0031-R005)。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param pattern, "The regular expression."
+  @param_trans pattern, zh_CN: "正则表达式。"
+  @param deps, "Whether dependency sources join the search."
+  @param_trans deps, zh_CN: "依赖源是否参与。"
+  @spec grep(string(), string(), boolean()) :: map()
+  def grep(root, pattern, deps) do
+    files = Atlas.corpus(root, deps)
+    rg = System.find_executable("rg")
+    matches = if is_nil(rg), do: scan(files, pattern), else: rg_scan(rg, files, pattern)
+    kept = Enum.take(matches, @max_matches)
+    %{
+      "matches" => Enum.map(kept, fn {path, line, text} ->
+        %{"path" => Atlas.relative(path, root), "line" => line, "text" => text}
+      end),
+      "count" => Enum.count(kept),
+      "truncated" => Enum.count(matches) > @max_matches
+    }
+  end
+
+  # rg over the explicit corpus list: parity with the fallback by
+  # construction — both see exactly the same files
+  defp rg_scan(rg, files, pattern) do
+    {out, _status} = System.cmd(rg, ["-n", "--no-heading", "-e", pattern, "--"] ++ files)
+    lines = out |> String.trim() |> String.split_on("\n")
+    for l <- lines, l != "", do: rg_hit(l)
+  end
+
+  # one `path:line:text` row; the text may carry its own colons
+  defp rg_hit(l) do
+    [path, line | rest] = String.split_on(l, ":")
+    {path, $builtins.int(line), Enum.join(rest, ":")}
+  end
+
+  defp scan(files, pattern) do
+    compiled = re.compile(pattern)
+    Enum.flat_map(files, fn path ->
+      lines = safe(File.read!(path), "") |> String.split_on("\n")
+      for {l, i} <- Enum.with_index(lines), not is_nil(compiled.search(l)),
+        do: {path, i + 1, l}
+    end)
+  end
+
+  @doc """
+  The BM25-ranked answer for a prose query (k1 = 1.2, b = 0.75, one
+  file per document): the top files, each with its best matching lines
+  and its score — deterministic, ties broken by path (GEP-0031-R005).
+  """
+  @doc_trans zh_CN: "散文式查询的 BM25 排名答案(k1=1.2、b=0.75、一文件一文档):得分最高的文件,各附最佳命中行与分值——确定性,平分按路径序(GEP-0031-R005)。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param query, "The words to rank by."
+  @param_trans query, zh_CN: "用于排名的词。"
+  @param deps, "Whether dependency sources join the search."
+  @param_trans deps, zh_CN: "依赖源是否参与。"
+  @spec ranked(string(), string(), boolean()) :: map()
+  def ranked(root, query, deps) do
+    terms = tokens(query)
+    files = Atlas.corpus(root, deps)
+    texts = Enum.map(files, fn path -> {path, safe(File.read!(path), "")} end)
+    freqs = Enum.map(texts, fn {path, text} -> {path, text, Enum.frequencies(tokens(text))} end)
+    n = Enum.count(freqs)
+    avg = average(Enum.map(freqs, fn {_p, _t, f} -> doc_len(f) end))
+    idfs = Enum.map(terms, fn t -> {t, idf(t, freqs, n)} end)
+    scored = freqs
+    |> Enum.map(fn {path, text, f} -> {score(f, idfs, avg), path, text} end)
+    |> Enum.filter(fn {s, _p, _t} -> s > 0.0 end)
+    |> Enum.sort_by(fn {s, path, _t} -> {-s, path} end)
+    |> Enum.take(@ranked_files)
+    %{
+      "files" => Enum.map(scored, fn {s, path, text} ->
+        %{
+          "path" => Atlas.relative(path, root),
+          "score" => $builtins.round(s, 2),
+          "lines" => best_lines(text, terms)
+        }
+      end),
+      "count" => Enum.count(scored),
+      "truncated" => Enum.count(freqs) > @ranked_files and Enum.count(scored) == @ranked_files
+    }
+  end
+
+  @doc "The lowercased `[a-z0-9_]+` tokens of a text (GEP-0031-R005)."
+  @doc_trans zh_CN: "文本的小写 `[a-z0-9_]+` 词元(GEP-0031-R005)。"
+  @param text, "Any text."
+  @param_trans text, zh_CN: "任意文本。"
+  @spec tokens(string()) :: list(string())
+  @example """
+      gan> Retrieval.tokens("File.read! reads UTF-8")
+      ['file', 'read', 'reads', 'utf', '8']
+  """
+  def tokens(text) do
+    ~r/[a-z0-9_]+/.findall(String.downcase(text))
+  end
+
+  defp doc_len(freq), do: freq |> Map.values() |> Enum.sum()
+
+  defp average(xs) do
+    if Enum.empty?(xs), do: 1.0, else: Enum.sum(xs) / Enum.count(xs)
+  end
+
+  defp idf(term, freqs, n) do
+    df = Enum.count(Enum.filter(freqs, fn {_p, _t, f} -> Map.has_key?(f, term) end))
+    math.log((n - df + 0.5) / (df + 0.5) + 1.0)
+  end
+
+  defp score(freq, idfs, avg) do
+    len = doc_len(freq)
+    idfs
+    |> Enum.map(fn {term, w} ->
+      tf = Map.get(freq, term, 0)
+      w * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * len / avg))
+    end)
+    |> Enum.sum()
+  end
+
+  # the up-to-three lines carrying the most distinct query terms
+  defp best_lines(text, terms) do
+    text
+    |> String.split_on("\n")
+    |> Enum.with_index()
+    |> Enum.map(fn {l, i} -> {hits_on(l, terms), i + 1, l} end)
+    |> Enum.filter(fn {h, _i, _l} -> h > 0 end)
+    |> Enum.sort_by(fn {h, i, _l} -> {-h, i} end)
+    |> Enum.take(3)
+    |> Enum.map(fn {_h, i, l} -> %{"line" => i, "text" => String.trim(l)} end)
+  end
+
+  defp hits_on(line, terms) do
+    low = tokens(line)
+    terms |> Enum.filter(fn t -> Enum.member?(low, t) end) |> Enum.count()
+  end
+
+  @doc """
+  One precise read (GEP-0031-R006): `{path, from, to, text}` for a
+  path with a 1-based inclusive line range (0, 0 = the whole file), a
+  module name (its whole source, project or installed), or `Mod.fun`
+  (the definition's block, annotations included, bounded by the next
+  symbol). An unresolvable target answers `{"error": why}`.
+  """
+  @doc_trans zh_CN: "一次精准读取(GEP-0031-R006):路径+1 起始闭区间行段(0,0=整文件)、模块名(整份源码,项目或已安装)、或 Mod.fun(定义块,含注解,以下一符号为界)返回 {path, from, to, text};无法解析的目标返回 {\"error\": why}。"
+  @param root, "The project root."
+  @param_trans root, zh_CN: "项目根。"
+  @param target, "A corpus path, `Mod`, or `Mod.fun`."
+  @param_trans target, zh_CN: "语料路径、`Mod` 或 `Mod.fun`。"
+  @param from, "First line, 1-based; 0 for a named or whole-file read."
+  @param_trans from, zh_CN: "起始行(1 起);具名/整文件读取传 0。"
+  @param to, "Last line, inclusive; 0 for a named or whole-file read."
+  @param_trans to, zh_CN: "结束行(含);具名/整文件读取传 0。"
+  @spec read(string(), string(), integer(), integer()) :: map()
+  def read(root, target, from, to) do
+    cond do
+      # every dotted segment capitalized, tail lowercase: a definition
+      String.match?(target, ~r/^([A-Z][A-Za-z0-9_]*\.)+[a-z_][A-Za-z0-9_]*[?!]?$/) ->
+        read_block(root, target)
+        # capitalized segments only: a module (README.md fails the shape)
+      String.match?(target, ~r/^[A-Z][A-Za-z0-9_]*(\.[A-Z][A-Za-z0-9_]*)*$/) ->
+        read_module(root, target)
+      true ->
+        read_range(root, target, from, to)
+    end
+  end
+
+  defp read_range(root, path, from, to) do
+    abs = if Path.absolute?(path), do: path, else: Path.join(root, path)
+    case File.read(abs) do
+      {:error, why} -> %{"error" => why}
+      {:ok, text} ->
+        lines = String.split_on(text, "\n")
+        total = Enum.count(lines)
+        first = if from < 1, do: 1, else: from
+        last = if to < 1 or to > total, do: total, else: to
+        slice = lines |> Enum.drop(first - 1) |> Enum.take(last - first + 1)
+        %{
+          "path" => Atlas.relative(abs, root),
+          "from" => first,
+          "to" => last,
+          "text" => Enum.join(slice, "\n")
+        }
+    end
+  end
+
+  defp read_module(root, mod) do
+    hit = safe(core.definition(mod, root), nil)
+    if is_nil(hit) do
+      %{"error" => "module #{mod} does not resolve here"}
+    else
+      read_range(root, to_string(Map.get(hit, "path")), 0, 0)
+    end
+  end
+
+  # one definition's block: annotations through last clause, located by
+  # the compiler's own lines and bounded by the next symbol's block
+  defp read_block(root, target) do
+    hit = safe(core.definition(target, root), nil)
+    if is_nil(hit) do
+      %{"error" => "#{target} does not resolve here"}
+    else
+      path = to_string(Map.get(hit, "path"))
+      parts = String.split_on(target, ".")
+      mod = parts |> Enum.take(Enum.count(parts) - 1) |> Enum.join(".")
+      name = Enum.at(parts, -1)
+      sym_lines = safe(core.symbols(mod, root), [])
+      |> Enum.map(fn s -> Map.get(s, "line", 0) end)
+      |> Enum.sort()
+      lines = safe(File.read!(path), "") |> String.split_on("\n")
+      total = Enum.count(lines)
+      def_line = Map.get(hit, "line", 1)
+      prev = sym_lines |> Enum.filter(fn l -> l < def_line end) |> Enum.at(-1)
+      next = sym_lines |> Enum.filter(fn l -> l > def_line end) |> Enum.at(0)
+      floor = if is_nil(prev), do: 0, else: prev
+      stop = if is_nil(next), do: total - 1, else: block_start(lines, next, def_line) - 1
+      start = block_start(lines, def_line, floor)
+      read_range(root, path, start, trim_blank(lines, stop))
+      |> Map.put("target", target)
+      |> Map.put("name", name)
+    end
+  end
+
+  @doc """
+  Where a definition's block starts: the first line of the annotation
+  run (`@...`/comments, heredoc bodies included) that ends directly
+  above `def_line`, never reaching back past `floor` — the previous
+  definition's own line.
+  """
+  @doc_trans zh_CN: "定义块的起点:紧贴 `def_line` 上方的注解连段(@ 行/注释行,heredoc 体在内)的首行;不回溯越过 `floor`——上一个定义所在行。"
+  @param lines, "The file's lines."
+  @param_trans lines, zh_CN: "文件的各行。"
+  @param def_line, "The 1-based line of the definition."
+  @param_trans def_line, zh_CN: "定义所在行(1 起)。"
+  @param floor, "The previous definition's line; 0 at the top."
+  @param_trans floor, zh_CN: "上一个定义的行;顶部为 0。"
+  @spec block_start(sequence(string()), integer(), integer()) :: integer()
+  @example """
+      gan> Retrieval.block_start(["defmodule M do", "  @doc \\"d\\"", "  def f(), do: 1", "end"], 3, 0)
+      2
+  """
+  def block_start(lines, def_line, floor) do
+    walk_annotations(lines, floor + 1, def_line, nil, false)
+  end
+
+  # forward scan with heredoc state: an @-line with an unclosed pair of
+  # triple quotes keeps the run open across its prose body
+  defp walk_annotations(lines, i, def_line, start, open) do
+    if i >= def_line do
+      if is_nil(start), do: def_line, else: start
+    else
+      line = Enum.at(lines, i - 1)
+      fence_count = line |> String.split_on("\"\"\"") |> Enum.count()
+      fences = rem(fence_count - 1, 2) == 1
+      cond do
+        open -> recur(lines, i + 1, def_line, start, not fences)
+        String.match?(line, ~r/^\s*(@|#)/) ->
+          recur(lines, i + 1, def_line, if(is_nil(start), do: i, else: start), fences)
+        true -> recur(lines, i + 1, def_line, nil, false)
+      end
+    end
+  end
+
+  defp trim_blank(lines, stop) do
+    line = Enum.at(lines, stop - 1)
+    if stop > 1 and not is_nil(line) and String.trim(line) == "" do
+      recur(lines, stop - 1)
+    else
+      stop
+    end
+  end
+end

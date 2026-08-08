@@ -36,5 +36,6 @@
     "0028-the-mcp-surface.md",
     "0029-task.md",
     "0030-async-functions.md",
+    "0031-the-retrieval-surface.md",
   ],
 }

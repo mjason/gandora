@@ -91,7 +91,7 @@ defmodule TestMcpSurface do
     names = Enum.map(Main.tools(), fn {n, _f} -> n end)
     assert_contains(names, "gan_example")
     assert_contains(names, "gan_verify")
-    assert_eq(Enum.count(names), 6)
+    assert_eq(Enum.count(names), 10)
   end
 
   # the write-once contract, end to end (GEP-0028 rev 3): @doc prose is

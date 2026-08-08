@@ -41,9 +41,11 @@ defmodule Agent do
   - Host work goes through std `File`/`Path`/`System`
     (`File.read!`, `Path.wildcard`, `System.cmd`), not
     `$os`/`$pathlib`/`$subprocess`.
-  - Repeated shape becomes a data table + Enum; compile-time
-    repetition becomes a `defmacro` whose expansion is what you would
-    have written by hand.
+  - Declare, don't narrate: repeated shape becomes a data table + Enum;
+    a table describing definitions becomes annotations on them
+    (`defattr` + `@on_definition`, GEP-0008); compile-time repetition
+    becomes a `defmacro` whose expansion is what you would have
+    written by hand.
   """
 
   @doc "Prints the briefing; `--json` emits the raw context pack instead."

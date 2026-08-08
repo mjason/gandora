@@ -33,7 +33,12 @@ defmodule Main do
   `clean: true` with `doctests.passed: true` is the only evidence that
   the code works. `gan_doc` and `gan_pack` answer what a name means, and
   are the same answers as `gan lsc doc` / `gan lsc pack` if you have a
-  shell.
+  shell. To find code before touching it: `gan_map` orients (project,
+  installed packages, docs), `gan_search_files`/`gan_search_content`
+  locate (the corpus includes documentation and every installed
+  package's shipped .gan sources), and `gan_read` fetches exactly one
+  block — a line range, a module, or `Mod.fun` with its annotations —
+  instead of a whole file.
   """
 
   @doc """
@@ -97,6 +102,68 @@ defmodule Main do
   @spec gan_briefing() :: string()
   @tool true
   def gan_briefing(), do: Intel.briefing(root())
+
+  @doc """
+  The code atlas (GEP-0031): project modules with paths and public
+  heads, every installed package's modules with the `.gan` sources
+  they ship (the standard library included), and the documentation
+  files — the map to read once before searching.
+  """
+  @doc_trans zh_CN: "代码地图(GEP-0031):项目模块及路径与公开函数头、每个已安装包的模块与其随附 .gan 源(std 在内)、以及文档文件——检索前先读一遍的地图。"
+  @param needle, "Narrow to modules whose name contains this; \"\" for the full atlas."
+  @spec gan_map(string()) :: term()
+  @tool true
+  def gan_map(needle), do: Intel.lsc(["map", needle], root())
+
+  @doc """
+  Corpus files whose name matches `pattern` — a glob when it carries
+  `*`/`?`, a substring otherwise. The corpus is project sources and
+  docs; `deps` adds the `.gan` sources of every installed package
+  (GEP-0031).
+  """
+  @doc_trans zh_CN: "文件名匹配 `pattern` 的语料文件——含 `*`/`?` 按 glob,否则按子串。语料为项目源码与文档;`deps` 加入每个已安装包随附的 .gan 源(GEP-0031)。"
+  @param pattern, "The file-name pattern."
+  @param deps, "Whether installed packages' sources join the search."
+  @spec gan_search_files(string(), boolean()) :: term()
+  @tool true
+  def gan_search_files(pattern, deps) do
+    Intel.lsc(["find", pattern] ++ flag(deps, "--deps"), root())
+  end
+
+  @doc """
+  Content search over the corpus (GEP-0031): a regular expression by
+  default, or BM25 ranking when `ranked` — use ranked mode for prose
+  questions, regex for exact shapes. `deps` adds the `.gan` sources of
+  every installed package, so library code and its `@doc` prose are
+  searchable too. Capped output says so via `truncated`.
+  """
+  @doc_trans zh_CN: "语料内容检索(GEP-0031):默认正则,`ranked` 时 BM25 排名——散文式问题用排名,精确形状用正则。`deps` 加入每个已安装包随附的 .gan 源,库代码与其 @doc 散文一并可搜。输出有上限并以 `truncated` 如实相告。"
+  @param pattern, "The regular expression, or the words to rank by."
+  @param ranked, "BM25 ranking instead of regex matching."
+  @param deps, "Whether installed packages' sources join the search."
+  @spec gan_search_content(string(), boolean(), boolean()) :: term()
+  @tool true
+  def gan_search_content(pattern, ranked, deps) do
+    Intel.lsc(["grep", pattern] ++ flag(ranked, "--ranked") ++ flag(deps, "--deps"), root())
+  end
+
+  @doc """
+  One precise read (GEP-0031): a corpus path with a 1-based inclusive
+  line range (0, 0 for the whole file), a module name (its whole
+  source, project or installed), or `Mod.fun` (that definition's
+  block, annotations included). Prefer this over paging whole files.
+  """
+  @doc_trans zh_CN: "一次精准读取(GEP-0031):语料路径加 1 起始闭区间行段(整文件传 0,0)、模块名(整份源码,项目或已安装)、或 Mod.fun(该定义的块,含注解)。优先用它,别整页翻文件。"
+  @param target, "A corpus path, `Mod`, or `Mod.fun`."
+  @param from_line, "First line, 1-based; 0 for a named or whole-file read."
+  @param to_line, "Last line, inclusive; 0 for a named or whole-file read."
+  @spec gan_read(string(), integer(), integer()) :: term()
+  @tool true
+  def gan_read(target, from_line, to_line) do
+    Intel.lsc(["read", target, to_string(from_line), to_string(to_line)], root())
+  end
+
+  defp flag(on, name), do: if(on, do: [name], else: [])
 
   @doc """
   The tool table the hook accumulated from the `@tool` markers — the

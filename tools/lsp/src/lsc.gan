@@ -93,6 +93,42 @@ defmodule Lsc do
   @command {"pack", "[<Mod> ...]", "one-call agent context: std lists, project\nsignatures, construct index, verdict summary;\nnamed modules ride along with full docs (GEP-0026-R003)"}
   defp pack_q(rest, root), do: emit(ContextPack.build(root, positional(rest)))
 
+  @command {"map", "[<Mod>]", "the code atlas: project modules + heads, installed\npackages with their shipped .gan sources, docs (GEP-0031)"}
+  defp map_q(rest, root) do
+    needle = rest |> positional() |> Enum.at(0)
+    emit(Atlas.build(root, if(is_nil(needle), do: "", else: needle)))
+  end
+
+  @command {"find", "<pattern> [--deps]", "corpus files whose name matches (glob with */?,\nsubstring otherwise); --deps adds installed sources (GEP-0031)"}
+  defp find_q([pattern | rest], root), do: emit(Retrieval.find(root, pattern, Enum.member?(rest, "--deps")))
+  defp find_q([], _root), do: usage_halt()
+
+  @command {"grep", "<pattern> [--ranked] [--deps]", "content search: regex (rg-accelerated), or BM25\nranking with --ranked; --deps adds installed sources (GEP-0031)"}
+  defp grep_q([pattern | rest], root) do
+    deps = Enum.member?(rest, "--deps")
+    if Enum.member?(rest, "--ranked") do
+      emit(Retrieval.ranked(root, pattern, deps))
+    else
+      emit(Retrieval.grep(root, pattern, deps))
+    end
+  end
+
+  defp grep_q([], _root), do: usage_halt()
+
+  @command {"read", "<path|Mod|Mod.fun> [from to]", "one precise read: a line range, a whole module,\nor one definition's block with its annotations (GEP-0031)"}
+  defp read_q([target | rest], root) do
+    span = positional(rest)
+    from = span |> Enum.at(0) |> line_or_zero()
+    to = span |> Enum.at(1) |> line_or_zero()
+    emit(Retrieval.read(root, target, from, to))
+  end
+
+  defp read_q([], _root), do: usage_halt()
+
+  defp line_or_zero(arg) do
+    if is_nil(arg), do: 0, else: safe($builtins.int(arg), 0)
+  end
+
   @command {"doc", "<target> [...] [--brief]", "docs for one or many targets; --brief = one line each"}
   defp doc_q([target | rest], root) do
     # many targets in one call; --brief trims each to one line
