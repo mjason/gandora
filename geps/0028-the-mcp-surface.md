@@ -9,7 +9,7 @@ areas:
   - Tooling
 created: 2026-08-06
 updated: 2026-08-08
-revision: 3
+revision: 4
 requires: [13, 15, 25, 26]
 replaces: []
 superseded-by: null
@@ -156,6 +156,21 @@ clones, and the verdicts they produce are the project's own, judged
 inside its own environment rather than by whatever toolchain happens
 to be installed system-wide.
 
+**GEP-0028-R012A (the agent instructions are wired the same way, rev
+4):** `gan init` also wires the agent-instruction files. When neither
+exists, it creates `AGENTS.md` holding the marker-delimited Gandora
+section — a compact pointer document (the loop, the retrieval-first
+habit, `gan_verify` as the only proof, and where the live briefing
+lives), never a copy of rules the toolchain already serves. When
+`AGENTS.md` exists, the section is appended, its markers making the
+operation idempotent; the user's own content is never touched. When
+`CLAUDE.md` exists, one `@AGENTS.md` import line is appended (once) so
+Claude reads the same section. Static wiring stays `gan init`'s job —
+re-runnable, deterministic, and honest about mutation — while the MCP
+server keeps its property of never writing into the project: its
+`instructions` may point an agent at `gan init .`, not do the writing
+for it.
+
 ## Rationale
 
 The surface refuses the split most codegen tools accept — a fast path
@@ -212,6 +227,13 @@ that passed R002, or a failure carrying findings — never an unverified
 draft.
 
 ## Change History
+
+- Revision 4, 2026-08-08: R012A — `gan init` wires the
+  agent-instruction files: creates `AGENTS.md` when absent, appends
+  the marker-delimited Gandora section when present, and adds one
+  `@AGENTS.md` import to an existing `CLAUDE.md`. The section is a
+  pointer, not a rulebook copy; the MCP server continues to write
+  nothing into the project.
 
 - Revision 3, 2026-08-08: the write-once contract is now fully wired.
   A tool is a bare `@tool true` marker on the function that implements

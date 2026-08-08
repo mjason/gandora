@@ -414,6 +414,61 @@ defmodule Main do
     write_if_absent(p |> Path.join(".codex") |> Path.join("config.toml"), @mcp_codex)
   end
 
+  # the markers make the append idempotent: re-running init must never
+  # duplicate the section, and the user's own prose is never touched
+  @agents_begin "<!-- gandora:begin -->"
+  @agents_end "<!-- gandora:end -->"
+
+  # a pointer document, not a rulebook copy: the rules live in the
+  # toolchain (`gan agent`, `gan lsc doc practices`) — this section
+  # only tells an agent they exist and how to reach them
+  @agents_body """
+  ## Gandora
+
+  This project contains Gandora sources (`.gan` — Elixir-flavored,
+  compiled to readable Python). The loop: write -> `gan build` (fix
+  EVERY finding) -> `gan test`.
+
+  - Start a session with the `gan_briefing` MCP tool (or `uv run gan agent`):
+    the working loop, the house style, and this project's context pack.
+  - Find before touching: `gan_map` (with `ranked`, it searches definitions
+    by meaning), `gan_search_files` / `gan_search_content` (project docs and
+    installed-package sources included), then `gan_read` for one precise
+    block instead of a whole file.
+  - `gan_verify` every snippet before handing it over — `ok: true` with
+    `clean: true` and `doctests.passed: true` is the only evidence it works.
+  - The MCP server is `uv run gan mcp`, wired in `.mcp.json`,
+    `.codex/config.toml`, and `opencode.json`.
+  """
+
+  @claude_import "@AGENTS.md"
+
+  @doc """
+  Wires the agent-instruction files (GEP-0028-R012A): creates
+  `AGENTS.md` when absent, appends the marker-delimited Gandora
+  section when present, and points an existing `CLAUDE.md` at it with
+  one `@AGENTS.md` import line. Idempotent; user prose untouched.
+  """
+  @param p, "The project directory."
+  @spec write_agents_wiring(string()) :: nil
+  def write_agents_wiring(p) do
+    section = @agents_begin <> "\n" <> @agents_body <> @agents_end <> "\n"
+    agents = Path.join(p, "AGENTS.md")
+    cond do
+      not File.exists?(agents) ->
+        File.write!(agents, "# Agent instructions\n\n" <> section)
+      String.contains?(File.read!(agents), @agents_begin) -> nil
+      true ->
+        kept = agents |> File.read!() |> String.trim_trailing()
+        File.write!(agents, kept <> "\n\n" <> section)
+    end
+    claude = Path.join(p, "CLAUDE.md")
+    if File.exists?(claude) and not String.contains?(File.read!(claude), @claude_import) do
+      kept = claude |> File.read!() |> String.trim_trailing()
+      File.write!(claude, kept <> "\n\n" <> @claude_import <> "\n")
+    end
+  end
+
   # `init [--package] <path>`: the flag selects which scaffold
   defp init_cmd(args) do
     paths = Enum.filter(args, fn a -> not String.starts_with?(a, "--") end)
@@ -466,8 +521,10 @@ defmodule Main do
     write_if_absent(Path.join(path, ".python-version"), "3.11\n")
     write_if_absent(path |> Path.join("src") |> Path.join("main.gan"), @hello_gan)
     write_mcp_configs(path)
+    write_agents_wiring(path)
     IO.puts("Initialized Gandora project in #{path}")
     IO.puts("MCP wired for Claude Code (.mcp.json), Codex (.codex/config.toml), opencode (opencode.json)")
+    IO.puts("Agent instructions wired (AGENTS.md; @AGENTS.md import added to an existing CLAUDE.md)")
   end
 
   defp write_if_absent(file, content) do
@@ -582,6 +639,7 @@ defmodule Main do
     File.write!(Path.join(path, ".python-version"), "3.11\n")
     File.write!(Path.join(src, "core.gan"), package_starter(module, dist_name))
     write_mcp_configs(path)
+    write_agents_wiring(path)
     IO.puts("Initialized Gandora package #{dist_name} in #{path}")
     IO.puts("Publish with:")
     IO.puts("  cd #{path}")
