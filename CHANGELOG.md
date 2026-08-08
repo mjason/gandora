@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.20.1 — 2026-08-08
+
+**Agent instructions belong to the agents.**
+
+- The gan-mcp server `instructions` now carry the self-setup nudge: a
+  connected agent whose own instruction file (CLAUDE.md, AGENTS.md, or
+  its tool's equivalent) does not cover Gandora is told to add a short
+  section itself, in that file's own conventions — the
+  write → `gan build` → `gan test` loop, retrieval before editing,
+  `gan_verify` as the only proof. GEP-0028 revision 5 makes the
+  boundary explicit: `gan init` writes machine-read, single-shape
+  config it defines (`.mcp.json` and friends) and never writes into
+  the prose files that carry each agent's own voice — a revision-4
+  design that appended a universal section there was tried against a
+  real project and withdrawn the same day.
+
 ## v0.20.0 — 2026-08-08
 
 **The language learns to be found — a retrieval surface over code,

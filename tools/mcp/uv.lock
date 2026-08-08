@@ -319,17 +319,17 @@ wheels = [
 
 [[package]]
 name = "gandora-core"
-version = "0.20.0"
+version = "0.20.1"
 source = { directory = "../../crates/core-py" }
 
 [[package]]
 name = "gandora-lang"
-version = "0.20.0"
+version = "0.20.1"
 source = { directory = "../../" }
 
 [[package]]
 name = "gandora-lsp"
-version = "0.20.0"
+version = "0.20.1"
 source = { directory = "../lsp" }
 dependencies = [
     { name = "gandora-core" },
@@ -353,7 +353,7 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "gandora-mcp"
-version = "0.20.0"
+version = "0.20.1"
 source = { editable = "." }
 dependencies = [
     { name = "gandora-core" },
@@ -384,7 +384,7 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "gandora-std"
-version = "0.20.0"
+version = "0.20.1"
 source = { directory = "../../std" }
 
 [package.metadata]
@@ -394,7 +394,7 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "gandora-tool"
-version = "0.20.0"
+version = "0.20.1"
 source = { directory = "../gan" }
 dependencies = [
     { name = "gandora-core" },
