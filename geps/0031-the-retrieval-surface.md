@@ -91,10 +91,14 @@ never in the corpus.
 **GEP-0031-R003:** `map` returns the atlas: for the project, each
 module with its path and rendered public heads; for the standard
 library and each installed package, each module with the path of its
-shipped `.gan` source and its public function names; plus the list of
-documentation files. Everything is sorted; paths inside the project
-are project-relative and dep paths are absolute. `map <Mod>` narrows
-the atlas to modules whose name contains `<Mod>`.
+shipped `.gan` source and the same rendered heads. A head is an
+orientation line — the signature with the definition's `@doc` first
+sentence appended (`def map(xs, f) — Applies \`f\` to every
+element.`) — so the map answers "what is here and what does it do"
+in one pull. The atlas also lists the documentation files. Everything
+is sorted; paths inside the project are project-relative and dep
+paths are absolute. `map <Mod>` narrows the atlas to modules whose
+name contains `<Mod>`.
 
 **GEP-0031-R004:** `find <pattern>` matches file *names* in the corpus
 (substring or glob when the pattern carries `*`/`?`). When `fd` is on

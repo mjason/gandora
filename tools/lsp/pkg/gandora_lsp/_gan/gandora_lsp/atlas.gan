@@ -15,12 +15,13 @@ defmodule Atlas do
   import Safe
 
   @doc """
-  The atlas for `root`: project modules (path + public heads),
-  installed packages' modules (shipped source + public names), and the
-  documentation files. `needle` narrows module lists to names
-  containing it; `""` keeps everything.
+  The atlas for `root`: project modules (path + public heads, each
+  carrying its `@doc` first sentence), installed packages' modules
+  (shipped source + the same signed heads), and the documentation
+  files. `needle` narrows module lists to names containing it; `""`
+  keeps everything.
   """
-  @doc_trans zh_CN: "`root` 的地图:项目模块(路径+公开函数头)、已安装包的模块(随附源+公开名)、文档文件。`needle` 收窄到名字包含它的模块;`\"\"` 保留全部。"
+  @doc_trans zh_CN: "`root` 的地图:项目模块(路径+公开函数头,每条带 `@doc` 首句)、已安装包的模块(随附源+同样带摘要的函数头)、文档文件。`needle` 收窄到名字包含它的模块;`\"\"` 保留全部。"
   @param root, "The project root."
   @param_trans root, zh_CN: "项目根。"
   @param needle, "A module-name fragment; \"\" for the full atlas."
@@ -35,8 +36,8 @@ defmodule Atlas do
     }
   end
 
-  # every project module: relative path plus its public heads, from the
-  # compiler's own symbol walk
+  # every project module: relative path plus its public heads — each
+  # carrying its @doc first sentence — from the compiler's symbol walk
   defp project(root, low) do
     syms = safe(core.wsymbols("", root), [])
     grouped = Enum.reduce(syms, %{}, fn s, acc ->
@@ -45,7 +46,7 @@ defmodule Atlas do
       entry = if Map.get(s, "kind") == "defp" do
         entry
       else
-        Map.put(entry, "heads", Map.get(entry, "heads") ++ [Map.get(s, "head", Map.get(s, "name"))])
+        Map.put(entry, "heads", Map.get(entry, "heads") ++ [signed(s)])
       end
       Map.put(acc, mod, entry)
     end)
@@ -54,12 +55,20 @@ defmodule Atlas do
       do: Map.put(e, "module", mod)
   end
 
+  # `def map(xs, f) — Applies \`f\` to every element.`: the head and the
+  # @doc first sentence in one orientation line
+  defp signed(s) do
+    head = Map.get(s, "head", Map.get(s, "name", ""))
+    doc = String.trim(to_string(Map.get(s, "doc", "")))
+    if doc == "", do: head, else: head <> " — " <> doc
+  end
+
   @doc """
   The installed packages and their modules, from the `gandora.toml`
   markers under the project venv (GEP-0006): package name, then per
-  module its shipped `.gan` source (absolute) and public names.
+  module its shipped `.gan` source (absolute) and its signed heads.
   """
-  @doc_trans zh_CN: "已安装包及其模块,来自项目 venv 下的 gandora.toml marker(GEP-0006):包名,及每模块的随附 .gan 源(绝对路径)与公开名。"
+  @doc_trans zh_CN: "已安装包及其模块,来自项目 venv 下的 gandora.toml marker(GEP-0006):包名,及每模块的随附 .gan 源(绝对路径)与带摘要的函数头。"
   @param root, "The project root."
   @param_trans root, zh_CN: "项目根。"
   @param low, "The lowercased module-name filter; \"\" keeps all."
@@ -98,14 +107,15 @@ defmodule Atlas do
     %{
       "module" => name,
       "source" => Path.join(site, Map.get(m, "source", "")),
-      "names" => public_names(name, root)
+      "heads" => public_heads(name, root)
     }
   end
 
-  defp public_names(mod, root) do
+  # same orientation lines as the project's: head — @doc first sentence
+  defp public_heads(mod, root) do
     for s <- safe(core.symbols(mod, root), []),
       Map.get(s, "kind") != "defp",
-      do: Map.get(s, "name")
+      do: signed(s)
   end
 
   @doc """

@@ -24,10 +24,11 @@ class GanMatchError(Exception):
 
 
 def build(root: str, needle: str) -> dict:
-    """The atlas for `root`: project modules (path + public heads),
-installed packages' modules (shipped source + public names), and the
-documentation files. `needle` narrows module lists to names
-containing it; `""` keeps everything.
+    """The atlas for `root`: project modules (path + public heads, each
+carrying its `@doc` first sentence), installed packages' modules
+(shipped source + the same signed heads), and the documentation
+files. `needle` narrows module lists to names containing it; `""`
+keeps everything.
 
 ## Parameters
 
@@ -50,7 +51,7 @@ def _project(root, low):
         if gandora_std.map.get(s, "kind") == "defp":
             _gan_tmp1 = entry
         else:
-            _gan_tmp1 = gandora_std.map.put(entry, "heads", gandora_std.map.get(entry, "heads") + [gandora_std.map.get(s, "head", gandora_std.map.get(s, "name"))])
+            _gan_tmp1 = gandora_std.map.put(entry, "heads", gandora_std.map.get(entry, "heads") + [_signed(s)])
         entry = _gan_tmp1
         return gandora_std.map.put(acc, mod, entry)
     grouped = gandora_std.enum.reduce(syms, {}, _gan_fn0)
@@ -58,10 +59,19 @@ def _project(root, low):
     return [gandora_std.map.put(e, "module", mod) for _gan_for2 in sorted if isinstance(_gan_for2, tuple) and len(_gan_for2) == 2 for (mod, e,) in [(_gan_for2[0], _gan_for2[1],)] if _gan_truthy(gandora_std.string.contains_p(gandora_std.string.downcase(mod), low))]
 
 
+def _signed(s):
+    head = gandora_std.map.get(s, "head", gandora_std.map.get(s, "name", ""))
+    doc = gandora_std.string.trim(str(gandora_std.map.get(s, "doc", "")))
+    if doc == "":
+        return head
+    else:
+        return head + (" — " + doc)
+
+
 def packages(root: str, low: str) -> dict:
     """The installed packages and their modules, from the `gandora.toml`
 markers under the project venv (GEP-0006): package name, then per
-module its shipped `.gan` source (absolute) and public names.
+module its shipped `.gan` source (absolute) and its signed heads.
 
 ## Parameters
 
@@ -102,15 +112,15 @@ def _named_p(m, low):
 
 def _dep_entry(m, site, root):
     name = gandora_std.map.get(m, "name", "")
-    return {"module": name, "source": gandora_std.path.join(site, gandora_std.map.get(m, "source", "")), "names": _public_names(name, root)}
+    return {"module": name, "source": gandora_std.path.join(site, gandora_std.map.get(m, "source", "")), "heads": _public_heads(name, root)}
 
 
-def _public_names(mod, root):
+def _public_heads(mod, root):
     try:
         _gan_tmp5 = core.symbols(mod, root)
     except Exception as _e__gan3:
         _gan_tmp5 = []
-    return [gandora_std.map.get(s, "name") for s in _gan_tmp5 if gandora_std.map.get(s, "kind") != "defp"]
+    return [_signed(s) for s in _gan_tmp5 if gandora_std.map.get(s, "kind") != "defp"]
 
 
 def docs(root: str) -> list[str]:

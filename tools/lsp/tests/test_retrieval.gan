@@ -11,20 +11,25 @@ defmodule TestRetrieval do
   defp root(), do: File.cwd!()
 
   describe "the atlas (GEP-0031-R003)" do
-    test "project modules carry paths and public heads" do
+    test "project modules carry paths and doc-signed heads" do
       atlas = Atlas.build(root(), "Retrieval")
       [entry] = Map.get(atlas, "project")
       assert_eq(Map.get(entry, "module"), "Retrieval")
       assert_eq(Map.get(entry, "path"), "src/retrieval.gan")
-      assert_true(Enum.count(Map.get(entry, "heads")) >= 4)
+      heads = Map.get(entry, "heads")
+      assert_true(Enum.count(heads) >= 4)
+      # the @doc first sentence rides each head
+      tokens_head = Enum.find(heads, fn h -> String.contains?(h, "def tokens(text)") end)
+      assert_contains(tokens_head, "— The lowercased")
     end
 
-    test "installed packages appear with shipped sources and names" do
+    test "installed packages appear with shipped sources and signed heads" do
       atlas = Atlas.build(root(), "Enum")
       std = atlas |> Map.get("packages") |> Map.get("gandora_std")
       [entry] = Enum.filter(std, fn m -> Map.get(m, "module") == "Enum" end)
       assert_contains(Map.get(entry, "source"), "_gan/gandora_std/enum.gan")
-      assert_contains(Map.get(entry, "names"), "map")
+      map_head = Enum.find(Map.get(entry, "heads"), fn h -> String.starts_with?(h, "def map(") end)
+      assert_contains(map_head, "Applies")
     end
   end
 
