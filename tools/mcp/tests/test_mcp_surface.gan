@@ -94,6 +94,28 @@ defmodule TestMcpSurface do
     assert_eq(Enum.count(names), 6)
   end
 
+  # the write-once contract, end to end (GEP-0028 rev 3): @doc prose is
+  # the description, and every @param text lands on its schema property
+  test "the whole annotation surface reaches the protocol" do
+    s = Main.server()
+    tool = s._tool_manager.get_tool("gan_verify")
+    assert_contains(tool.description, "throwaway project")
+    refute String.contains?(tool.description, "## Parameters")
+    source_desc = tool.parameters
+    |> Map.get("properties")
+    |> Map.get("source")
+    |> Map.get("description")
+    assert_contains(source_desc, "Gandora source text")
+    # every registered tool with parameters carries a description on each
+    Enum.each(Main.tools(), fn {name, _f, _blurb} ->
+      props = s._tool_manager.get_tool(name).parameters |> Map.get("properties", %{})
+      Enum.each(Map.to_list(props), fn {_pname, schema} ->
+        assert_true(Map.get(schema, "description", "") != "")
+      end)
+    end)
+    nil
+  end
+
   test "every construct atom survives the verdict it teaches" do
     # the corpus proves Task (GEP-0029), and Task fans the corpus out:
     # every atom's sandbox verdict crosses the blocking bridge, bounded

@@ -8,8 +8,8 @@ type: Standards Track
 areas:
   - Tooling
 created: 2026-08-06
-updated: 2026-08-07
-revision: 2
+updated: 2026-08-08
+revision: 3
 requires: [13, 15, 25, 26]
 replaces: []
 superseded-by: null
@@ -212,6 +212,17 @@ that passed R002, or a failure carrying findings — never an unverified
 draft.
 
 ## Change History
+
+- Revision 3, 2026-08-08: the write-once contract is now fully wired.
+  The tool table is declared on the definitions (`@tool` +
+  `defattr`/`@on_definition`, GEP-0008 rev 2) instead of maintained
+  beside them, and registration carries the whole annotation surface
+  into the protocol: the `@doc` prose is the tool description
+  (previously the table blurb overrode it), and each `@param` text is
+  injected into its `inputSchema` property — parsed from the
+  `## Parameters` docstring section our own codegen emits (GEP-0018),
+  a contract rather than a guess. `@tool`'s one-liner remains the
+  table/listing summary. Nothing about a tool is written twice.
 
 - Revision 2, 2026-08-07: Accepted. `gandora-mcp` joins the release
   chain as the sixth published package, and R012 makes `gan init`

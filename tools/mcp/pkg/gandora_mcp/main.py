@@ -9,22 +9,30 @@ every public function is exactly what the protocol needs.
 import collections.abc
 import gandora_core as core
 import mcp.server.mcpserver as ms
+import re
 import gandora_mcp.composer
 import gandora_mcp.intel
 import gandora_mcp.sandbox
 import gandora_std.enum
 import gandora_std.file
+import gandora_std.map
 import gandora_std.path
+import gandora_std.string
 import gandora_std.system
 
 
 def _gan_truthy(value):
     return value is not None and value is not False
 
+def _gan_or(value, then):
+    return value if _gan_truthy(value) else then()
+
 class GanMatchError(Exception):
     pass
 
 instructions = "Gandora is an Elixir-flavored language compiling to readable Python.\nCall `gan_briefing` once at the start of a session. Ask `gan_example`\nwhen you need to know how a feature or a piece of syntax is really\nwritten — it answers with prose plus a module that compiled and whose\ndoctests ran. Call `gan_verify` on every snippet before you hand it to\nthe user, including snippets you wrote yourself: a verdict of\n`clean: true` with `doctests.passed: true` is the only evidence that\nthe code works. `gan_doc` and `gan_pack` answer what a name means, and\nare the same answers as `gan lsc doc` / `gan lsc pack` if you have a\nshell.\n"
+
+param_line = re.compile("^\\s*- ([a-z_][A-Za-z0-9_]*): (.*)$")
 
 
 def gan_verify(source: str) -> dict:
@@ -121,16 +129,92 @@ def _discover(dir):
             continue
 
 
-def main() -> None:
-    """Serves the tool table over stdio until the client disconnects."""
-    server = ms.MCPServer("gandora", version=core.version(), instructions=instructions)
-    def _gan_fn0(*_gan_args, server=server):
+def server() -> object:
+    """The configured server: every table entry registered with its whole
+annotation surface wired into the protocol — the signature (from
+`@spec`) is the inputSchema, the `@doc` prose is the description,
+and each `@param` text lands on its schema property. Declared once
+on the definition, visible to every client.
+"""
+    s = ms.MCPServer("gandora", version=core.version(), instructions=instructions)
+    def _gan_fn0(*_gan_args, s=s):
         match _gan_args:
-            case ((name, f, desc) as _gan_t0,) if isinstance(_gan_t0, tuple):
-                return server.add_tool(f, name=name, description=desc)
+            case ((name, f, _blurb) as _gan_t0,) if isinstance(_gan_t0, tuple):
+                return _register(s, name, f)
         raise GanMatchError("no clause of _gan_fn0/1 matched " + repr(_gan_args))
     gandora_std.enum.each(tools(), _gan_fn0)
-    return server.run("stdio")
+    return s
+
+
+def _register(s, name, f):
+    s.add_tool(f, name=name, description=doc_prose(f.__doc__))
+    return _annotate(s._tool_manager.get_tool(name), param_docs(f.__doc__))
+
+
+def _annotate(tool, docs):
+    if not ((tool is None)):
+        props = gandora_std.map.get(tool.parameters, "properties", {})
+        def _gan_fn1(*_gan_args, props=props):
+            match _gan_args:
+                case ((pname, text) as _gan_t1,) if isinstance(_gan_t1, tuple):
+                    if _gan_truthy(gandora_std.map.has_key_p(props, pname)):
+                        _none = gandora_std.map.get(props, pname).update({"description": text})
+                        return None
+                    else:
+                        return None
+            raise GanMatchError("no clause of _gan_fn1/1 matched " + repr(_gan_args))
+        return gandora_std.enum.each(gandora_std.map.to_list(docs), _gan_fn1)
+    else:
+        return None
+
+
+def doc_prose(doc: str) -> str:
+    """The tool description from a compiled docstring: the `@doc` prose,
+with the `## Parameters` section (which rides the schema instead)
+cut off.
+
+## Parameters
+
+  - doc: The function docstring; nil for an undocumented function.
+
+    >>> doc_prose("Does things.\\n\\n## Parameters\\n\\n  - x: The input.\\n")
+    'Does things.'
+"""
+    if (doc is None):
+        return ""
+    else:
+        return gandora_std.string.trim(gandora_std.enum.at(gandora_std.string.split_on(doc, "## Parameters"), 0))
+
+
+def param_docs(doc: str) -> dict:
+    """The `@param` texts by parameter name, parsed from the compiled
+`## Parameters` section — the exact shape our own codegen emits
+(GEP-0018), so the parse is a contract, not a guess.
+
+## Parameters
+
+  - doc: The function docstring; nil for an undocumented function.
+
+    >>> param_docs("D.\\n\\n## Parameters\\n\\n  - x: The input.\\n  - y: The other.\\n")
+    {'x': 'The input.', 'y': 'The other.'}
+"""
+    if (doc is None):
+        _gan_tmp2 = [doc]
+    else:
+        _gan_tmp2 = gandora_std.string.split_on(doc, "## Parameters")
+    parts = _gan_tmp2
+    if gandora_std.enum.count(parts) < 2:
+        return {}
+    else:
+        matches = gandora_std.enum.map(gandora_std.enum.take_while(gandora_std.string.split_on(gandora_std.enum.at(parts, 1), "\n"), lambda l: _gan_or(gandora_std.string.trim(l) == "", lambda: gandora_std.string.match_p(l, param_line))), lambda l: param_line.match(l))
+        _gan_tmp3 = [(m.group(1), m.group(2)) for m in matches if not ((m is None))]
+        pairs = _gan_tmp3
+        return gandora_std.map.new(pairs)
+
+
+def main() -> None:
+    """Serves the tool table over stdio until the client disconnects."""
+    return server().run("stdio")
 
 
 if __name__ == "__main__":

@@ -136,14 +136,94 @@ defmodule Main do
     end
   end
 
+  @doc """
+  The configured server: every table entry registered with its whole
+  annotation surface wired into the protocol — the signature (from
+  `@spec`) is the inputSchema, the `@doc` prose is the description,
+  and each `@param` text lands on its schema property. Declared once
+  on the definition, visible to every client.
+  """
+  @doc_trans zh_CN: "配置完毕的服务器:表中每个条目注册时把完整注解面接进协议——签名(来自 @spec)即 inputSchema,@doc 散文即 description,每条 @param 落到对应 schema 属性上。在定义上声明一次,每个客户端都看得见。"
+  @spec server() :: term()
+  def server() do
+    s = ms.MCPServer("gandora", version: core.version(), instructions: @instructions)
+    Enum.each(tools(), fn {name, f, _blurb} -> register(s, name, f) end)
+    s
+  end
+
+  defp register(s, name, f) do
+    s.add_tool(f, name: name, description: doc_prose(f.__doc__))
+    # the Tool's schema is enriched in place; get_tool is the tool
+    # manager's public accessor, reached through the server's field
+    annotate(s._tool_manager.get_tool(name), param_docs(f.__doc__))
+  end
+
+  defp annotate(tool, docs) do
+    if not is_nil(tool) do
+      props = tool.parameters |> Map.get("properties", %{})
+      Enum.each(Map.to_list(docs), fn {pname, text} ->
+        if Map.has_key?(props, pname) do
+          _none = Map.get(props, pname).update(%{"description" => text})
+          nil
+        end
+      end)
+    end
+  end
+
+  @doc """
+  The tool description from a compiled docstring: the `@doc` prose,
+  with the `## Parameters` section (which rides the schema instead)
+  cut off.
+  """
+  @doc_trans zh_CN: "编译后 docstring 里的工具描述:@doc 散文,截去改走 schema 的 `## Parameters` 段。"
+  @param doc, "The function docstring; nil for an undocumented function."
+  @param_trans doc, zh_CN: "函数 docstring;未写文档时为 nil。"
+  @spec doc_prose(string()) :: string()
+  @example """
+      gan> Main.doc_prose("Does things.\\n\\n## Parameters\\n\\n  - x: The input.\\n")
+      'Does things.'
+  """
+  def doc_prose(doc) do
+    if is_nil(doc) do
+      ""
+    else
+      doc |> String.split_on("## Parameters") |> Enum.at(0) |> String.trim()
+    end
+  end
+
+  # one compiled @param: `  - name: text` (GEP-0018 codegen shape)
+  @param_line ~r/^\s*- ([a-z_][A-Za-z0-9_]*): (.*)$/
+
+  @doc """
+  The `@param` texts by parameter name, parsed from the compiled
+  `## Parameters` section — the exact shape our own codegen emits
+  (GEP-0018), so the parse is a contract, not a guess.
+  """
+  @doc_trans zh_CN: "按参数名给出的 `@param` 文本,解析自编译产物的 `## Parameters` 段——正是自家 codegen 生成的形状(GEP-0018),解析是契约而非猜测。"
+  @param doc, "The function docstring; nil for an undocumented function."
+  @param_trans doc, zh_CN: "函数 docstring;未写文档时为 nil。"
+  @spec param_docs(string()) :: map()
+  @example """
+      gan> Main.param_docs("D.\\n\\n## Parameters\\n\\n  - x: The input.\\n  - y: The other.\\n")
+      {'x': 'The input.', 'y': 'The other.'}
+  """
+  def param_docs(doc) do
+    parts = if is_nil(doc), do: [doc], else: String.split_on(doc, "## Parameters")
+    if Enum.count(parts) < 2 do
+      %{}
+    else
+      matches = parts
+      |> Enum.at(1)
+      |> String.split_on("\n")
+      |> Enum.take_while(fn l -> String.trim(l) == "" or String.match?(l, @param_line) end)
+      |> Enum.map(fn l -> @param_line.match(l) end)
+      pairs = for m <- matches, not is_nil(m), do: {m.group(1), m.group(2)}
+      Map.new(pairs)
+    end
+  end
+
   @doc "Serves the tool table over stdio until the client disconnects."
   @doc_trans zh_CN: "通过 stdio 提供工具表,直到客户端断开。"
   @spec main() :: nil
-  def main() do
-    server = ms.MCPServer("gandora", version: core.version(), instructions: @instructions)
-    Enum.each(tools(), fn {name, f, desc} ->
-      server.add_tool(f, name: name, description: desc)
-    end)
-    server.run("stdio")
-  end
+  def main(), do: server().run("stdio")
 end
