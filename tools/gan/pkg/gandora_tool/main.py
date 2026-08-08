@@ -358,7 +358,7 @@ def _eval_line(code, ns):
 
 
 def _pyproject_toml(name):
-    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
+    return f"[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-lsp>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
 
 
 def write_mcp_configs(p: str) -> None:
@@ -415,7 +415,7 @@ would write, it writes only when absent.
         if not (_gan_truthy(gandora_std.string.contains_p(gandora_std.file.read_bang(pyproject), "gandora-mcp"))):
             print("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
             print("  dependencies: \"gandora-std\"        (generated code imports it)")
-            print("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
+            print("  dev group:    \"gandora-tool[dev]\", \"gandora-lsp\", \"gandora-mcp\"  (`uv run gan mcp`)")
     else:
         gandora_std.file.write_bang(pyproject, _pyproject_toml(name))
     _write_if_absent(gandora_std.path.join(path, ".gitignore"), gitignore)
@@ -434,7 +434,7 @@ def _write_if_absent(file, content):
 
 
 def _package_pyproject(dist_name, py_pkg):
-    return f"[project]\nname = \"{dist_name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora package\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n\n# pkg/ is gitignored build output but must enter the distribution\n[tool.hatch.build]\nignore-vcs = true\n\n# the sdist carries sources and the compiled output of `gan build`\n[tool.hatch.build.targets.sdist]\ninclude = [\"pkg\", \"src\", \"gandora.jsonc\"]\n\n# the wheel packages the compiled output (marker and .gan sources included)\n[tool.hatch.build.targets.wheel]\npackages = [\"pkg/{py_pkg}\"]\n\n# the toolchain and the MCP surface are development-time, never runtime\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
+    return f"[project]\nname = \"{dist_name}\"\nversion = \"0.1.0\"\ndescription = \"A Gandora package\"\nrequires-python = \">=3.11\"\ndependencies = [\"gandora-std>={core.version()}\"]\n\n[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n\n# pkg/ is gitignored build output but must enter the distribution\n[tool.hatch.build]\nignore-vcs = true\n\n# the sdist carries sources and the compiled output of `gan build`\n[tool.hatch.build.targets.sdist]\ninclude = [\"pkg\", \"src\", \"gandora.jsonc\"]\n\n# the wheel packages the compiled output (marker and .gan sources included)\n[tool.hatch.build.targets.wheel]\npackages = [\"pkg/{py_pkg}\"]\n\n# the toolchain and the MCP surface are development-time, never runtime\n[dependency-groups]\ndev = [\"gandora-tool[dev]>={core.version()}\", \"gandora-lsp>={core.version()}\", \"gandora-mcp>={core.version()}\"]\n"
 
 
 def _package_starter(module, dist_name):

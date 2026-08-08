@@ -1,5 +1,77 @@
 # Changelog
 
+## v0.20.0 — 2026-08-08
+
+**The language learns to be found — a retrieval surface over code,
+docs, and every installed package, and the disciplines that make it
+rank.**
+
+- **The retrieval surface** (GEP-0031): `gan lsc map` lays out the
+  atlas — project modules with doc-signed heads (`def map(xs, f) —
+  Applies \`f\` to every element.`), every installed package's modules
+  with the `.gan` sources they ship (GEP-0006 makes the standard
+  library and third-party code source-searchable by construction), and
+  the documentation files, a first-class member of the corpus. `find`
+  matches names, `grep` matches contents (`rg`-accelerated over an
+  explicit corpus list so the pure fallback is identical by
+  construction; `--ranked` is real BM25, k1 = 1.2 / b = 0.75, caps
+  reported via `truncated`), and `read` fetches one precise block — a
+  line range, a module, or `Mod.fun` with its annotations, located by
+  the compiler's own line data with heredoc-aware bounds. No
+  tree-sitter, no index: the compiler is the parser. `gan-mcp`
+  forwards all four (`gan_map`, `gan_search_files`,
+  `gan_search_content`, `gan_read`; six tools become ten).
+- **Search by meaning** (GEP-0031-R003A): `map --query` ranks the
+  atlas's definitions themselves — every public symbol is one BM25
+  document of target, head, and `@doc` sentence, so "read a file
+  returning an ok or error verdict" finds `File.read` without knowing
+  its name. Made honest by **GEP-0007-R011**: the default
+  `@doc`/`@moduledoc`/`@param` channels are English, enforced as a
+  check-phase error that teaches the `_trans` spelling — one language
+  per channel keeps the index rankable and gives localized prose its
+  own full-weight home. Symbol docs travel whole: the lightweight
+  default sentence *is* the summary, so nothing truncates it.
+- **The host, wrapped** (GEP-0010 rev 4): `Path`, `File`, and `System`
+  join the stdlib under the R011 contracts — thin over
+  `os.path`/`pathlib`/`subprocess`, Elixir-named, divergences recorded
+  (`File.read` returns `{:ok, text}`/`{:error, message}`;
+  `System.cmd` keeps Elixir's `{stdout, exit_status}` with a
+  documented `timeout:` extension). The toolchain's own sources now
+  prefer them over raw interop, and the Advisor points the way.
+- **Declarative surfaces** (GEP-0008 rev 2): expansion may write
+  registered attributes — absorbed as registrations, completing
+  R005's "definition plus registrations" — and the def-head atom
+  coercion extends to capture position (`&unquote(name)/n`). On top of
+  that, `gan`'s CLI, `gan-lsc`'s query table, and `gan-mcp`'s tool
+  table are all annotations on the definitions themselves
+  (`@command {token, argspec, help}` / `@tool true` with
+  `defattr` + `@on_definition` hooks; `gan-lsc` consumes
+  gandora-tool's `Cli` hook cross-package): usage text, dispatch, and
+  registration read one accumulated table and cannot drift.
+- **MCP writes nothing twice** (GEP-0028 rev 3): `@spec` is the
+  inputSchema, the `@doc` prose is the tool description, each `@param`
+  text lands on its schema property (parsed from the `## Parameters`
+  section our own codegen emits), and `@tool` is a bare marker.
+  Verified end to end with a real MCP client over stdio.
+- **The practice engine gains the pipeline taste** (GEP-0025 rev 4):
+  three-deep nested calls suggest `|>`; a bare single-variable `for`
+  suggests `Enum.map` when the stdlib resolves; host interop the
+  stdlib wraps gets one consolidated hint; the old map+filter rule is
+  corrected to fire only where a comprehension actually exists.
+  docs/practices.md is the long form ("Declare, don't narrate"),
+  `gan lsc doc practices` the card, and the `gan agent` briefing and
+  composer prompt carry the digest.
+- `Safe.safe(expr, fallback)` — one cross-package macro replacing ~25
+  hand-written `try/rescue` guards; the expansion is exactly what a
+  reviewer would have written.
+- Fixes: the dead-`defp` lint sees `&atom/n` captures; the map no
+  longer leaks `async defp` or renders nil docs as `"None"`; three
+  stale-compiler traps closed (root cache-keys watched an empty
+  `src/`, `uv.sources` don't propagate so every tool now pins
+  `gandora-lang` locally, `File.read!`/`write!` are explicit UTF-8);
+  scaffolded projects list `gandora-lsp` explicitly in their dev
+  group.
+
 ## v0.19.0 — 2026-08-07
 
 **The coroutine world, spoken natively — and a sixth package that hands

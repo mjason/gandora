@@ -396,7 +396,7 @@ defmodule Main do
     dependencies = ["gandora-std>=<%= core.version() %>"]
 
     [dependency-groups]
-    dev = ["gandora-tool[dev]>=<%= core.version() %>", "gandora-mcp>=<%= core.version() %>"]
+    dev = ["gandora-tool[dev]>=<%= core.version() %>", "gandora-lsp>=<%= core.version() %>", "gandora-mcp>=<%= core.version() %>"]
     """
   end
 
@@ -457,7 +457,7 @@ defmodule Main do
       if not String.contains?(File.read!(pyproject), "gandora-mcp") do
         IO.puts("kept existing pyproject.toml — add these so the toolchain and the MCP wiring resolve:")
         IO.puts("  dependencies: \"gandora-std\"        (generated code imports it)")
-        IO.puts("  dev group:    \"gandora-tool[dev]\", \"gandora-mcp\"  (`uv run gan mcp`)")
+        IO.puts("  dev group:    \"gandora-tool[dev]\", \"gandora-lsp\", \"gandora-mcp\"  (`uv run gan mcp`)")
       end
     else
       File.write!(pyproject, pyproject_toml(name))
@@ -516,7 +516,7 @@ defmodule Main do
 
     # the toolchain and the MCP surface are development-time, never runtime
     [dependency-groups]
-    dev = ["gandora-tool[dev]>=<%= core.version() %>", "gandora-mcp>=<%= core.version() %>"]
+    dev = ["gandora-tool[dev]>=<%= core.version() %>", "gandora-lsp>=<%= core.version() %>", "gandora-mcp>=<%= core.version() %>"]
     """
   end
 
