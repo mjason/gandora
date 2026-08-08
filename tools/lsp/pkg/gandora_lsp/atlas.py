@@ -48,7 +48,7 @@ def _project(root, low):
     def _gan_fn0(s, acc, *, root=root):
         mod = gandora_std.map.get(s, "module", "?")
         entry = gandora_std.map.get(acc, mod, {"path": relative(gandora_std.map.get(s, "path", ""), root), "heads": []})
-        if gandora_std.map.get(s, "kind") == "defp":
+        if _gan_truthy(_private_p(s)):
             _gan_tmp1 = entry
         else:
             _gan_tmp1 = gandora_std.map.put(entry, "heads", gandora_std.map.get(entry, "heads") + [_signed(s)])
@@ -61,11 +61,23 @@ def _project(root, low):
 
 def _signed(s):
     head = gandora_std.map.get(s, "head", gandora_std.map.get(s, "name", ""))
-    doc = gandora_std.string.trim(str(gandora_std.map.get(s, "doc", "")))
+    doc = _doc_sentence(s)
     if doc == "":
         return head
     else:
         return head + (" — " + doc)
+
+
+def _doc_sentence(s):
+    doc = gandora_std.map.get(s, "doc")
+    if (doc is None):
+        return ""
+    else:
+        return gandora_std.string.trim(str(doc))
+
+
+def _private_p(s):
+    return gandora_std.string.contains_p(gandora_std.map.get(s, "kind", ""), "defp")
 
 
 def packages(root: str, low: str) -> dict:
@@ -120,7 +132,7 @@ def _public_heads(mod, root):
         _gan_tmp5 = core.symbols(mod, root)
     except Exception as _e__gan3:
         _gan_tmp5 = []
-    return [_signed(s) for s in _gan_tmp5 if gandora_std.map.get(s, "kind") != "defp"]
+    return [_signed(s) for s in _gan_tmp5 if not (_gan_truthy(_private_p(s)))]
 
 
 def docs(root: str) -> list[str]:
@@ -193,7 +205,7 @@ def _project_symbols(root):
         _gan_tmp10 = core.wsymbols("", root)
     except Exception as _e__gan6:
         _gan_tmp10 = []
-    return [_symbol_entry(s, gandora_std.map.get(s, "module", "?"), relative(gandora_std.map.get(s, "path", ""), root)) for s in _gan_tmp10 if gandora_std.map.get(s, "kind") != "defp"]
+    return [_symbol_entry(s, gandora_std.map.get(s, "module", "?"), relative(gandora_std.map.get(s, "path", ""), root)) for s in _gan_tmp10 if not (_gan_truthy(_private_p(s)))]
 
 
 def _dep_symbols(root):
@@ -211,13 +223,13 @@ def _dep_symbols(root):
                 _gan_tmp12 = core.symbols(mod, root)
             except Exception as _e__gan8:
                 _gan_tmp12 = []
-            return [_symbol_entry(s, mod, src) for s in _gan_tmp12 if gandora_std.map.get(s, "kind") != "defp"]
+            return [_symbol_entry(s, mod, src) for s in _gan_tmp12 if not (_gan_truthy(_private_p(s)))]
         return gandora_std.enum.flat_map(gandora_std.map.get(data, "modules", []), _gan_fn4)
     return gandora_std.enum.flat_map(markers(root), _gan_fn3)
 
 
 def _symbol_entry(s, mod, path):
-    return {"target": mod + ("." + gandora_std.map.get(s, "name", "")), "head": gandora_std.map.get(s, "head", gandora_std.map.get(s, "name", "")), "doc": gandora_std.string.trim(str(gandora_std.map.get(s, "doc", ""))), "path": path}
+    return {"target": mod + ("." + gandora_std.map.get(s, "name", "")), "head": gandora_std.map.get(s, "head", gandora_std.map.get(s, "name", "")), "doc": _doc_sentence(s), "path": path}
 
 
 def relative(path: str, root: str) -> str:

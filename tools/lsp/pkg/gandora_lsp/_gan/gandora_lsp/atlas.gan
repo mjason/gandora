@@ -43,7 +43,7 @@ defmodule Atlas do
     grouped = Enum.reduce(syms, %{}, fn s, acc ->
       mod = Map.get(s, "module", "?")
       entry = Map.get(acc, mod, %{"path" => relative(Map.get(s, "path", ""), root), "heads" => []})
-      entry = if Map.get(s, "kind") == "defp" do
+      entry = if private?(s) do
         entry
       else
         Map.put(entry, "heads", Map.get(entry, "heads") ++ [signed(s)])
@@ -59,8 +59,20 @@ defmodule Atlas do
   # @doc first sentence in one orientation line
   defp signed(s) do
     head = Map.get(s, "head", Map.get(s, "name", ""))
-    doc = s |> Map.get("doc", "") |> to_string() |> String.trim()
+    doc = doc_sentence(s)
     if doc == "", do: head, else: head <> " — " <> doc
+  end
+
+  # the doc key can be present-but-nil: an undocumented def has no
+  # sentence, not the string "None"
+  defp doc_sentence(s) do
+    doc = Map.get(s, "doc")
+    if is_nil(doc), do: "", else: String.trim(to_string(doc))
+  end
+
+  # `defp` and `async defp` alike: private stays off the map
+  defp private?(s) do
+    s |> Map.get("kind", "") |> String.contains?("defp")
   end
 
   @doc """
@@ -113,9 +125,7 @@ defmodule Atlas do
 
   # same orientation lines as the project's: head — @doc first sentence
   defp public_heads(mod, root) do
-    for s <- safe(core.symbols(mod, root), []),
-      Map.get(s, "kind") != "defp",
-      do: signed(s)
+    for s <- safe(core.symbols(mod, root), []), not private?(s), do: signed(s)
   end
 
   @doc """
@@ -197,7 +207,7 @@ defmodule Atlas do
   end
 
   defp project_symbols(root) do
-    for s <- safe(core.wsymbols("", root), []), Map.get(s, "kind") != "defp",
+    for s <- safe(core.wsymbols("", root), []), not private?(s),
       do: symbol_entry(s, Map.get(s, "module", "?"), relative(Map.get(s, "path", ""), root))
   end
 
@@ -208,7 +218,7 @@ defmodule Atlas do
       Enum.flat_map(Map.get(data, "modules", []), fn m ->
         mod = Map.get(m, "name", "")
         src = Path.join(site, Map.get(m, "source", ""))
-        for s <- safe(core.symbols(mod, root), []), Map.get(s, "kind") != "defp",
+        for s <- safe(core.symbols(mod, root), []), not private?(s),
           do: symbol_entry(s, mod, src)
       end)
     end)
@@ -218,7 +228,7 @@ defmodule Atlas do
     %{
       "target" => mod <> "." <> Map.get(s, "name", ""),
       "head" => Map.get(s, "head", Map.get(s, "name", "")),
-      "doc" => s |> Map.get("doc", "") |> to_string() |> String.trim(),
+      "doc" => doc_sentence(s),
       "path" => path
     }
   end
