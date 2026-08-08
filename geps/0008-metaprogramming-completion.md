@@ -9,8 +9,8 @@ areas:
   - Language
   - Macros
 created: 2026-08-01
-updated: 2026-08-01
-revision: 1
+updated: 2026-08-08
+revision: 2
 requires: [2, 7]
 replaces: []
 superseded-by: null
@@ -47,7 +47,10 @@ language grows its own annotation systems in userland.
 
 Definition generation, `use`, unquote in heads, attribute
 registration, and definition hooks. `@before_compile`/`@after_compile`
-hooks and cross-package hook distribution are deferred.
+hooks are deferred. Cross-package hook distribution, deferred in
+revision 1, turned out to need nothing beyond GEP-0006 macro shipping
+— a hook is a macro — and is exercised since revision 2 (`gan-lsc`
+consumes `Cli.on_command` from gandora-tool).
 
 ## Terminology
 
@@ -62,13 +65,22 @@ hooks and cross-package hook distribution are deferred.
 **GEP-0008-R001:** Macro expansion at module top level MAY produce
 `def`, `defp`, `defstruct`, documentation attributes, `@decorate`, and
 `__block__` sequences of these, which the compiler flattens into the
-module body. Header forms (`defmodule`, `alias`, `import`, `require`,
-`pyimport`, `use`) MUST NOT be macro-generated. This amends
+module body. Expansion MAY additionally produce writes of registered
+attributes (rev 2): they are absorbed as registrations — joining the
+R004 value table in expansion order, subject to the same accumulate
+rules — and never reach codegen as plain module attributes. This is
+the second half of R005's "definition plus registrations": without it
+a hook could rewrite definitions but never build the table that makes
+rewriting worth doing. Header forms (`defmodule`, `alias`, `import`,
+`require`, `pyimport`, `use`) MUST NOT be macro-generated. This amends
 GEP-0002-R007.
 
 **GEP-0008-R002:** In a quote template, `def unquote(expr)(params)`
 (and `defp`) defines a function whose name is the atom or string value
-of `expr` at expansion time, enabling name-computed definitions.
+of `expr` at expansion time, enabling name-computed definitions. The
+same coercion applies in capture position (rev 2): `&unquote(expr)/n`
+captures the named local function, private-name mangling included — a
+hook that received a definition's head can register a callable to it.
 
 **GEP-0008-R003:** `use Mod` and `use Mod, opts` at module top level
 are equivalent to `require Mod` followed by expanding
@@ -152,5 +164,14 @@ R006 collision diagnostic; and `gan expand` output for all of the
 above.
 
 ## Change History
+
+- Revision 2, 2026-08-08: R001 — expansion may write registered
+  attributes, absorbed as registrations (the R005 "definition plus
+  registrations" promise, previously rejected by the implementation as
+  duplicate plain attributes); R002 — the atom/string coercion extends
+  to capture position (`&unquote(name)/n`). Motivated by the toolchain
+  going declarative: `gan`'s command table and `gan-mcp`'s tool table
+  are built by `@on_definition` hooks from annotations on the
+  definitions themselves, so the data and the execution cannot drift.
 
 - Revision 1, 2026-08-01: Initial version.

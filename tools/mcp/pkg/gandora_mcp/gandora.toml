@@ -30,3 +30,7 @@ source = "gandora_mcp/_gan/gandora_mcp/main.gan"
 name = "Sandbox"
 python = "gandora_mcp/sandbox.py"
 source = "gandora_mcp/_gan/gandora_mcp/sandbox.gan"
+
+[[modules]]
+name = "Toolkit"
+source = "gandora_mcp/_gan/gandora_mcp/toolkit.gan"

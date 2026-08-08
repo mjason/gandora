@@ -2,44 +2,28 @@ defmodule Lsc do
   @moduledoc """
   gan-lsc: the Language Server Console (GEP-0015-R001A) — language
   intelligence as one JSON value per query, for AI agents and shells.
+  Each query is declared as a `@command` annotation on its handler
+  (GEP-0008, via the gandora-tool `Cli` hook): the usage text and the
+  dispatch read one accumulated table and cannot drift.
   """
 
   pyimport gandora_core, as: core
   pyimport json
 
   import Safe
+  require Cli
 
-  @usage """
-  gan lsc <query> — one JSON value on stdout
+  defattr :command
+  defattr :command_table, accumulate: true
 
-  Queries (each accepts --root <dir>, default: cwd):
-    version                     compiler/library version
-    diagnostics <file>          full-pipeline diagnostics
-    ast <file>                  quoted term of the source
-    expand <file>               quoted term after macro expansion
-    compile <file>              generated Python source (plain text)
-    resolve <module>            how a module reference resolves
-    pack [<Mod> ...]            one-call agent context: std lists, project
-                                signatures, construct index, verdict summary;
-                                named modules ride along with full docs
-    doc <target> [...] [--brief]  docs for one or many targets; --brief = one line each
-    definition <Mod>[.<fun>]    defining source path/line/col
-    symbols <Mod>               every definition with rendered heads
-    references <Mod>.<fun>      every project call site (+ definitions)
-    wsymbols [<query>]          project-wide symbol search
-    check                       the project verdict: {diagnostics, suggestions}
-    pydoc <mod.chain>           Python docstring for a $-style reference
-    pycomplete <mod.prefix>     Python member completions
-    pygoto <mod.chain>          Python source location
-    pysig <mod.fun>             Python call signatures
-  """
+  @on_definition Cli.on_command
 
   @doc "Entry: parses --root, dispatches one query, emits one JSON value."
   @spec main() :: nil
   def main() do
     {root, args} = take_root(System.argv())
     try do
-      dispatch(args, root)
+      run(args, root)
     rescue
       e in core.CompileError ->
         parts = $builtins.list(e.args)
@@ -57,114 +41,163 @@ defmodule Lsc do
     end
   end
 
+  defp run([cmd | rest], root) do
+    hit = Enum.find(queries(), fn {{token, _argspec, _help}, _f} -> token == cmd end)
+    case hit do
+      nil -> usage_halt()
+      {_entry, f} -> f.(rest, root)
+    end
+  end
+
+  defp run([], _root), do: usage_halt()
+
+  # the query table the hook accumulated — dispatch and usage share it
+  defp queries(), do: @command_table
+
+  defp usage_halt() do
+    IO.puts("gan lsc <query> — one JSON value on stdout")
+    IO.puts("")
+    IO.puts("Queries (each accepts --root <dir>, default: cwd):")
+    IO.puts(Cli.usage("", queries()))
+    System.halt(2)
+  end
+
   # the arguments that are not flags: targets, modules, queries
   defp positional(args) do
     Enum.filter(args, fn a -> not String.starts_with?(a, "--") end)
   end
 
-  defp dispatch(args, root) do
-    case args do
-      ["version" | _] ->
-        emit(%{"version" => core.version()})
-      ["diagnostics", file | _] ->
-        file |> read() |> core.diagnostics(file, root) |> emit()
-      ["ast", file | _] ->
-        file |> read() |> core.parse(file) |> emit()
-      ["expand", file | _] ->
-        file |> read() |> core.expand(file, root) |> emit()
-      ["compile", file | _] ->
-        file |> read() |> core.compile_string(file, root) |> IO.puts()
-      ["resolve", module | _] ->
-        emit(core.resolve(root, module))
-      ["doc", target | rest] ->
-        # many targets in one call; --brief trims each to one line
-        # (GEP-0026-R001/R002)
-        brief = Enum.member?(rest, "--brief")
-        targets = [target] ++ positional(rest)
-        results = Enum.map(targets, fn t -> doc_one(t, root, brief) end)
-        if Enum.count(targets) == 1 do
-          emit(Enum.at(results, 0))
-        else
-          emit(results)
-        end
-      ["definition", target | _] ->
-        emit(core.definition(target, root))
-      ["symbols", module | rest] ->
-        mods = [module] ++ positional(rest)
-        if Enum.count(mods) == 1 do
-          emit(core.symbols(module, root))
-        else
-          mods
-          |> Enum.map(fn m -> {m, core.symbols(m, root)} end)
-          |> Map.new()
-          |> emit()
-        end
-      ["pack" | rest] ->
-        # the one-call agent context (GEP-0026-R003)
-        emit(ContextPack.build(root, positional(rest)))
-      ["references", target | _] ->
-        emit(core.references(target, root))
-      ["wsymbols", query | _] ->
-        emit(core.wsymbols(query, root))
-      ["wsymbols"] ->
-        emit(core.wsymbols("", root))
-      ["check" | rest] ->
-        diags = core.check(root)
-        # artifact verification (GEP-0025-R008) joins the verdict when
-        # the project already compiles; --strict adds type-flow warnings
-        errors0 = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
-        diags = if Enum.empty?(errors0) do
-          cache = Path.join(root, ".gandora/cache")
-          verification = safe(
-            Verifier.verify(root, cache, core.build(root, cache),
-              Enum.member?(rest, "--strict")),
-            [])
-          diags ++ verification
-        else
-          diags
-        end
-        # a parse-broken file must not silence the whole verdict: fall
-        # back to globbing when the symbol walk dies
-        files = safe(
-          core.wsymbols("", root)
-          |> Enum.map(fn sym -> Map.get(sym, "path") end)
-          |> Enum.uniq(),
-          Path.wildcard(Path.join(root, "src/**/*.gan")))
-        # tests are part of the project surface too (Advisor pass only —
-        # their compile diagnostics belong to `gan test`); top-level
-        # only, mirroring what `gan test` runs — deeper directories
-        # hold fixtures, not tests
-        test_files = Path.wildcard(Path.join(root, "tests/*.gan"))
-        suggestions = Enum.flat_map(Enum.uniq(files ++ test_files), fn path ->
-          text = safe(read(path), "")
-          per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
-          (Advisor.analyze(text, root) ++ Advisor.lint_hints(text, per_file))
-          |> Enum.map(fn h -> Map.put(h, "path", path) end)
-        end)
-        |> Advisor.consolidate()
-        errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
-        emit(%{
-          "ok" => Enum.empty?(errors),
-          "clean" => Enum.empty?(errors) and Enum.empty?(diags) and Enum.empty?(suggestions),
-          "diagnostics" => diags,
-          "suggestions" => suggestions
-        })
-        if not Enum.empty?(errors) do
-          System.halt(1)
-        end
-      ["pydoc", chain | _] ->
-        emit(PyIntel.hover_markdown(root, import_line(chain), chain))
-      ["pycomplete", chain | _] ->
-        emit(PyIntel.complete(root, import_line(chain), chain))
-      ["pygoto", chain | _] ->
-        emit(PyIntel.goto(root, import_line(chain), chain))
-      ["pysig", chain | _] ->
-        emit(PyIntel.signatures(root, import_line(chain), chain))
-      _ ->
-        IO.puts(@usage)
-        System.halt(2)
+  @command {"version", "", "compiler/library version"}
+  defp version_q(_rest, _root), do: emit(%{"version" => core.version()})
+
+  @command {"diagnostics", "<file>", "full-pipeline diagnostics"}
+  defp diagnostics_q([file | _], root), do: file |> read() |> core.diagnostics(file, root) |> emit()
+  defp diagnostics_q([], _root), do: usage_halt()
+
+  @command {"ast", "<file>", "quoted term of the source"}
+  defp ast_q([file | _], _root), do: file |> read() |> core.parse(file) |> emit()
+  defp ast_q([], _root), do: usage_halt()
+
+  @command {"expand", "<file>", "quoted term after macro expansion"}
+  defp expand_q([file | _], root), do: file |> read() |> core.expand(file, root) |> emit()
+  defp expand_q([], _root), do: usage_halt()
+
+  @command {"compile", "<file>", "generated Python source (plain text)"}
+  defp compile_q([file | _], root), do: file |> read() |> core.compile_string(file, root) |> IO.puts()
+  defp compile_q([], _root), do: usage_halt()
+
+  @command {"resolve", "<module>", "how a module reference resolves"}
+  defp resolve_q([module | _], root), do: emit(core.resolve(root, module))
+  defp resolve_q([], _root), do: usage_halt()
+
+  @command {"pack", "[<Mod> ...]", "one-call agent context: std lists, project\nsignatures, construct index, verdict summary;\nnamed modules ride along with full docs (GEP-0026-R003)"}
+  defp pack_q(rest, root), do: emit(ContextPack.build(root, positional(rest)))
+
+  @command {"doc", "<target> [...] [--brief]", "docs for one or many targets; --brief = one line each"}
+  defp doc_q([target | rest], root) do
+    # many targets in one call; --brief trims each to one line
+    # (GEP-0026-R001/R002)
+    brief = Enum.member?(rest, "--brief")
+    targets = [target] ++ positional(rest)
+    results = Enum.map(targets, fn t -> doc_one(t, root, brief) end)
+    if Enum.count(targets) == 1 do
+      emit(Enum.at(results, 0))
+    else
+      emit(results)
     end
   end
+
+  defp doc_q([], _root), do: usage_halt()
+
+  @command {"definition", "<Mod>[.<fun>]", "defining source path/line/col"}
+  defp definition_q([target | _], root), do: emit(core.definition(target, root))
+  defp definition_q([], _root), do: usage_halt()
+
+  @command {"symbols", "<Mod> [...]", "every definition with rendered heads"}
+  defp symbols_q([module | rest], root) do
+    mods = [module] ++ positional(rest)
+    if Enum.count(mods) == 1 do
+      emit(core.symbols(module, root))
+    else
+      mods
+      |> Enum.map(fn m -> {m, core.symbols(m, root)} end)
+      |> Map.new()
+      |> emit()
+    end
+  end
+
+  defp symbols_q([], _root), do: usage_halt()
+
+  @command {"references", "<Mod>.<fun>", "every project call site (+ definitions)"}
+  defp references_q([target | _], root), do: emit(core.references(target, root))
+  defp references_q([], _root), do: usage_halt()
+
+  @command {"wsymbols", "[<query>]", "project-wide symbol search"}
+  defp wsymbols_q([query | _], root), do: emit(core.wsymbols(query, root))
+  defp wsymbols_q([], root), do: emit(core.wsymbols("", root))
+
+  @command {"check", "[--strict]", "the project verdict: {diagnostics, suggestions}"}
+  defp check_q(rest, root) do
+    diags = core.check(root)
+    # artifact verification (GEP-0025-R008) joins the verdict when
+    # the project already compiles; --strict adds type-flow warnings
+    errors0 = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+    diags = if Enum.empty?(errors0) do
+      cache = Path.join(root, ".gandora/cache")
+      verification = safe(
+        Verifier.verify(root, cache, core.build(root, cache),
+          Enum.member?(rest, "--strict")),
+        [])
+      diags ++ verification
+    else
+      diags
+    end
+    # a parse-broken file must not silence the whole verdict: fall
+    # back to globbing when the symbol walk dies
+    files = safe(
+      core.wsymbols("", root)
+      |> Enum.map(fn sym -> Map.get(sym, "path") end)
+      |> Enum.uniq(),
+      Path.wildcard(Path.join(root, "src/**/*.gan")))
+    # tests are part of the project surface too (Advisor pass only —
+    # their compile diagnostics belong to `gan test`); top-level
+    # only, mirroring what `gan test` runs — deeper directories
+    # hold fixtures, not tests
+    test_files = Path.wildcard(Path.join(root, "tests/*.gan"))
+    suggestions = Enum.flat_map(Enum.uniq(files ++ test_files), fn path ->
+      text = safe(read(path), "")
+      per_file = Enum.filter(diags, fn d -> Map.get(d, "path") == path end)
+      (Advisor.analyze(text, root) ++ Advisor.lint_hints(text, per_file))
+      |> Enum.map(fn h -> Map.put(h, "path", path) end)
+    end)
+    |> Advisor.consolidate()
+    errors = Enum.filter(diags, fn d -> Map.get(d, "severity") == "error" end)
+    emit(%{
+      "ok" => Enum.empty?(errors),
+      "clean" => Enum.empty?(errors) and Enum.empty?(diags) and Enum.empty?(suggestions),
+      "diagnostics" => diags,
+      "suggestions" => suggestions
+    })
+    if not Enum.empty?(errors) do
+      System.halt(1)
+    end
+  end
+
+  @command {"pydoc", "<mod.chain>", "Python docstring for a $-style reference"}
+  defp pydoc_q([chain | _], root), do: emit(PyIntel.hover_markdown(root, import_line(chain), chain))
+  defp pydoc_q([], _root), do: usage_halt()
+
+  @command {"pycomplete", "<mod.prefix>", "Python member completions"}
+  defp pycomplete_q([chain | _], root), do: emit(PyIntel.complete(root, import_line(chain), chain))
+  defp pycomplete_q([], _root), do: usage_halt()
+
+  @command {"pygoto", "<mod.chain>", "Python source location"}
+  defp pygoto_q([chain | _], root), do: emit(PyIntel.goto(root, import_line(chain), chain))
+  defp pygoto_q([], _root), do: usage_halt()
+
+  @command {"pysig", "<mod.fun>", "Python call signatures"}
+  defp pysig_q([chain | _], root), do: emit(PyIntel.signatures(root, import_line(chain), chain))
+  defp pysig_q([], _root), do: usage_halt()
 
   # one doc lookup: project/std docs, construct cards, then pydoc
   defp doc_one(target, root, brief) do

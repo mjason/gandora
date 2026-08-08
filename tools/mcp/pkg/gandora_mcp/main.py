@@ -86,13 +86,14 @@ def gan_briefing() -> str:
 
 
 def tools() -> list[tuple]:
-    """The tool table — the single source the server registers from: one
-entry per exposed function with its capture and its blurb.
+    """The tool table the hook accumulated from the `@tool` annotations —
+the single source the server registers from: each entry is the
+function's own name, a capture of it, and the blurb that sits on it.
 
     >>> gandora_std.enum.count(tools())
     6
 """
-    return [("gan_example", gan_example, "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."), ("gan_verify", gan_verify, "Compile a Gandora module and run its @example doctests; returns the verdict."), ("gan_doc", gan_doc, "Look up documentation for Mod.fun, a bare name, or a language construct."), ("gan_pack", gan_pack, "The one-call context pack for the project."), ("gan_check", gan_check, "The build verdict for the whole project."), ("gan_briefing", gan_briefing, "The session briefing for working in Gandora.")]
+    return [("gan_verify", gan_verify, "Compile a Gandora module and run its @example doctests; returns the verdict."), ("gan_example", gan_example, "Explain a Gandora feature or syntax and demonstrate it with a module that compiled and whose doctests ran."), ("gan_doc", gan_doc, "Look up documentation for Mod.fun, a bare name, or a language construct."), ("gan_pack", gan_pack, "The one-call context pack for the project."), ("gan_check", gan_check, "The build verdict for the whole project."), ("gan_briefing", gan_briefing, "The session briefing for working in Gandora.")]
 
 
 def root() -> str:

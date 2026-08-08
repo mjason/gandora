@@ -108,6 +108,9 @@ defmodule Composer do
     (File.read!, Path.join, Path.wildcard, System.cmd, System.get_env)
     — never $os/$pathlib/$subprocess for what those wrap.
   - Outcomes at boundaries are verdict tuples {:ok, v} / {:error, why}.
+  - Declare, don't narrate: parallel branches repeating a shape become
+    a data table walked by Enum, or a defmacro when the repetition is
+    at compile time.
   """
 
   @doc """

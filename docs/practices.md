@@ -8,6 +8,34 @@ not aspirational prose — the practice engine in `gan build` /
 practices` answers with the digest, and `gan agent` carries the digest
 into every session briefing.
 
+## 0. Declare, don't narrate
+
+The philosophy every rule below instantiates: **declarative beats
+procedural**. State what things *are*, once, where they belong — and
+let machinery derive what happens. Procedural code narrates its
+decisions: a `case` with twelve arms, a usage string hand-maintained
+beside it, a registration block repeating every name a third time.
+Each narration is a copy, and copies disagree. Declarative code states
+the fact on the definition itself:
+
+```gandora
+@command {"build", "[--strict]", "the verdict + compile"}
+defp build_cmd(rest), do: build(Enum.member?(rest, "--strict"))
+```
+
+A `defattr` + `@on_definition` hook (GEP-0008) accumulates these into
+one table; usage text and dispatch both read it. The help cannot
+describe a command that does not run, and no command runs
+undescribed. `gan`'s CLI, `gan-lsc`'s query surface, and `gan-mcp`'s
+tool table are all this one shape — and so is `@doc` itself, which is
+the same mechanism, built in.
+
+The ladder of preference: a **data table** walked by `Enum` beats
+branching logic; an **annotation on the definition** beats a table
+maintained elsewhere; a **macro** beats both when the repetition
+happens at compile time. Climb to the next rung only when the current
+one cannot state the fact.
+
 ## 1. Data flows left to right
 
 Pipe the subject through its transformations. Nested calls read inside
@@ -104,7 +132,13 @@ When the repetition happens at compile time — the same `def` skeleton,
 the same guard around every query — it is a `defmacro` with a
 `quote`/`unquote` body, and the expansion is exactly what a reviewer
 would have written by hand (`Safe.safe/2` is the working example).
-Declare structure once; let the language mean it everywhere.
+And when the table describes the definitions themselves — commands,
+tools, routes — it should not be maintained *near* them but declared
+*on* them: `defattr` + `@on_definition` (GEP-0008) turns an annotation
+into a table entry carrying the function's own name and capture, so
+the data cannot disagree with the execution (chapter 0; `Cli` and
+`Toolkit` are the working examples). Declare structure once; let the
+language mean it everywhere.
 
 ## 7. Annotations are the contract
 

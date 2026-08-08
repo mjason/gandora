@@ -9,52 +9,82 @@ defmodule Main do
   pyimport subprocess
   pyimport sys
 
-  @usage """
-  gan - the Gandora task runner
+  require Cli
 
-  Usage:
-    gan build [--strict]    the verdict + compile: diagnostics, advice,
-                            artifact verification; errors stop artifacts
-                            (--strict adds type-flow warnings via ty)
-    gan run <file> [args...] | exec <code> | repl
-    gan fmt [--check] [path...] | version
-    gan init [--package] <path>   scaffold a project (or fill an existing one)
-    gan test                doctests + tests/*.gan (GEP-0024)
-    gan agent [--json]      the AI-session briefing: working loop +
-                            context pack in one output (GEP-0026)
-    gan <plugin> ...        delegates to gan-<plugin>, then to ganc
-  """
+  # each command is an annotation on its handler (GEP-0008): the
+  # Cli.on_command hook accumulates {entry, &handler/1} here, and
+  # usage and dispatch both read this one table — no drift possible
+  defattr :command
+  defattr :command_table, accumulate: true
+
+  @on_definition Cli.on_command
 
   @doc "The task-runner entry: one command per invocation (GEP-0013)."
   @spec main() :: nil
   def main() do
-    args = System.argv()
-    case args do
+    case System.argv() do
       [] ->
-        IO.puts(@usage)
+        IO.puts(usage())
         System.halt(2)
-      ["version" | _] -> version()
-      ["build" | rest] -> build(Enum.member?(rest, "--strict"))
-      ["check" | rest] ->
-        IO.puts("note: `gan check` merged into `gan build` (GEP-0025 rev 3)")
-        build(Enum.member?(rest, "--strict"))
-      ["run", file | rest] -> run(file, rest)
-      ["run"] -> die_usage("run requires a file")
-      ["exec", code | _] -> exec_code(code)
-      ["exec"] -> die_usage("exec requires code")
-      ["repl" | _] -> repl()
-      ["agent" | rest] -> Agent.run(rest)
-      ["fmt" | rest] -> Fmt.run(rest)
-      ["init" | rest] -> init_cmd(rest)
-      [cmd | rest] -> delegate(cmd, rest)
+      [cmd | rest] -> Cli.dispatch(commands(), cmd, rest, &delegate/2)
     end
+  end
+
+  @doc "The command table the hook accumulated — dispatch and usage share it."
+  @spec commands() :: list(tuple())
+  def commands(), do: @command_table
+
+  # what dispatch cannot see: the ganc/plugin delegation seam
+  @usage_footer """
+    gan test                doctests + tests/*.gan (GEP-0024)
+    gan <plugin> ...        delegates to gan-<plugin>, then to ganc
+  """
+
+  @doc "The usage text, generated from the command table."
+  @spec usage() :: string()
+  def usage() do
+    "gan - the Gandora task runner\n\nUsage:\n" <>
+      Cli.usage("gan", commands()) <> "\n" <> @usage_footer
   end
 
   defp die_usage(msg) do
     IO.puts("gan: " <> msg)
-    IO.puts(@usage)
+    IO.puts(usage())
     System.halt(2)
   end
+
+  @command {"build", "[--strict]", "the verdict + compile: diagnostics, advice,\nartifact verification; errors stop artifacts\n(--strict adds type-flow warnings via ty)"}
+  defp build_cmd(rest), do: build(Enum.member?(rest, "--strict"))
+
+  # the retired spelling still answers, but stays out of usage
+  @command {"check", "", nil}
+  defp check_cmd(rest) do
+    IO.puts("note: `gan check` merged into `gan build` (GEP-0025 rev 3)")
+    build(Enum.member?(rest, "--strict"))
+  end
+
+  @command {"run", "<file> [args...]", "compiles and executes with the project Python"}
+  defp run_cmd([file | rest]), do: run(file, rest)
+  defp run_cmd([]), do: die_usage("run requires a file")
+
+  @command {"exec", "<code>", "compiles and runs one expression"}
+  defp exec_cmd([code | _]), do: exec_code(code)
+  defp exec_cmd([]), do: die_usage("exec requires code")
+
+  @command {"repl", "", "an interactive session; state carries across lines"}
+  defp repl_cmd(_rest), do: repl()
+
+  @command {"fmt", "[--check] [--diff] [path...]", "conservative formatting; `-` reads stdin"}
+  defp fmt_cmd(rest), do: Fmt.run(rest)
+
+  @command {"init", "[--package] <path>", "scaffold a project (or fill an existing one)"}
+  defp init_dispatch(rest), do: init_cmd(rest)
+
+  @command {"agent", "[--json]", "the AI-session briefing: working loop +\ncontext pack in one output (GEP-0026)"}
+  defp agent_cmd(rest), do: Agent.run(rest)
+
+  @command {"version", "", "runner and compiler-library versions"}
+  defp version_cmd(_rest), do: version()
 
   defp root(), do: File.cwd!()
 

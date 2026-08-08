@@ -423,6 +423,54 @@ impl Expander {
             flatten_into(&mut out, expanded);
         }
 
+        // absorb registered-attribute writes arriving from macro output
+        // (GEP-0008-R005: a hook returns "the reconstructed definition
+        // plus registrations") — source-level writes were consumed in
+        // the pass above, so anything still here came from an expansion;
+        // it is a registration for the value table, never a plain
+        // module attribute for codegen
+        if !registered.is_empty() {
+            let mut kept: Vec<Term> = Vec::with_capacity(out.len());
+            for stmt in out.drain(..) {
+                let mut absorbed = false;
+                if let Term::Call(c) = &stmt {
+                    if let Callee::Name(n) = &c.callee {
+                        if let Some(plain) = n.strip_prefix('@') {
+                            if let Some(accumulate) = registered.get(plain) {
+                                if c.args.len() != 1 {
+                                    return Err(self.err(
+                                        c.span,
+                                        format!("@{plain} requires a value"),
+                                    ));
+                                }
+                                if !*accumulate
+                                    && values.get(plain).is_some_and(|v| !v.is_empty())
+                                {
+                                    return Err(self.err(
+                                        c.span,
+                                        format!(
+                                            "@{plain} is not accumulating; register it with \
+                                             defattr :{plain}, accumulate: true \
+                                             (GEP-0008-R004)"
+                                        ),
+                                    ));
+                                }
+                                values
+                                    .entry(plain.to_string())
+                                    .or_default()
+                                    .push(c.args[0].clone());
+                                absorbed = true;
+                            }
+                        }
+                    }
+                }
+                if !absorbed {
+                    kept.push(stmt);
+                }
+            }
+            out = kept;
+        }
+
         // substitute reads of registered attributes (GEP-0008-R004)
         if !registered.is_empty() {
             let subst = |term: &Term| -> Option<Term> {

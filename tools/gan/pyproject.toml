@@ -27,10 +27,12 @@ include = ["pkg", "src", "gandora.jsonc"]
 packages = ["pkg/gandora_tool"]
 
 # local development until gandora-core reaches PyPI (uv.sources does not
-# affect the published wheel's metadata)
+# affect the published wheel's metadata); gandora-lang rides along so
+# the ganc that `gan test` delegates to tracks the workspace compiler
 [tool.uv.sources]
 gandora-core = { path = "../../crates/core-py" }
 gandora-std = { path = "../../std" }
+gandora-lang = { path = "../.." }
 
 [dependency-groups]
 dev = [

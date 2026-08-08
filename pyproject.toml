@@ -24,12 +24,18 @@ Issues = "https://github.com/mjason/gandora/issues"
 bindings = "bin"
 manifest-path = "crates/gan/Cargo.toml"
 
+# the compiler sources live under crates/, not a root src/ — cache
+# keys must watch what the wheel is actually built from, or a path
+# install serves a stale ganc (the v0.19.0 core-py lesson, again)
 [tool.uv]
 cache-keys = [
     { file = "pyproject.toml" },
-    { file = "src/**/*.rs" },
     { file = "Cargo.toml" },
     { file = "Cargo.lock" },
+    { file = "crates/core/Cargo.toml" },
+    { file = "crates/core/src/**/*.rs" },
+    { file = "crates/gan/Cargo.toml" },
+    { file = "crates/gan/src/**/*.rs" },
 ]
 
 [build-system]

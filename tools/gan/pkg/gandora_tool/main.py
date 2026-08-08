@@ -18,6 +18,7 @@ import gandora_std.string
 import gandora_std.system
 import gandora_tool.advisor
 import gandora_tool.agent
+import gandora_tool.cli
 import gandora_tool.fmt
 import gandora_tool.verifier
 
@@ -31,7 +32,7 @@ def _gan_and(value, then):
 class GanMatchError(Exception):
     pass
 
-usage = "gan - the Gandora task runner\n\nUsage:\n  gan build [--strict]    the verdict + compile: diagnostics, advice,\n                          artifact verification; errors stop artifacts\n                          (--strict adds type-flow warnings via ty)\n  gan run <file> [args...] | exec <code> | repl\n  gan fmt [--check] [path...] | version\n  gan init [--package] <path>   scaffold a project (or fill an existing one)\n  gan test                doctests + tests/*.gan (GEP-0024)\n  gan agent [--json]      the AI-session briefing: working loop +\n                          context pack in one output (GEP-0026)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
+usage_footer = "  gan test                doctests + tests/*.gan (GEP-0024)\n  gan <plugin> ...        delegates to gan-<plugin>, then to ganc\n"
 
 labels = {"error": ("error", "1;31"), "warning": ("warning", "1;33"), "practice": ("practice", "1;36"), "migration": ("migration", "1;35"), "did_you_mean": ("did you mean", "1;34"), "type": ("type", "2;37")}
 
@@ -52,45 +53,78 @@ package_jsonc = "{\n  // Gandora package project (GEP-0006): `gan build` also em
 
 def main() -> None:
     """The task-runner entry: one command per invocation (GEP-0013)."""
-    args = gandora_std.system.argv()
-    _gan_case0 = args
+    _gan_case0 = gandora_std.system.argv()
     match _gan_case0:
         case [] as _gan_l1 if isinstance(_gan_l1, list):
-            print(usage)
+            print(usage())
             return gandora_std.system.halt(2)
-        case ["version", *_] as _gan_l2 if isinstance(_gan_l2, list):
-            return version()
-        case ["build", *rest] as _gan_l3 if isinstance(_gan_l3, list):
-            return build(gandora_std.enum.member_p(rest, "--strict"))
-        case ["check", *rest] as _gan_l4 if isinstance(_gan_l4, list):
-            print("note: `gan check` merged into `gan build` (GEP-0025 rev 3)")
-            return build(gandora_std.enum.member_p(rest, "--strict"))
-        case ["run", file, *rest] as _gan_l5 if isinstance(_gan_l5, list):
-            return run(file, rest)
-        case ["run"] as _gan_l6 if isinstance(_gan_l6, list):
-            return _die_usage("run requires a file")
-        case ["exec", code, *_] as _gan_l7 if isinstance(_gan_l7, list):
-            return exec_code(code)
-        case ["exec"] as _gan_l8 if isinstance(_gan_l8, list):
-            return _die_usage("exec requires code")
-        case ["repl", *_] as _gan_l9 if isinstance(_gan_l9, list):
-            return repl()
-        case ["agent", *rest] as _gan_l10 if isinstance(_gan_l10, list):
-            return gandora_tool.agent.run(rest)
-        case ["fmt", *rest] as _gan_l11 if isinstance(_gan_l11, list):
-            return gandora_tool.fmt.run(rest)
-        case ["init", *rest] as _gan_l12 if isinstance(_gan_l12, list):
-            return _init_cmd(rest)
-        case [cmd, *rest] as _gan_l13 if isinstance(_gan_l13, list):
-            return _delegate(cmd, rest)
+        case [cmd, *rest] as _gan_l2 if isinstance(_gan_l2, list):
+            return gandora_tool.cli.dispatch(commands(), cmd, rest, _delegate)
         case _:
             raise GanMatchError("no case clause matched: " + repr(_gan_case0))
 
 
+def commands() -> list[tuple]:
+    """The command table the hook accumulated — dispatch and usage share it."""
+    return [(("build", "[--strict]", "the verdict + compile: diagnostics, advice,\nartifact verification; errors stop artifacts\n(--strict adds type-flow warnings via ty)"), _build_cmd), (("check", "", None), _check_cmd), (("run", "<file> [args...]", "compiles and executes with the project Python"), _run_cmd), (("exec", "<code>", "compiles and runs one expression"), _exec_cmd), (("repl", "", "an interactive session; state carries across lines"), _repl_cmd), (("fmt", "[--check] [--diff] [path...]", "conservative formatting; `-` reads stdin"), _fmt_cmd), (("init", "[--package] <path>", "scaffold a project (or fill an existing one)"), _init_dispatch), (("agent", "[--json]", "the AI-session briefing: working loop +\ncontext pack in one output (GEP-0026)"), _agent_cmd), (("version", "", "runner and compiler-library versions"), _version_cmd)]
+
+
+def usage() -> str:
+    """The usage text, generated from the command table."""
+    return "gan - the Gandora task runner\n\nUsage:\n" + (gandora_tool.cli.usage("gan", commands()) + ("\n" + usage_footer))
+
+
 def _die_usage(msg):
     print("gan: " + msg)
-    print(usage)
+    print(usage())
     return gandora_std.system.halt(2)
+
+
+def _build_cmd(rest):
+    return build(gandora_std.enum.member_p(rest, "--strict"))
+
+
+def _check_cmd(rest):
+    print("note: `gan check` merged into `gan build` (GEP-0025 rev 3)")
+    return build(gandora_std.enum.member_p(rest, "--strict"))
+
+
+def _run_cmd(*_gan_args):
+    match _gan_args:
+        case ([file, *rest] as _gan_l3,) if isinstance(_gan_l3, list):
+            return run(file, rest)
+        case ([] as _gan_l4,) if isinstance(_gan_l4, list):
+            return _die_usage("run requires a file")
+    raise GanMatchError("no clause of run_cmd/1 matched " + repr(_gan_args))
+
+
+def _exec_cmd(*_gan_args):
+    match _gan_args:
+        case ([code, *_] as _gan_l5,) if isinstance(_gan_l5, list):
+            return exec_code(code)
+        case ([] as _gan_l6,) if isinstance(_gan_l6, list):
+            return _die_usage("exec requires code")
+    raise GanMatchError("no clause of exec_cmd/1 matched " + repr(_gan_args))
+
+
+def _repl_cmd(_rest):
+    return repl()
+
+
+def _fmt_cmd(rest):
+    return gandora_tool.fmt.run(rest)
+
+
+def _init_dispatch(rest):
+    return _init_cmd(rest)
+
+
+def _agent_cmd(rest):
+    return gandora_tool.agent.run(rest)
+
+
+def _version_cmd(_rest):
+    return version()
 
 
 def _root():
@@ -146,30 +180,30 @@ def _run_check(with_suggestions=True, strict=False):
             cache = gandora_std.path.join(_root(), ".gandora/cache")
             try:
                 modules = core.build(_root(), cache)
-                _gan_tmp15 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
+                _gan_tmp8 = gandora_tool.verifier.verify(_root(), cache, modules, strict)
             except Exception as _e:
-                _gan_tmp15 = []
-            verification = _gan_tmp15
-            _gan_tmp14 = diags + verification
+                _gan_tmp8 = []
+            verification = _gan_tmp8
+            _gan_tmp7 = diags + verification
         else:
-            _gan_tmp14 = diags
-        diags = _gan_tmp14
+            _gan_tmp7 = diags
+        diags = _gan_tmp7
         gandora_std.enum.each(diags, lambda d: _print_finding(gandora_std.map.get(d, "severity"), gandora_std.map.get(d, "path"), gandora_std.map.get(d, "line", 0), gandora_std.map.get(d, "message")))
         if _gan_truthy(with_suggestions):
-            _gan_tmp16 = _collect_files(["src", "tests"])
+            _gan_tmp9 = _collect_files(["src", "tests"])
         else:
-            _gan_tmp16 = []
-        sources = _gan_tmp16
+            _gan_tmp9 = []
+        sources = _gan_tmp9
         def _gan_fn0(path, *, diags=diags):
-            _gan_case18 = gandora_std.file.read(path)
-            match _gan_case18:
-                case ("ok", t) as _gan_t19 if isinstance(_gan_t19, tuple):
-                    _gan_tmp17 = t
-                case ("error", _why) as _gan_t20 if isinstance(_gan_t20, tuple):
-                    _gan_tmp17 = ""
+            _gan_case11 = gandora_std.file.read(path)
+            match _gan_case11:
+                case ("ok", t) as _gan_t12 if isinstance(_gan_t12, tuple):
+                    _gan_tmp10 = t
+                case ("error", _why) as _gan_t13 if isinstance(_gan_t13, tuple):
+                    _gan_tmp10 = ""
                 case _:
-                    raise GanMatchError("no case clause matched: " + repr(_gan_case18))
-            text = _gan_tmp17
+                    raise GanMatchError("no case clause matched: " + repr(_gan_case11))
+            text = _gan_tmp10
             per_file = gandora_std.enum.filter(diags, lambda d, *, path=path: gandora_std.map.get(d, "path") == path)
             return gandora_std.enum.map(gandora_tool.advisor.analyze(text, _root()) + gandora_tool.advisor.lint_hints(text, per_file), lambda h, *, path=path: gandora_std.map.put(h, "path", path))
         hints = gandora_std.enum.flat_map(sources, _gan_fn0)
@@ -193,21 +227,21 @@ def _paint(text, code):
 
 
 def _print_finding(kind, path, line, message):
-    _gan_val21 = gandora_std.map.get(labels, kind, (kind, "1"))
-    match _gan_val21:
-        case (label, code) as _gan_t22 if isinstance(_gan_t22, tuple):
+    _gan_val14 = gandora_std.map.get(labels, kind, (kind, "1"))
+    match _gan_val14:
+        case (label, code) as _gan_t15 if isinstance(_gan_t15, tuple):
             pass
         case _:
-            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val21))
+            raise GanMatchError("no match of right-hand side value: " + repr(_gan_val14))
     if line > 0:
-        _gan_tmp23 = f":{line}"
+        _gan_tmp16 = f":{line}"
     else:
-        _gan_tmp23 = ""
-    at = _gan_tmp23
+        _gan_tmp16 = ""
+    at = _gan_tmp16
     rel = gandora_std.string.replace(str(path), _root() + "/", "")
     print("")
-    _gan_fstr24 = _paint(rel + at, "2")
-    print(f"{_paint(label, code)} {_gan_fstr24}")
+    _gan_fstr17 = _paint(rel + at, "2")
+    print(f"{_paint(label, code)} {_gan_fstr17}")
     return gandora_std.enum.each(message.split("\n"), lambda l: print("  " + l))
 
 
@@ -260,8 +294,8 @@ def run(file: str, args: list[str]) -> None:
             print(f"gan: {file} is not a module of this project")
             return gandora_std.system.halt(1)
         elif (gandora_std.map.get(target, "python") is None):
-            _gan_fstr26 = gandora_std.map.get(target, "module")
-            print(f"gan: {_gan_fstr26} defines only macros; nothing to run")
+            _gan_fstr19 = gandora_std.map.get(target, "module")
+            print(f"gan: {_gan_fstr19} defines only macros; nothing to run")
             return gandora_std.system.halt(1)
         else:
             code = subprocess.call([_project_python(), "-P", gandora_std.map.get(target, "python")] + args, env=gandora_std.map.put(builtins.dict(os.environ), "PYTHONPATH", cache))
@@ -291,12 +325,12 @@ def repl() -> None:
 def _repl_walk(ns):
     while True:
         try:
-            _gan_tmp27 = builtins.input("gan> ")
+            _gan_tmp20 = builtins.input("gan> ")
         except builtins.EOFError as _e:
-            _gan_tmp27 = "eof"
+            _gan_tmp20 = "eof"
         except builtins.KeyboardInterrupt as _e:
-            _gan_tmp27 = "eof"
-        line = _gan_tmp27
+            _gan_tmp20 = "eof"
+        line = _gan_tmp20
         if line == "eof":
             return "ok"
         elif gandora_std.string.trim(line) == "":
@@ -345,10 +379,10 @@ Codex, `opencode.json` for opencode. Never overwrites what is there.
 def _init_cmd(args):
     paths = gandora_std.enum.filter(args, lambda a: not (_gan_truthy(gandora_std.string.starts_with_p(a, "--"))))
     if _gan_truthy(gandora_std.enum.empty_p(paths)):
-        _gan_tmp28 = "."
+        _gan_tmp21 = "."
     else:
-        _gan_tmp28 = gandora_std.enum.at(paths, 0)
-    path = _gan_tmp28
+        _gan_tmp21 = gandora_std.enum.at(paths, 0)
+    path = _gan_tmp21
     if _gan_truthy(gandora_std.enum.member_p(args, "--package")):
         if _gan_truthy(gandora_std.enum.empty_p(paths)):
             return _die_usage("init --package requires a package name")
@@ -447,8 +481,8 @@ def camelize(name: str) -> str:
     >>> camelize("gan_coin")
     'GanCoin'
 """
-    _gan_tmp29 = [gandora_std.string.capitalize(part) for part in gandora_std.string.split_on(name, "_") if part != ""]
-    parts = _gan_tmp29
+    _gan_tmp22 = [gandora_std.string.capitalize(part) for part in gandora_std.string.split_on(name, "_") if part != ""]
+    parts = _gan_tmp22
     return gandora_std.enum.join(parts, "")
 
 

@@ -34,6 +34,7 @@ gandora-core = { path = "../../crates/core-py" }
 gandora-std = { path = "../../std" }
 gandora-tool = { path = "../gan" }
 gandora-lsp = { path = "../lsp" }
+gandora-lang = { path = "../.." }
 
 [dependency-groups]
 dev = [

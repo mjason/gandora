@@ -1,0 +1,134 @@
+defmodule Cli do
+  @moduledoc """
+  The declarative command surface (GEP-0008): a CLI declares each
+  command as an annotation on the handler that implements it —
+
+      @command {"build", "[--strict]", "the verdict + compile"}
+      defp build_cmd(rest), do: ...
+
+  — and the `on_command` hook registers `{entry, &handler/1}` into the
+  consumer's accumulated `@command_table`. Usage text and dispatch both
+  read that one table: what the help prints is what the dispatcher
+  runs, and neither can drift from the other. A `nil` help hides an
+  entry from usage (aliases) without unhooking it from dispatch.
+  """
+  @moduledoc_trans zh_CN: "声明式命令面(GEP-0008):CLI 把每条命令声明为其处理函数上的注解,`on_command` 钩子将 {条目, &handler/1} 注册进消费者累积的 @command_table。usage 与分派读同一张表:帮助所印即分派所跑,两者无从漂移。help 为 nil 的条目在 usage 里隐藏(别名),分派照常。"
+
+  # attrs arrive as a keyword list; a local macro doubles as the
+  # compile-time lookup function (GEP-0002-R010)
+  defmacro find_attr(attrs, key) do
+    case attrs do
+      [] -> nil
+      [{k, v} | rest] ->
+        if k == key, do: v, else: find_attr(rest, key)
+    end
+  end
+
+  @doc """
+  The definition hook: a `@command {token, argspec, help}` annotation
+  turns the following def/defp into a dispatch-table entry — the
+  handler's own arity (1: rest; 2: rest plus a context such as a
+  project root) decides the capture. Every other definition passes
+  through untouched (GEP-0008-R005).
+  """
+  @param kind, "`:def` or `:defp`."
+  @param head, "The definition head, quoted."
+  @param attrs, "The registered attributes collected for this definition."
+  @param body, "The definition body, quoted."
+  defmacro on_command(kind, head, attrs, body) do
+    entry = find_attr(attrs, :command)
+    {name, _meta, args} = head
+    arity = length(args)
+    cond do
+      entry != nil and kind == :defp and arity == 2 ->
+        quote do
+          defp unquote(head), do: unquote(body)
+          @command_table {unquote(entry), &unquote(name)/2}
+        end
+      entry != nil and kind == :defp ->
+        quote do
+          defp unquote(head), do: unquote(body)
+          @command_table {unquote(entry), &unquote(name)/1}
+        end
+      entry != nil and arity == 2 ->
+        quote do
+          def unquote(head), do: unquote(body)
+          @command_table {unquote(entry), &unquote(name)/2}
+        end
+      entry != nil ->
+        quote do
+          def unquote(head), do: unquote(body)
+          @command_table {unquote(entry), &unquote(name)/1}
+        end
+      kind == :defp ->
+        quote do
+          defp unquote(head), do: unquote(body)
+        end
+      true ->
+        quote do
+          def unquote(head), do: unquote(body)
+        end
+    end
+  end
+
+  @doc """
+  The usage body generated from a command table: one aligned line per
+  visible entry, continuation help lines indented to the same column.
+  """
+  @doc_trans zh_CN: "由命令表生成的 usage 正文:每个可见条目一行对齐输出,多行 help 续行缩进到同一列。"
+  @param prefix, "The program name printed before each token."
+  @param_trans prefix, zh_CN: "印在每个命令名前的程序名。"
+  @param table, "The accumulated `@command_table`."
+  @param_trans table, zh_CN: "累积的 @command_table。"
+  @spec usage(string(), sequence(tuple())) :: string()
+  @example """
+      gan> Cli.usage("gan", [{{"go", "<file>", "runs it"}, nil}])
+      '  gan go <file>           runs it'
+  """
+  def usage(prefix, table) do
+    lines = for {entry, _f} <- table, not is_nil(elem(entry, 2)),
+      do: entry_lines(prefix, entry)
+    Enum.join(lines, "\n")
+  end
+
+  @column 26
+
+  defp entry_lines(prefix, {token, argspec, help}) do
+    left = [prefix, token, argspec]
+    |> Enum.filter(fn part -> part != "" end)
+    |> Enum.join(" ")
+    lead = "  " <> left
+    padded = if String.length(lead) >= @column - 1,
+      do: lead <> "  ",
+      else: String.pad_trailing(lead, @column)
+    [first | more] = String.split_on(help, "\n")
+    rest = Enum.map(more, fn l -> String.duplicate(" ", @column) <> l end)
+    Enum.join([padded <> first] ++ rest, "\n")
+  end
+
+  @doc """
+  Runs the table entry for `cmd` with `rest`; an unknown command goes
+  to `fallback.(cmd, rest)` — the plugin/delegation seam.
+  """
+  @doc_trans zh_CN: "以 `rest` 运行 `cmd` 对应的表条目;未知命令交给 `fallback.(cmd, rest)`——插件/委托的接缝。"
+  @param table, "The accumulated `@command_table`."
+  @param_trans table, zh_CN: "累积的 @command_table。"
+  @param cmd, "The subcommand token."
+  @param_trans cmd, zh_CN: "子命令名。"
+  @param rest, "The arguments after the token."
+  @param_trans rest, zh_CN: "命令名之后的参数。"
+  @param fallback, "Called with (cmd, rest) when no entry matches."
+  @param_trans fallback, zh_CN: "无条目匹配时以 (cmd, rest) 调用。"
+  @spec dispatch(sequence(tuple()), string(), sequence(string()), fun()) :: term()
+  @example """
+      gan> Cli.dispatch([{{"go", "", "g"}, fn r -> {:ran, r} end}], "go", ["x"], nil)
+      ('ran', ['x'])
+  """
+  def dispatch(table, cmd, rest, fallback) do
+    hit = Enum.find(table, fn {{token, _argspec, _help}, _f} -> token == cmd end)
+    case hit do
+      nil -> fallback.(cmd, rest)
+      {_entry, f} -> f.(rest)
+    end
+  end
+end

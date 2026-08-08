@@ -3802,6 +3802,16 @@ impl Codegen {
                             }
                             Ok(f)
                         }
+                        // an unquoted atom names the function — the
+                        // GEP-0008-R002 def-head coercion, in capture
+                        // position: `&unquote(name)/1` from a hook
+                        Term::Atom(n) => {
+                            let mut f = map_ident(n);
+                            if self.private_funs.contains(&(n.clone(), arity)) {
+                                f.insert(0, '_');
+                            }
+                            Ok(f)
+                        }
                         t @ Term::Call(cc) if matches!(&cc.callee, Callee::Dot { .. }) => {
                             self.emit_expr(t, pre)
                         }
@@ -4099,6 +4109,15 @@ fn name_referenced(term: &Term, name: &str) -> bool {
             .any(|(k, v)| name_referenced(k, name) || name_referenced(v, name)),
         Term::Pair(_, v) => name_referenced(v, name),
         Term::Call(c) => {
+            // `&unquote(name)/n` captures through an atom
+            // (GEP-0008-R002 coercion) — that atom names a function
+            if matches!(&c.callee, Callee::Name(n) if n == "/") {
+                if let Some(Term::Atom(a)) = c.args.first() {
+                    if a == name {
+                        return true;
+                    }
+                }
+            }
             let own = match &c.callee {
                 Callee::Name(n) => n == name,
                 Callee::Dot { base, .. } => name_referenced(base, name),
@@ -6138,6 +6157,27 @@ mod gep0008_tests {
             "defmodule M do\n  defattr :tag, accumulate: true\n  @tag :a\n  @tag :b\n  def tags(), do: @tag\nend",
         );
         assert!(py.contains("return [\"a\", \"b\"]"), "{py}");
+    }
+
+    #[test]
+    fn hook_emitted_registrations_join_the_value_table() {
+        // GEP-0008-R005: a hook returns "the reconstructed definition
+        // plus registrations" — the emitted @table write is absorbed as
+        // a registration, never a plain module attribute for codegen
+        let py = compile(
+            "defmodule M do\n  defattr :cmd\n  defattr :table, accumulate: true\n  defmacro on_def(kind, head, attrs, body) do\n    quote do\n      def unquote(head) do\n        unquote(body)\n      end\n      @table unquote(length(attrs))\n    end\n  end\n  @on_definition M.on_def\n  @cmd \"a\"\n  def a(), do: :ok\n  @cmd \"b\"\n  def b(), do: :ok\n  def table(), do: @table\nend",
+        );
+        assert!(py.contains("def a():"), "{py}");
+        // the hook ran for all three defs; table() itself carried no @cmd
+        assert!(py.contains("return [1, 1, 0]"), "{py}");
+    }
+
+    #[test]
+    fn macro_emitted_write_to_non_accumulating_attr_still_errors() {
+        let err = expand_err(
+            "defmodule M do\n  defattr :one\n  defmacro reg(v) do\n    quote do\n      @one unquote(v)\n    end\n  end\n  @one 1\n  reg(2)\n  def f(), do: @one\nend",
+        );
+        assert!(err.contains("GEP-0008-R004"), "{err}");
     }
 
     #[test]
